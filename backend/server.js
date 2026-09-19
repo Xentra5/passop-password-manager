@@ -2,6 +2,8 @@
 const dotenv = require('dotenv');
 const { MongoClient } = require('mongodb');
 const cors = require('cors');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 dotenv.config();
 
@@ -9,9 +11,10 @@ const MONGO_URL = process.env.MONGO_URL;
 const DB_NAME = process.env.DB_NAME || 'passOP';
 const PORT = Number(process.env.PORT || 3000);
 const FRONTEND_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
+const JWT_SECRET = process.env.JWT_SECRET;
 
-if (!MONGO_URL) {
-  throw new Error('Missing MONGO_URL in backend/.env');
+if (!MONGO_URL || !JWT_SECRET) {
+  throw new Error('Missing MONGO_URL or JWT_SECRET in backend/.env');
 }
 
 const app = express();
@@ -39,14 +42,85 @@ const isValidPasswordPayload = (payload) => {
 };
 
 const getPasswordsCollection = () => client.db(DB_NAME).collection('passwords');
+const getUsersCollection = () => client.db(DB_NAME).collection('users');
+
+const createToken = (user) => jwt.sign(
+  { userId: user._id.toString(), email: user.email },
+  JWT_SECRET,
+  { expiresIn: '7d' }
+);
+
+const authenticateToken = (req, res, next) => {
+  const authorization = req.headers.authorization || '';
+  const token = authorization.startsWith('Bearer ')
+    ? authorization.slice(7)
+    : null;
+
+  if (!token) {
+    return res.status(401).json({ success: false, message: 'Authentication required' });
+  }
+
+  try {
+    req.user = jwt.verify(token, JWT_SECRET);
+    next();
+  } catch {
+    return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+  }
+};
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
 
-app.get('/api/passwords', async (_req, res) => {
+app.post('/api/auth/register', async (req, res) => {
   try {
-    const passwords = await getPasswordsCollection().find({}).sort({ site: 1 }).toArray();
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+
+    if (!email.includes('@') || password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Use a valid email and a password of at least 8 characters',
+      });
+    }
+
+    const users = getUsersCollection();
+    const existingUser = await users.findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({ success: false, message: 'An account with that email already exists' });
+    }
+
+    const user = { email, passwordHash: await bcrypt.hash(password, 12), createdAt: new Date() };
+    const result = await users.insertOne(user);
+    user._id = result.insertedId;
+
+    res.status(201).json({ success: true, token: createToken(user), user: { email } });
+  } catch (error) {
+    console.error('Failed to register user:', error);
+    res.status(500).json({ success: false, message: 'Failed to create account' });
+  }
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    const user = await getUsersCollection().findOne({ email });
+
+    if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+      return res.status(401).json({ success: false, message: 'Invalid email or password' });
+    }
+
+    res.json({ success: true, token: createToken(user), user: { email: user.email } });
+  } catch (error) {
+    console.error('Failed to log in user:', error);
+    res.status(500).json({ success: false, message: 'Failed to log in' });
+  }
+});
+
+app.get('/api/passwords', authenticateToken, async (req, res) => {
+  try {
+    const passwords = await getPasswordsCollection().find({ userId: req.user.userId }).sort({ site: 1 }).toArray();
     res.json(passwords);
   } catch (error) {
     console.error('Failed to load passwords:', error);
@@ -54,7 +128,7 @@ app.get('/api/passwords', async (_req, res) => {
   }
 });
 
-app.post('/api/passwords', async (req, res) => {
+app.post('/api/passwords', authenticateToken, async (req, res) => {
   try {
     const password = req.body;
 
@@ -65,7 +139,7 @@ app.post('/api/passwords', async (req, res) => {
       });
     }
 
-    await getPasswordsCollection().insertOne(password);
+    await getPasswordsCollection().insertOne({ ...password, userId: req.user.userId });
 
     res.status(201).json({
       success: true,
@@ -77,7 +151,7 @@ app.post('/api/passwords', async (req, res) => {
   }
 });
 
-app.put('/api/passwords/:id', async (req, res) => {
+app.put('/api/passwords/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const password = req.body;
@@ -95,7 +169,7 @@ app.put('/api/passwords/:id', async (req, res) => {
 
     const collection = getPasswordsCollection();
     const result = await collection.updateOne(
-      { id },
+      { id, userId: req.user.userId },
       {
         $set: {
           site: password.site,
@@ -110,7 +184,7 @@ app.put('/api/passwords/:id', async (req, res) => {
       return res.status(404).json({ success: false, message: 'Password not found' });
     }
 
-    const updatedPassword = await collection.findOne({ id: password.id });
+    const updatedPassword = await collection.findOne({ id: password.id, userId: req.user.userId });
 
     res.json({
       success: true,
@@ -122,7 +196,7 @@ app.put('/api/passwords/:id', async (req, res) => {
   }
 });
 
-app.delete('/api/passwords/:id', async (req, res) => {
+app.delete('/api/passwords/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const passwordId = id || req.body?.id;
@@ -131,7 +205,7 @@ app.delete('/api/passwords/:id', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Missing password id' });
     }
 
-    const result = await getPasswordsCollection().deleteOne({ id: passwordId });
+    const result = await getPasswordsCollection().deleteOne({ id: passwordId, userId: req.user.userId });
 
     if (result.deletedCount === 0) {
       return res.status(404).json({ success: false, message: 'Password not found' });

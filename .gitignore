@@ -24,3 +24,8 @@ dist-ssr
 *.sw?
 .env
 backend/.env
+
+# Local AI / Prompt files
+SKILL.md
+token.md
+tokensave.md

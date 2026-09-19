@@ -1,26 +1,67 @@
- import githubIcon from "../assets/github-icon-1-logo.svg";
+import githubIcon from "../assets/github-icon-1-logo.svg";
 
-const NavBar = () => {
+const NavBar = ({ user, onLogout }) => {
   return (
-    <nav className='sticky top-0 z-20 border-b border-white/20 bg-slate-950/70 backdrop-blur-xl flex justify-between items-center gap-2 p-3 text-white md:gap-10 md:p-5'>
-      <div className="logo font-bold text-white text-lg md:text-2xl">
-        <span className='text-green-500'>&lt;</span>
-        <span>Pass</span>
-        <span className='text-green-500'>OP/&gt;</span>
-      </div>
+    <header className="site-nav nav-reveal sticky top-0 z-30 w-full border-b border-[#ddd8d0]/80 bg-[#f4f1ec]/80 transition-all">
+      <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
+        {/* Brand / Logo */}
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-emerald-500/30 bg-emerald-950/40 text-emerald-400 shadow-sm shadow-emerald-500/10">
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+              />
+            </svg>
+          </div>
+          <div className="flex items-baseline gap-1.5">
+            <span className="font-['Space_Grotesk'] text-lg font-bold tracking-tight text-[#1f2933] sm:text-xl">
+              Pass<span className="text-[#176b87]">Vault</span>
+            </span>
+          </div>
 
-      <ul className="flex items-center gap-3 text-sm font-semibold md:gap-6 md:text-base">
-        <li><a href="/" className="hover:font-bold">Home</a></li>
-        <li><a href="#about" className="hover:font-bold">About</a></li>
-        <li><a href="#contact" className="hover:font-bold">Contact</a></li>
-      </ul>
-      <div className="flex items-center gap-0 text-white rounded-full bg-green-500 hover:bg-green-600  border border-green-700/40 shadow-lg shadow-green-500/20 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-green-500/30 px-2 py-2 border-white">
-        <img src={githubIcon} alt="GitHub logo, clickable link to GitHub profile" className='w-7 h-7 cursor-pointer border-white md:w-10 md:h-10' />
-        <span className='hidden font-bold px-2 sm:inline'>GitHub</span>
-      </div>
-      
-    </nav>
-  )
-}
+          <span className="hidden items-center gap-1.5 rounded-full border border-[#b8d9d4] bg-[#e6f2ef] px-2.5 py-0.5 text-[11px] font-medium text-[#176b65] sm:inline-flex">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#26968a]"></span>
+            Ready
+          </span>
+        </div>
 
-export default NavBar
+        {/* Navigation & Action */}
+        <div className="flex items-center gap-4">
+          {user && <span className="hidden text-xs text-[#6f6a63] sm:inline">{user.email}</span>}
+          {user && (
+            <button
+              type="button"
+              onClick={onLogout}
+              className="rounded-md border border-[#d5d0c8] bg-white px-3.5 py-2 text-xs font-medium text-[#4b5563] transition-all hover:bg-[#faf9f7] hover:text-[#1f2933]"
+            >
+              Log out
+            </button>
+          )}
+          <a
+            href="https://github.com"
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-2 rounded-md border border-[#d5d0c8] bg-white px-3.5 py-2 text-xs font-medium text-[#4b5563] transition-all hover:border-[#aaa39a] hover:bg-[#faf9f7] hover:text-[#1f2933] active:scale-[0.98]"
+          >
+            <img
+              src={githubIcon}
+              alt="GitHub repository"
+              className="h-4 w-4 opacity-70"
+            />
+            <span>GitHub</span>
+          </a>
+        </div>
+      </div>
+    </header>
+  );
+};
+
+export default NavBar;
