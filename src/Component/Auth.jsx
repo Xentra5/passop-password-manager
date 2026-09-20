@@ -4,10 +4,16 @@ import "react-toastify/dist/ReactToastify.css"
 
 const AUTH_API_URL = "http://localhost:3000/api/auth"
 
-const Auth = ({ onAuthenticated }) => {
-  const [isRegistering, setIsRegistering] = useState(false)
+const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
+  const [isRegistering, setIsRegistering] = useState(initialMode === "register")
   const [form, setForm] = useState({ email: "", password: "" })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [lastInitialMode, setLastInitialMode] = useState(initialMode)
+
+  if (initialMode !== lastInitialMode) {
+    setLastInitialMode(initialMode)
+    setIsRegistering(initialMode === "register")
+  }
 
   const handleChange = (event) => {
     setForm(previous => ({ ...previous, [event.target.name]: event.target.value }))
@@ -47,6 +53,18 @@ const Auth = ({ onAuthenticated }) => {
       <ToastContainer position="top-right" autoClose={2000} theme="dark" />
       <div className="auth-signal" aria-hidden="true"></div>
       <section className="auth-panel relative z-10 w-full max-w-md rounded-lg border border-[#ddd8d0] bg-white p-6 shadow-[0_10px_35px_rgba(56,45,32,0.06)] sm:p-8">
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close modal"
+            className="absolute right-4 top-4 rounded-md p-1.5 text-[#857e75] hover:bg-[#f0ede6] hover:text-[#1f2933]"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
         <div className="mb-6">
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#176b87]">PassVault</p>
           <h1 className="mt-2 font-['Space_Grotesk'] text-2xl font-bold text-[#1f2933]">

@@ -20,6 +20,33 @@ body {
   color: #1f2933;
 }
 
+/* ── Linear-grade Typography: tight letter-spacing on all headlines ── */
+h1 {
+  letter-spacing: -0.033em;
+  line-height: 1.08;
+}
+
+h2 {
+  letter-spacing: -0.022em;
+  line-height: 1.14;
+}
+
+h3 {
+  letter-spacing: -0.014em;
+  line-height: 1.2;
+}
+
+/* Tighten leading on large hero spans */
+h1 span {
+  letter-spacing: inherit;
+}
+
+/* Sub-eyebrow text (the small uppercase labels) */
+.eyebrow-label {
+  letter-spacing: 0.16em;
+}
+
+
 .composition-shell {
   isolation: isolate;
   overflow: hidden;
@@ -85,7 +112,12 @@ body {
 }
 
 .site-nav {
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  /* Linear-style inner specular border on nav */
+  box-shadow:
+    0 1px 0 rgba(23, 107, 135, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.65);
 }
 
 .nav-reveal {
@@ -225,9 +257,165 @@ body {
 }
 
 @keyframes composition-reveal {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(16px) scale(0.99); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
+
+/* Hero section ambient bloom — radial glow matching Linear style */
+.hero-ambient-bloom {
+  pointer-events: none;
+  position: absolute;
+  top: -8rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 72rem;
+  height: 32rem;
+  background: radial-gradient(
+    ellipse at top center,
+    rgba(23, 107, 135, 0.09) 0%,
+    rgba(38, 150, 138, 0.05) 35%,
+    transparent 70%
+  );
+  filter: blur(1px);
+  z-index: 0;
+}
+
+/* ==========================================================================
+   PREMIUM FULL-BLEED HERO — Linear / Vercel visual quality
+   ========================================================================== */
+
+.hero-full-bleed {
+  position: relative;
+  overflow: hidden;
+  /* Multi-layer gradient mesh — the signature of premium SaaS */
+  background:
+    radial-gradient(ellipse 110% 55% at 18% 25%, rgba(23, 107, 135, 0.13) 0%, transparent 60%),
+    radial-gradient(ellipse 75% 65% at 82% 75%, rgba(38, 150, 138, 0.09) 0%, transparent 55%),
+    radial-gradient(ellipse 55% 45% at 50% -5%, rgba(23, 107, 135, 0.07) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 40% at 5% 80%, rgba(38, 150, 138, 0.05) 0%, transparent 45%),
+    linear-gradient(170deg, #edf4f2 0%, #f2efe9 40%, #f5f1eb 100%);
+}
+
+/* Fine dot grid texture */
+.hero-dot-grid {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(23, 107, 135, 0.11) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(ellipse 85% 75% at 25% 35%, rgba(0,0,0,0.7), transparent);
+  z-index: 0;
+}
+
+/* Left gradient bloom (teal) */
+.hero-bloom-left {
+  pointer-events: none;
+  position: absolute;
+  top: -5rem;
+  left: -8rem;
+  width: 38rem;
+  height: 38rem;
+  background: radial-gradient(circle, rgba(23, 107, 135, 0.08) 0%, transparent 70%);
+  filter: blur(40px);
+  z-index: 0;
+}
+
+/* Right gradient bloom (emerald) */
+.hero-bloom-right {
+  pointer-events: none;
+  position: absolute;
+  bottom: -4rem;
+  right: -6rem;
+  width: 30rem;
+  height: 30rem;
+  background: radial-gradient(circle, rgba(38, 150, 138, 0.07) 0%, transparent 70%);
+  filter: blur(35px);
+  z-index: 0;
+}
+
+/* ==========================================================================
+   HERO TYPOGRAPHY — Linear-grade headline scale
+   ========================================================================== */
+
+.hero-headline {
+  font-family: "Space Grotesk", "DM Sans", system-ui, sans-serif;
+  letter-spacing: -0.038em;
+  line-height: 1.05;
+  font-weight: 700;
+}
+
+/* Animated gradient text */
+.hero-gradient-text {
+  background: linear-gradient(
+    135deg,
+    #176b87 0%,
+    #1a8fa0 30%,
+    #26968a 65%,
+    #2db388 100%
+  );
+  background-size: 200% 200%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: gradient-shift 6s ease infinite;
+}
+
+@keyframes gradient-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* ==========================================================================
+   HERO CTAs — Premium button system
+   ========================================================================== */
+
+.hero-cta-primary {
+  position: relative;
+  background: linear-gradient(135deg, #176b87 0%, #1a8fa0 50%, #26968a 100%);
+  background-size: 200% 200%;
+  box-shadow:
+    0 6px 20px -2px rgba(23, 107, 135, 0.38),
+    0 2px 6px -1px rgba(23, 107, 135, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  transition:
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-position 600ms ease;
+  will-change: transform;
+}
+
+.hero-cta-primary:hover {
+  transform: translateY(-2px);
+  box-shadow:
+    0 12px 32px -3px rgba(23, 107, 135, 0.5),
+    0 4px 10px -1px rgba(23, 107, 135, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  background-position: right center;
+}
+
+.hero-cta-primary:active {
+  transform: scale(0.97);
+  box-shadow:
+    0 4px 12px -2px rgba(23, 107, 135, 0.3),
+    inset 0 1px 0 rgba(0, 0, 0, 0.08);
+}
+
+.hero-cta-secondary {
+  position: relative;
+  will-change: transform;
+  transition:
+    transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 180ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 180ms ease,
+    background-color 180ms ease;
+}
+
+.hero-cta-secondary:active {
+  transform: scale(0.97);
+}
+
+
 
 @keyframes nav-settle {
   from { opacity: 0; transform: translateY(-12px); }
@@ -315,7 +503,9 @@ body {
   .signal-line,
   .hero-lock,
   .hero-lock-ring,
-  .auth-signal {
+  .auth-signal,
+  .radar-sweep,
+  .cipher-stream-scan {
     animation: none !important;
   }
 
@@ -323,9 +513,234 @@ body {
   .credential-section button,
   .site-nav a,
   .site-nav button,
-  .vault-panel > form > div {
+  .vault-panel > form > div,
+  .tilt-card,
+  .spotlight-card,
+  .tactile-btn {
     transition: none !important;
+    transform: none !important;
   }
+
+  .reveal-init {
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* ==========================================================================
+   MOTION DESIGN SYSTEM TOKENS & UTILITIES (Linear / Vercel / Lovable style)
+   ========================================================================== */
+:root {
+  --duration-instant: 100ms;
+  --duration-fast: 180ms;
+  --duration-normal: 320ms;
+  --duration-slow: 600ms;
+  --duration-ambient: 18s;
+
+  /* Linear's signature easing: fast start → long smooth tail */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-linear-app: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-enter: cubic-bezier(0, 0, 0.2, 1);
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Typography tokens */
+  --tracking-headline: -0.033em;
+  --tracking-section: -0.022em;
+  --tracking-ui: -0.012em;
+  --lh-headline: 1.08;
+  --lh-section: 1.14;
+}
+
+/* 1. Spotlight Card (Dynamic cursor-following ambient glow) */
+.spotlight-card {
+  --mouse-x: 50%;
+  --mouse-y: 50%;
+  position: relative;
+  isolation: isolate;
+  background: #ffffff;
+  transition: transform var(--duration-fast) var(--ease-emphasized),
+              box-shadow var(--duration-fast) var(--ease-emphasized);
+}
+
+.spotlight-card::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: radial-gradient(
+    450px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    rgba(23, 107, 135, 0.18),
+    transparent 65%
+  );
+  opacity: 0;
+  transition: opacity var(--duration-normal) var(--ease-standard);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.spotlight-card:hover::before {
+  opacity: 1;
+}
+
+.spotlight-card-content {
+  position: relative;
+  z-index: 2;
+}
+
+/* 2. 3D Tilt Perspective Card with Specular Glare */
+.tilt-wrapper {
+  perspective: 1000px;
+}
+
+.tilt-card {
+  position: relative;
+  transform-style: preserve-3d;
+  will-change: transform;
+  transition: transform 120ms var(--ease-standard),
+              box-shadow var(--duration-normal) var(--ease-emphasized);
+}
+
+.tilt-glare {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    circle at var(--glare-x, 50%) var(--glare-y, 50%),
+    rgba(255, 255, 255, 0.35) 0%,
+    transparent 60%
+  );
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+  mix-blend-mode: overlay;
+  z-index: 10;
+}
+
+.tilt-card:hover .tilt-glare {
+  opacity: 1;
+}
+
+/* 3. Scroll Reveal Utilities */
+.reveal-init {
+  opacity: 0;
+  transform: translateY(20px) scale(0.99);
+  will-change: opacity, transform;
+  transition: opacity var(--duration-slow) var(--ease-emphasized),
+              transform var(--duration-slow) var(--ease-emphasized);
+}
+
+.reveal-active {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.stagger-1 { transition-delay: 80ms; }
+.stagger-2 { transition-delay: 160ms; }
+.stagger-3 { transition-delay: 240ms; }
+.stagger-4 { transition-delay: 320ms; }
+.stagger-5 { transition-delay: 400ms; }
+
+/* 4. Tactile Buttons & Magnetic Micro-interactions */
+.tactile-btn {
+  position: relative;
+  transition: transform var(--duration-fast) var(--ease-emphasized),
+              box-shadow var(--duration-fast) var(--ease-standard),
+              background-color var(--duration-fast) var(--ease-standard),
+              color var(--duration-fast) var(--ease-standard);
+  will-change: transform;
+}
+
+.tactile-btn:hover {
+  transform: translateY(-2px);
+  /* Inner specular highlight — Linear style */
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
+}
+
+.tactile-btn:active {
+  transform: scale(0.97) translateY(0);
+  box-shadow: inset 0 1px 0 rgba(0, 0, 0, 0.06);
+}
+
+.tactile-btn-primary {
+  box-shadow:
+    0 4px 14px -1px rgba(23, 107, 135, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.tactile-btn-primary:hover {
+  box-shadow:
+    0 10px 28px -2px rgba(23, 107, 135, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
+}
+
+/* 4b. Typography Utilities — Linear-grade tight headlines */
+.headline-hero {
+  letter-spacing: var(--tracking-headline);
+  line-height: var(--lh-headline);
+}
+
+.headline-section {
+  letter-spacing: var(--tracking-section);
+  line-height: var(--lh-section);
+}
+
+.headline-card {
+  letter-spacing: var(--tracking-ui);
+  line-height: 1.2;
+}
+
+/* 5. Cryptographic Stream Scanline */
+@keyframes cipher-scan {
+  0% { transform: translateY(-100%); opacity: 0; }
+  50% { opacity: 0.6; }
+  100% { transform: translateY(1000%); opacity: 0; }
+}
+
+.cipher-stream-scan {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #34d399, transparent);
+  animation: cipher-scan 3.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  pointer-events: none;
+}
+
+/* 6. Radar Ping & Pulse */
+.beacon-dot {
+  position: relative;
+  display: inline-flex;
+}
+
+.beacon-dot::after {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0.4;
+  animation: beacon-ping 2.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+@keyframes beacon-ping {
+  0% { transform: scale(0.9); opacity: 0.6; }
+  70%, 100% { transform: scale(2.4); opacity: 0; }
+}
+
+/* 7. Shimmer Border Effect */
+.shimmer-border {
+  background-size: 200% 200%;
+  animation: shimmer-flow 6s linear infinite;
+}
+
+@keyframes shimmer-flow {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
 }
 
 /* Custom vault scrollbar */
@@ -342,4 +757,299 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #9d978d;
+}
+
+/* ==========================================================================
+   CRYPTOGRAPHIC NETWORK GLOBE — Container & Canvas
+   ========================================================================== */
+
+.cryptographic-globe-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 340px;
+  overflow: hidden;
+  border-radius: inherit;
+}
+
+.cryptographic-globe-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+}
+
+/* CSS Fallback rings (when canvas 2D fails) */
+.globe-css-fallback {
+  position: relative;
+  width: 100%;
+  height: 320px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.globe-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(23, 107, 135, 0.2);
+  animation: globe-ring-spin 18s linear infinite;
+}
+
+.globe-ring-1 { width: 220px; height: 220px; border-color: rgba(23,107,135,0.25); }
+.globe-ring-2 { width: 155px; height: 155px; border-style: dashed; animation-duration: 12s; animation-direction: reverse; }
+.globe-ring-3 { width: 88px; height: 88px; border-color: rgba(38,150,138,0.35); animation-duration: 8s; }
+
+@keyframes globe-ring-spin {
+  to { transform: rotate(360deg); }
+}
+
+.globe-node {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(23, 107, 135, 0.5);
+  animation: globe-node-pulse 3s ease-in-out infinite;
+}
+
+@keyframes globe-node-pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.4); }
+}
+
+/* ==========================================================================
+   GLOBE TELEMETRY HUD — Glassmorphic overlay panel
+   ========================================================================== */
+
+.globe-hud {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: linear-gradient(
+    to top,
+    rgba(244, 241, 236, 0.96) 0%,
+    rgba(244, 241, 236, 0.85) 60%,
+    rgba(244, 241, 236, 0) 100%
+  );
+  backdrop-filter: blur(2px);
+  padding: 1rem 1.25rem 0.875rem;
+  border-bottom-left-radius: inherit;
+  border-bottom-right-radius: inherit;
+}
+
+.globe-hud-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  flex-wrap: wrap;
+}
+
+.globe-hud-metric {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 10px;
+  font-family: "DM Sans", monospace;
+  font-weight: 600;
+  color: #4b5563;
+  padding: 0.25rem 0.625rem;
+  background: rgba(255,255,255,0.75);
+  border: 1px solid rgba(23,107,135,0.15);
+  border-radius: 6px;
+  backdrop-filter: blur(4px);
+  white-space: nowrap;
+}
+
+.globe-hud-metric-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.globe-hud-metric-dot.active {
+  background: #26968a;
+  box-shadow: 0 0 0 2px rgba(38,150,138,0.25);
+  animation: beacon-ping 2.5s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+.globe-hud-metric-dot.secure {
+  background: #176b87;
+}
+
+/* ==========================================================================
+   ENHANCED SPOTLIGHT CARD — Reactive border shimmer
+   ========================================================================== */
+
+.spotlight-card {
+  --mouse-x: 50%;
+  --mouse-y: 50%;
+  --mouse-nx: 50%;
+  --mouse-ny: 50%;
+  position: relative;
+  isolation: isolate;
+  background: #ffffff;
+  transition: transform var(--duration-fast) var(--ease-emphasized),
+              box-shadow var(--duration-fast) var(--ease-emphasized),
+              border-color var(--duration-normal) var(--ease-standard);
+}
+
+/* Ambient glow follows cursor */
+.spotlight-card::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: radial-gradient(
+    420px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    rgba(23, 107, 135, 0.14),
+    transparent 60%
+  );
+  opacity: 0;
+  transition: opacity var(--duration-normal) var(--ease-standard);
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Specular border shimmer */
+.spotlight-card::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  border: 1px solid transparent;
+  background:
+    radial-gradient(
+      200px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+      rgba(23, 107, 135, 0.45),
+      transparent 70%
+    ) border-box;
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: destination-out;
+  mask-composite: exclude;
+  opacity: 0;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.spotlight-card:hover::before,
+.spotlight-card:hover::after {
+  opacity: 1;
+}
+
+/* ==========================================================================
+   MAGNETIC BUTTON — Subtle hover offset animation
+   ========================================================================== */
+
+.magnetic-btn {
+  will-change: transform;
+  transition: transform 350ms var(--ease-emphasized);
+}
+
+/* ==========================================================================
+   HERO VISUAL CONTAINER — for the globe section in Hero
+   ========================================================================== */
+
+.hero-globe-wrapper {
+  position: relative;
+  width: 100%;
+  border-radius: 1.5rem;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f0f7f5 0%, #e8f4f6 40%, #f4f1ec 100%);
+  border: 1px solid #ddd8d0;
+  box-shadow:
+    0 20px 45px rgba(31,41,51,0.09),
+    0 0 0 1px rgba(23,107,135,0.06) inset;
+  transition: box-shadow 0.4s var(--ease-emphasized);
+}
+
+.hero-globe-wrapper:hover {
+  box-shadow:
+    0 28px 60px rgba(23,107,135,0.14),
+    0 0 0 1px rgba(23,107,135,0.1) inset;
+}
+
+/* Subtle animated gradient atmosphere ring behind globe */
+.hero-globe-atmosphere {
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
+  height: 80%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(23, 107, 135, 0.08) 0%,
+    rgba(38, 150, 138, 0.04) 50%,
+    transparent 70%
+  );
+  animation: atmosphere-pulse 6s ease-in-out infinite alternate;
+  z-index: 0;
+}
+
+@keyframes atmosphere-pulse {
+  from { transform: translate(-50%, -50%) scale(0.9); opacity: 0.7; }
+  to   { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+}
+
+/* ==========================================================================
+   SECTION GRADIENT CONNECTOR — visual section flow
+   ========================================================================== */
+
+.section-flow-gradient {
+  pointer-events: none;
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 80px;
+  background: linear-gradient(to bottom, transparent, #f4f1ec);
+  z-index: 1;
+}
+
+/* ==========================================================================
+   GSAP / SCROLL REVEAL SYSTEM — Enhanced with GSAP stagger support
+   ========================================================================== */
+
+/* Override: stagger delays also apply to GSAP-powered elements */
+.gsap-stagger-container > * {
+  opacity: 0;
+}
+
+/* ==========================================================================
+   REDUCED MOTION — Comprehensive overrides for all new classes
+   ========================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  .cryptographic-globe-canvas,
+  .cryptographic-globe-container {
+    /* Globe canvas: freeze by pausing via JS IntersectionObserver approach.
+       We also stop atmosphere animation. */
+    animation: none !important;
+  }
+
+  .globe-css-fallback *,
+  .hero-globe-atmosphere,
+  .globe-ring,
+  .globe-node,
+  .globe-hud-metric-dot.active {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .magnetic-btn,
+  .spotlight-card::before,
+  .spotlight-card::after {
+    transition: none !important;
+    transform: none !important;
+  }
+
+  .section-flow-gradient {
+    display: none;
+  }
 }
