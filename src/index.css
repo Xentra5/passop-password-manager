@@ -767,8 +767,8 @@ h1 span {
   position: relative;
   width: 100%;
   height: 100%;
-  min-height: 340px;
-  overflow: hidden;
+  min-height: 380px;
+  overflow: visible;
   border-radius: inherit;
 }
 
@@ -956,20 +956,26 @@ h1 span {
 .hero-globe-wrapper {
   position: relative;
   width: 100%;
+  min-height: 420px;
   border-radius: 1.5rem;
   overflow: hidden;
-  background: linear-gradient(135deg, #f0f7f5 0%, #e8f4f6 40%, #f4f1ec 100%);
-  border: 1px solid #ddd8d0;
+  background: radial-gradient(ellipse at 60% 40%, #ddf3f5 0%, #e8f4f0 35%, #f0ece6 100%);
+  border: 1px solid rgba(23,107,135,0.18);
   box-shadow:
-    0 20px 45px rgba(31,41,51,0.09),
+    0 4px 6px -1px rgba(31,41,51,0.04),
+    0 20px 48px -8px rgba(23,107,135,0.12),
     0 0 0 1px rgba(23,107,135,0.06) inset;
   transition: box-shadow 0.4s var(--ease-emphasized);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .hero-globe-wrapper:hover {
   box-shadow:
-    0 28px 60px rgba(23,107,135,0.14),
-    0 0 0 1px rgba(23,107,135,0.1) inset;
+    0 4px 6px -1px rgba(31,41,51,0.04),
+    0 32px 64px -8px rgba(23,107,135,0.18),
+    0 0 0 1px rgba(23,107,135,0.12) inset;
 }
 
 /* Subtle animated gradient atmosphere ring behind globe */

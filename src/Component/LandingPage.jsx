@@ -241,14 +241,18 @@ const LandingPage = ({ onOpenAuth }) => {
             {/* Right: Cryptographic Network Globe */}
             <div className="lg:col-span-5">
               <ScrollRevealSection delayClass="stagger-3">
-                <div className="hero-globe-wrapper" style={{ minHeight: "400px" }}>
-                  {/* Atmospheric glow ring behind globe */}
-                  <div className="hero-globe-atmosphere" aria-hidden="true" />
+                {/* Globe card — no inline minHeight needed, CSS handles it */}
+                <div className="hero-globe-wrapper" style={{ position: "relative" }}>
+                  {/* Globe fills wrapper absolutely */}
+                  <CryptographicNetworkGlobe
+                    className=""
+                    style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
+                  />
 
-                  {/* 3D Cryptographic Network Globe */}
-                  <CryptographicNetworkGlobe className="relative z-10" />
+                  {/* Spacer to maintain card height */}
+                  <div style={{ height: "420px" }} aria-hidden="true" />
 
-                  {/* Glassmorphic Telemetry HUD */}
+                  {/* Glassmorphic Telemetry HUD pinned to bottom */}
                   <div className="globe-hud" aria-label="Vault telemetry status">
                     <div className="globe-hud-row">
                       <div className="globe-hud-metric">
