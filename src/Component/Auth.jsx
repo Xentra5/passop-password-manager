@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { ToastContainer, toast, Bounce } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
+import PassVaultLogo from "./PassVaultLogo"
 
 const AUTH_API_URL = "http://localhost:3000/api/auth"
 
@@ -66,7 +67,9 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
           </button>
         )}
         <div className="mb-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#176b87]">PassVault</p>
+          <div className="mb-3">
+            <PassVaultLogo size="sm" />
+          </div>
           <h1 className="mt-2 font-['Space_Grotesk'] text-2xl font-bold text-[#1f2933]">
             {isRegistering ? "Create your vault" : "Open your vault"}
           </h1>

@@ -1,11 +1,11 @@
-﻿import { useState, useEffect, useId } from 'react'
+import { useState, useEffect, useId } from 'react'
 import { ToastContainer, toast, Bounce } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { v4 as uuidv4 } from "uuid";
 
 const API_BASE_URL = "http://localhost:3000/api/passwords"
 
-const Manager = ({ token, onUnauthorized }) => {
+const Manager = ({ token, onUnauthorized, onPasswordRevealChange }) => {
   const [form, setForm] = useState({ site: "", username: "", password: "" })
   const [passwordArray, setPasswordArray] = useState([])
   const [showPassword, setShowPassword] = useState(false)
@@ -195,6 +195,13 @@ const Manager = ({ token, onUnauthorized }) => {
   )
 
   const strength = getPasswordStrength(form.password)
+  const isAnyRevealed = Boolean(showPassword || Object.values(revealedIds).some(Boolean))
+
+  useEffect(() => {
+    if (onPasswordRevealChange) {
+      onPasswordRevealChange(isAnyRevealed)
+    }
+  }, [isAnyRevealed, onPasswordRevealChange])
 
   return (
     <div className="relative min-h-screen w-full bg-[#f4f1ec] pb-20 pt-10 text-[#1f2933] selection:bg-[#cce7ed] selection:text-[#14566d]">
@@ -215,13 +222,110 @@ const Manager = ({ token, onUnauthorized }) => {
             Store your sign-ins in one calm, private place. Add a new account or find an existing one below.
           </p>
           </div>
-          <div className="hero-lock" aria-hidden="true">
-            <div className="hero-lock-ring hero-lock-ring-outer"></div>
-            <div className="hero-lock-ring hero-lock-ring-inner"></div>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M7 10V7a5 5 0 0110 0v3m-9 0h8a2 2 0 012 2v7a2 2 0 01-2 2H8a2 2 0 01-2-2v-7a2 2 0 012-2z" />
-              <path strokeLinecap="round" d="M12 14v3" />
-            </svg>
+          <div
+            className={`hero-lock group cursor-pointer transition-all duration-300 ${
+              isAnyRevealed ? "unlocked" : "locked"
+            }`}
+            onClick={() => setShowPassword(prev => !prev)}
+            title={
+              isAnyRevealed
+                ? "Password visible • Click to lock vault"
+                : "Vault locked • Click to unlock & show password"
+            }
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault()
+                setShowPassword(prev => !prev)
+              }
+            }}
+            aria-label={isAnyRevealed ? "Lock vault" : "Unlock vault"}
+          >
+            <div className={`hero-lock-ring hero-lock-ring-outer ${isAnyRevealed ? "ring-unlocked-outer" : ""}`}></div>
+            <div className={`hero-lock-ring hero-lock-ring-inner ${isAnyRevealed ? "ring-unlocked-inner" : ""}`}></div>
+            
+            <div className="relative z-10 flex flex-col items-center">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                className={`transition-all duration-300 drop-shadow-md ${
+                  isAnyRevealed
+                    ? "text-emerald-600 scale-105"
+                    : "text-[#176b87]"
+                }`}
+              >
+                {isAnyRevealed ? (
+                  /* Open Padlock with shackle unhooked and swung open */
+                  <g className="transition-all duration-300">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M7 11V7a5 5 0 019.9-1.2"
+                      strokeWidth="2.2"
+                      className="stroke-emerald-600 animate-[pulse_2s_infinite]"
+                    />
+                    <rect
+                      x="4.5"
+                      y="11"
+                      width="15"
+                      height="10"
+                      rx="2.5"
+                      fill="currentColor"
+                      fillOpacity="0.12"
+                      className="stroke-emerald-600"
+                      strokeWidth="1.8"
+                    />
+                    <circle cx="12" cy="15.5" r="1.2" fill="currentColor" className="text-emerald-500" />
+                    <path strokeLinecap="round" d="M12 16.7v2" strokeWidth="2" className="stroke-emerald-600" />
+                  </g>
+                ) : (
+                  /* Closed Padlock securely locked */
+                  <g className="transition-all duration-300">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M7.5 11V7a4.5 4.5 0 019 0v4"
+                      strokeWidth="2"
+                    />
+                    <rect
+                      x="4.5"
+                      y="11"
+                      width="15"
+                      height="10"
+                      rx="2.5"
+                      fill="currentColor"
+                      fillOpacity="0.08"
+                      strokeWidth="1.8"
+                    />
+                    <circle cx="12" cy="15.5" r="1.2" fill="currentColor" />
+                    <path strokeLinecap="round" d="M12 16.7v2" strokeWidth="2" />
+                  </g>
+                )}
+              </svg>
+
+              <span
+                className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider transition-all duration-300 ${
+                  isAnyRevealed
+                    ? "border border-emerald-400 bg-emerald-50 text-emerald-800 shadow-sm"
+                    : "border border-[#176b87]/30 bg-[#e6f2ef] text-[#176b87]"
+                }`}
+              >
+                {isAnyRevealed ? (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                    <span>Unlocked</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="h-1.5 w-1.5 rounded-full bg-[#176b87]"></span>
+                    <span>Secured</span>
+                  </>
+                )}
+              </span>
+            </div>
           </div>
         </section>
 
@@ -314,10 +418,18 @@ const Manager = ({ token, onUnauthorized }) => {
                   )}
                 </div>
                 <div className="relative">
-                  <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-500">
-                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-                    </svg>
+                  <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 transition-colors">
+                    {showPassword ? (
+                      /* Open lock icon when password is shown */
+                      <svg className="h-4 w-4 text-emerald-600 transition-colors animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 017.6-1.8M5 11h14a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7a2 2 0 012-2z" />
+                      </svg>
+                    ) : (
+                      /* Key icon when locked */
+                      <svg className="h-4 w-4 text-slate-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                      </svg>
+                    )}
                   </span>
                   <input
                     id={passwordInputId}
@@ -326,15 +438,38 @@ const Manager = ({ token, onUnauthorized }) => {
                     value={form.password}
                     onChange={handleChange}
                     placeholder="Enter or generate secret"
-                    className="w-full rounded-md border border-[#d5d0c8] bg-[#faf9f7] py-2.5 pl-10 pr-20 text-sm text-[#1f2933] placeholder:text-[#aaa39a] transition-all focus:border-[#176b87] focus:outline-none focus:ring-1 focus:ring-[#176b87]/30"
+                    className={`w-full rounded-md border bg-[#faf9f7] py-2.5 pl-10 pr-24 text-sm text-[#1f2933] placeholder:text-[#aaa39a] transition-all focus:outline-none focus:ring-1 ${
+                      showPassword
+                        ? "border-emerald-400 focus:border-emerald-500 focus:ring-emerald-500/30"
+                        : "border-[#d5d0c8] focus:border-[#176b87] focus:ring-[#176b87]/30"
+                    }`}
                     required
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(prev => !prev)}
-                    className="absolute inset-y-0 right-0 flex items-center px-3 text-xs font-semibold text-[#7b746b] transition-colors hover:text-[#176b87]"
+                    className={`absolute inset-y-1 right-1 my-auto flex h-8 items-center gap-1.5 rounded px-2.5 text-xs font-semibold transition-all ${
+                      showPassword
+                        ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300"
+                        : "text-[#7b746b] hover:bg-[#ebe7e1] hover:text-[#176b87]"
+                    }`}
+                    title={showPassword ? "Lock and hide password" : "Open lock and show password"}
                   >
-                    {showPassword ? "Hide" : "Show"}
+                    {showPassword ? (
+                      <>
+                        <svg className="h-3.5 w-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 017.6-1.8M5 11h14a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7a2 2 0 012-2z" />
+                        </svg>
+                        <span>Hide</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="h-3.5 w-3.5 text-[#7b746b]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        <span>Show</span>
+                      </>
+                    )}
                   </button>
                 </div>
 
@@ -510,23 +645,58 @@ const Manager = ({ token, onUnauthorized }) => {
                           {/* Password Column */}
                           <td className="px-5 py-4">
                             <div className="flex items-center gap-2">
-                              <span className="text-xs text-[#4b5563]">
-                                {isRevealed ? item.password : "••••••••••••"}
-                              </span>
+                              {/* Open/Closed Lock badge with plaintext or masked password */}
+                              <div className="flex items-center gap-1.5">
+                                {isRevealed ? (
+                                  <span
+                                    className="flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-300 shadow-xs"
+                                    title="Vault lock opened: credential revealed"
+                                  >
+                                    <svg className="h-3 w-3 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.4">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 017.6-1.8M5 11h14a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7a2 2 0 012-2z" />
+                                    </svg>
+                                    <span>OPEN</span>
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 border border-slate-200"
+                                    title="Vault secured: credential masked"
+                                  >
+                                    <svg className="h-3 w-3 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                    </svg>
+                                  </span>
+                                )}
+                                <span
+                                  className={`text-xs font-mono transition-all ${
+                                    isRevealed
+                                      ? "font-semibold text-emerald-900 bg-emerald-50/70 px-2 py-0.5 rounded border border-emerald-200/60"
+                                      : "text-[#4b5563]"
+                                  }`}
+                                >
+                                  {isRevealed ? item.password : "••••••••••••"}
+                                </span>
+                              </div>
+
                               <button
                                 type="button"
                                 onClick={() => togglePasswordReveal(item.id)}
-                                title={isRevealed ? "Hide password" : "Reveal password"}
-                                className="rounded p-1 text-[#aaa39a] transition-colors hover:bg-[#ebe7e1] hover:text-[#176b87]"
+                                title={isRevealed ? "Hide password (lock)" : "Open lock & reveal password"}
+                                className={`rounded p-1.5 transition-all ${
+                                  isRevealed
+                                    ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-300"
+                                    : "text-[#aaa39a] hover:bg-[#ebe7e1] hover:text-[#176b87]"
+                                }`}
                               >
                                 {isRevealed ? (
-                                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                                  /* Open Lock icon when revealed */
+                                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 017.6-1.8M5 11h14a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7a2 2 0 012-2z" />
                                   </svg>
                                 ) : (
+                                  /* Closed Lock icon when hidden */
                                   <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                                   </svg>
                                 )}
                               </button>

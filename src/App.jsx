@@ -18,6 +18,7 @@ function App() {
   const [activeView, setActiveView] = useState(() => (session.token ? "vault" : "landing"))
   const [authModalOpen, setAuthModalOpen] = useState(false)
   const [authModalMode, setAuthModalMode] = useState("login")
+  const [isPasswordRevealed, setIsPasswordRevealed] = useState(false)
 
   const handleAuthenticated = useCallback((data) => {
     localStorage.setItem("passvault_token", data.token)
@@ -52,11 +53,16 @@ function App() {
         onOpenAuth={handleOpenAuth}
         activeView={activeView}
         setActiveView={setActiveView}
+        isPasswordRevealed={isPasswordRevealed}
       />
 
       <div className="relative z-10 flex-1">
         {session.token && activeView === "vault" ? (
-          <Manager token={session.token} onUnauthorized={handleLogout} />
+          <Manager
+            token={session.token}
+            onUnauthorized={handleLogout}
+            onPasswordRevealChange={setIsPasswordRevealed}
+          />
         ) : (
           <LandingPage onOpenAuth={handleOpenAuth} />
         )}

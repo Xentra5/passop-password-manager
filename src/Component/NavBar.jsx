@@ -1,39 +1,31 @@
 import githubIcon from "../assets/github-icon-1-logo.svg";
+import PassVaultLogo from "./PassVaultLogo";
 
-const NavBar = ({ user, onLogout, onOpenAuth, activeView, setActiveView }) => {
+const NavBar = ({ user, onLogout, onOpenAuth, activeView, setActiveView, isPasswordRevealed = false }) => {
   return (
     <header className="site-nav nav-reveal sticky top-0 z-30 w-full border-b border-[#ddd8d0]/80 bg-[#f4f1ec]/85 backdrop-blur-md transition-all">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
         {/* Brand / Logo */}
         <div className="flex items-center gap-3">
-          <button
-            type="button"
+          <PassVaultLogo
+            size="md"
+            isUnlocked={isPasswordRevealed}
             onClick={() => setActiveView && setActiveView("landing")}
-            className="flex items-center gap-2.5 text-left transition hover:opacity-90"
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg border border-[#26968a]/30 bg-[#e6f2ef] text-[#176b87] shadow-sm">
-              <svg
-                className="h-5 w-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                />
-              </svg>
-            </div>
-            <span className="font-['Space_Grotesk'] text-lg font-bold tracking-tight text-[#1f2933] sm:text-xl">
-              Pass<span className="text-[#176b87]">Vault</span>
-            </span>
-          </button>
+          />
 
-          <span className="hidden items-center gap-1.5 rounded-full border border-[#b8d9d4] bg-[#e6f2ef] px-2.5 py-0.5 text-[11px] font-medium text-[#176b65] md:inline-flex">
-            <span className="beacon-dot h-1.5 w-1.5 rounded-full bg-[#26968a]"></span>
-            Active
+          <span
+            className={`hidden items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-all duration-300 md:inline-flex ${
+              isPasswordRevealed
+                ? "border-emerald-300 bg-emerald-50 text-emerald-700 shadow-sm"
+                : "border-[#b8d9d4] bg-[#e6f2ef] text-[#176b65]"
+            }`}
+          >
+            <span
+              className={`beacon-dot h-1.5 w-1.5 rounded-full ${
+                isPasswordRevealed ? "bg-emerald-500 animate-ping" : "bg-[#26968a]"
+              }`}
+            ></span>
+            {isPasswordRevealed ? "Unlocked" : "Active"}
           </span>
         </div>
 
