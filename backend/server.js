@@ -113,6 +113,14 @@ app.post('/api/auth/register', async (req, res) => {
   try {
     const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    const confirmPassword = typeof req.body?.confirmPassword === 'string' ? req.body.confirmPassword : null;
+
+    if (confirmPassword !== null && password !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Passwords do not match',
+      });
+    }
 
     if (!email.includes('@') || password.length < 8) {
       return res.status(400).json({

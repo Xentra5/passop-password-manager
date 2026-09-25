@@ -7,13 +7,14 @@ const AUTH_API_URL = "http://localhost:3000/api/auth"
 
 const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
   const [isRegistering, setIsRegistering] = useState(initialMode === "register")
-  const [form, setForm] = useState({ email: "", password: "" })
+  const [form, setForm] = useState({ email: "", password: "", confirmPassword: "" })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [lastInitialMode, setLastInitialMode] = useState(initialMode)
 
   if (initialMode !== lastInitialMode) {
     setLastInitialMode(initialMode)
     setIsRegistering(initialMode === "register")
+    setForm({ email: "", password: "", confirmPassword: "" })
   }
 
   const handleChange = (event) => {
@@ -22,13 +23,29 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+
+    if (isRegistering) {
+      if (form.password.length < 8) {
+        toast.error("Password must be at least 8 characters", { theme: "dark" })
+        return
+      }
+      if (form.password !== form.confirmPassword) {
+        toast.error("Passwords do not match", { theme: "dark" })
+        return
+      }
+    }
+
     setIsSubmitting(true)
 
     try {
+      const payload = isRegistering
+        ? { email: form.email, password: form.password, confirmPassword: form.confirmPassword }
+        : { email: form.email, password: form.password }
+
       const response = await fetch(`${AUTH_API_URL}/${isRegistering ? "register" : "login"}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify(payload),
       })
       const data = await response.json()
 
@@ -113,6 +130,38 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
             {isRegistering && <p className="mt-1.5 text-xs text-[#7b746b]">Use at least 8 characters.</p>}
           </div>
 
+          {isRegistering && (
+            <div>
+              <label htmlFor="auth-confirm-password" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6f6a63]">
+                Confirm Password
+              </label>
+              <input
+                id="auth-confirm-password"
+                name="confirmPassword"
+                type="password"
+                autoComplete="new-password"
+                minLength={8}
+                value={form.confirmPassword}
+                onChange={handleChange}
+                required={isRegistering}
+                placeholder="Re-enter your password"
+                className={`w-full rounded-md border bg-[#faf9f7] px-3 py-2.5 text-sm text-[#1f2933] outline-none transition focus:ring-1 ${
+                  form.confirmPassword && form.password !== form.confirmPassword
+                    ? "border-red-400 focus:border-red-500 focus:ring-red-200"
+                    : form.confirmPassword && form.password === form.confirmPassword
+                    ? "border-emerald-500 focus:border-emerald-600 focus:ring-emerald-200"
+                    : "border-[#d5d0c8] focus:border-[#176b87] focus:ring-[#176b87]/30"
+                }`}
+              />
+              {form.confirmPassword && form.password !== form.confirmPassword && (
+                <p className="mt-1.5 text-xs text-red-500 font-medium">Passwords do not match.</p>
+              )}
+              {form.confirmPassword && form.password === form.confirmPassword && (
+                <p className="mt-1.5 text-xs text-emerald-600 font-medium">✓ Passwords match</p>
+              )}
+            </div>
+          )}
+
           <button
             type="submit"
             disabled={isSubmitting}
@@ -124,7 +173,10 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
 
         <button
           type="button"
-          onClick={() => setIsRegistering(previous => !previous)}
+          onClick={() => {
+            setIsRegistering(previous => !previous)
+            setForm(previous => ({ ...previous, confirmPassword: "" }))
+          }}
           className="mt-5 w-full text-xs font-semibold text-[#176b87] hover:underline"
         >
           {isRegistering ? "Already have an account? Sign in" : "New here? Create an account"}
