@@ -14,15 +14,15 @@ const NavBar = ({ user, onLogout, onOpenAuth, activeView, setActiveView, isPassw
           />
 
           <span
-            className={`hidden items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-medium transition-all duration-300 md:inline-flex ${
+            className={`hidden items-center gap-1.5 rounded-full border px-3 py-0.5 text-xs font-medium transition-all duration-300 md:inline-flex ${
               isPasswordRevealed
                 ? "border-emerald-300 bg-emerald-50 text-emerald-700 shadow-sm"
-                : "border-[#b8d9d4] bg-[#e6f2ef] text-[#176b65]"
+                : "border-[#bfe7df] bg-[#e8f6f3] text-[#0d7369]"
             }`}
           >
             <span
-              className={`beacon-dot h-1.5 w-1.5 rounded-full ${
-                isPasswordRevealed ? "bg-emerald-500 animate-ping" : "bg-[#26968a]"
+              className={`h-1.5 w-1.5 rounded-full ${
+                isPasswordRevealed ? "bg-emerald-500 animate-ping" : "bg-[#0d9488]"
               }`}
             ></span>
             {isPasswordRevealed ? "Unlocked" : "Active"}

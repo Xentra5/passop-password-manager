@@ -2,6 +2,7 @@ import { useState, useEffect, useId } from 'react'
 import { ToastContainer, toast, Bounce } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { v4 as uuidv4 } from "uuid";
+import SiteLogo, { extractDomain, getFamousBrand, POPULAR_SERVICES } from './SiteLogo';
 
 const API_BASE_URL = "http://localhost:3000/api/passwords"
 
@@ -185,14 +186,24 @@ const Manager = ({ token, onUnauthorized, onPasswordRevealChange }) => {
     }
   }
 
-  const cancelEditing = () => {
-    setForm({ site: "", username: "", password: "" })
-  }
+  const filteredPasswords = passwordArray.filter(item => {
+    const q = searchQuery.toLowerCase().trim()
+    if (!q) return true
+    const siteLower = (item.site || '').toLowerCase()
+    const userLower = (item.username || '').toLowerCase()
+    const domainLower = extractDomain(item.site).toLowerCase()
+    const brand = getFamousBrand(item.site)
+    const brandLower = brand ? brand.name.toLowerCase() : ''
+    const categoryLower = brand && brand.category ? brand.category.toLowerCase() : ''
 
-  const filteredPasswords = passwordArray.filter(item =>
-    (item.site || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (item.username || "").toLowerCase().includes(searchQuery.toLowerCase())
-  )
+    return (
+      siteLower.includes(q) ||
+      userLower.includes(q) ||
+      domainLower.includes(q) ||
+      brandLower.includes(q) ||
+      categoryLower.includes(q)
+    )
+  })
 
   const strength = getPasswordStrength(form.password)
   const isAnyRevealed = Boolean(showPassword || Object.values(revealedIds).some(Boolean))
@@ -361,10 +372,14 @@ const Manager = ({ token, onUnauthorized, onPasswordRevealChange }) => {
                 Website or service
               </label>
               <div className="relative">
-                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-500">
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
-                  </svg>
+                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
+                  {form.site.trim() ? (
+                    <SiteLogo site={form.site} size="sm" />
+                  ) : (
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                    </svg>
+                  )}
                 </span>
                 <input
                   id={siteInputId}
@@ -372,10 +387,30 @@ const Manager = ({ token, onUnauthorized, onPasswordRevealChange }) => {
                   name="site"
                   value={form.site}
                   onChange={handleChange}
-                  placeholder="https://github.com or cloud.google.com"
-                  className="w-full rounded-md border border-[#d5d0c8] bg-[#faf9f7] py-2.5 pl-10 pr-4 text-sm text-[#1f2933] placeholder:text-[#aaa39a] transition-all focus:border-[#176b87] focus:outline-none focus:ring-1 focus:ring-[#176b87]/30"
+                  placeholder="https://youtube.com, github.com, or google.com"
+                  className="w-full rounded-md border border-[#d5d0c8] bg-[#faf9f7] py-2.5 pl-11 pr-4 text-sm text-[#1f2933] placeholder:text-[#aaa39a] transition-all focus:border-[#176b87] focus:outline-none focus:ring-1 focus:ring-[#176b87]/30"
                   required
                 />
+              </div>
+
+              {/* Quick Brand Autofill Chips */}
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-medium text-[#8c857b] mr-0.5">Quick fill:</span>
+                {POPULAR_SERVICES.slice(0, 10).map((srv) => (
+                  <button
+                    key={srv.domain}
+                    type="button"
+                    onClick={() => setForm(prev => ({ ...prev, site: srv.defaultUrl }))}
+                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border transition-all ${
+                      extractDomain(form.site) === srv.domain
+                        ? 'bg-[#176b87] text-white border-[#176b87] shadow-xs'
+                        : 'bg-white text-[#4b5563] border-[#d5d0c8] hover:border-[#176b87] hover:bg-[#f5fbfc]'
+                    }`}
+                  >
+                    <SiteLogo site={srv.domain} size="xs" />
+                    <span>{srv.name}</span>
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -590,33 +625,63 @@ const Manager = ({ token, onUnauthorized, onPasswordRevealChange }) => {
                         >
                           {/* Domain Column */}
                           <td className="px-5 py-4">
-                            <div className="flex items-center gap-2.5">
-                              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[#e6f2ef] text-xs font-bold text-[#176b65]">
-                                {(item.site.replace(/https?:\/\/(www\.)?/, '')[0] || 'V').toUpperCase()}
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <a
-                                  href={item.site.startsWith('http') ? item.site : `https://${item.site}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="max-w-50 truncate font-medium text-[#2f5868] transition-colors hover:text-[#176b87] hover:underline"
-                                >
-                                  {item.site}
-                                </a>
-                                <button
-                                  type="button"
-                                  onClick={() => copyToClipboard(item.site, `${item.id}-site`, "Website")}
-                                  title="Copy URL"
-                                  className="rounded p-1 text-[#aaa39a] transition-colors hover:bg-[#ebe7e1] hover:text-[#176b87]"
-                                >
-                                  {isCopiedSite ? (
-                                    <span className="text-[10px] font-bold text-emerald-400">✓</span>
-                                  ) : (
-                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                    </svg>
-                                  )}
-                                </button>
+                            <div className="flex items-center gap-3">
+                              <SiteLogo site={item.site} size="md" />
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {(() => {
+                                    const brand = getFamousBrand(item.site);
+                                    const domain = extractDomain(item.site);
+                                    return (
+                                      <>
+                                        {brand ? (
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="font-semibold text-[#1f2933] text-xs">
+                                              {brand.name}
+                                            </span>
+                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                              Official
+                                            </span>
+                                            {brand.category && (
+                                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                                {brand.category}
+                                              </span>
+                                            )}
+                                          </div>
+                                        ) : (
+                                          <span className="font-semibold text-[#1f2933] text-xs">
+                                            {domain || item.site}
+                                          </span>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
+                                </div>
+                                <div className="flex items-center gap-1 mt-0.5">
+                                  <a
+                                    href={item.site.startsWith('http') ? item.site : `https://${item.site}`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    title={item.site}
+                                    className="max-w-60 truncate text-[11px] text-[#7b746b] hover:text-[#176b87] hover:underline"
+                                  >
+                                    {item.site}
+                                  </a>
+                                  <button
+                                    type="button"
+                                    onClick={() => copyToClipboard(item.site, `${item.id}-site`, "Website")}
+                                    title="Copy URL"
+                                    className="rounded p-0.5 text-[#aaa39a] transition-colors hover:bg-[#ebe7e1] hover:text-[#176b87]"
+                                  >
+                                    {isCopiedSite ? (
+                                      <span className="text-[10px] font-bold text-emerald-500">✓</span>
+                                    ) : (
+                                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                      </svg>
+                                    )}
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           </td>
@@ -645,33 +710,13 @@ const Manager = ({ token, onUnauthorized, onPasswordRevealChange }) => {
                           {/* Password Column */}
                           <td className="px-5 py-4">
                             <div className="flex items-center gap-2">
-                              {/* Open/Closed Lock badge with plaintext or masked password */}
+                              {/* Plaintext or masked password display */}
                               <div className="flex items-center gap-1.5">
-                                {isRevealed ? (
-                                  <span
-                                    className="flex items-center gap-1 rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700 border border-emerald-300 shadow-xs"
-                                    title="Vault lock opened: credential revealed"
-                                  >
-                                    <svg className="h-3 w-3 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.4">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 017.6-1.8M5 11h14a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7a2 2 0 012-2z" />
-                                    </svg>
-                                    <span>OPEN</span>
-                                  </span>
-                                ) : (
-                                  <span
-                                    className="flex items-center rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500 border border-slate-200"
-                                    title="Vault secured: credential masked"
-                                  >
-                                    <svg className="h-3 w-3 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                                    </svg>
-                                  </span>
-                                )}
                                 <span
                                   className={`text-xs font-mono transition-all ${
                                     isRevealed
-                                      ? "font-semibold text-emerald-900 bg-emerald-50/70 px-2 py-0.5 rounded border border-emerald-200/60"
-                                      : "text-[#4b5563]"
+                                      ? "font-semibold text-emerald-900 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200"
+                                      : "text-[#4b5563] tracking-widest"
                                   }`}
                                 >
                                   {isRevealed ? item.password : "••••••••••••"}
@@ -681,7 +726,7 @@ const Manager = ({ token, onUnauthorized, onPasswordRevealChange }) => {
                               <button
                                 type="button"
                                 onClick={() => togglePasswordReveal(item.id)}
-                                title={isRevealed ? "Hide password (lock)" : "Open lock & reveal password"}
+                                title={isRevealed ? "Hide password" : "Reveal password"}
                                 className={`rounded p-1.5 transition-all ${
                                   isRevealed
                                     ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-300"
@@ -689,14 +734,15 @@ const Manager = ({ token, onUnauthorized, onPasswordRevealChange }) => {
                                 }`}
                               >
                                 {isRevealed ? (
-                                  /* Open Lock icon when revealed */
-                                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 017.6-1.8M5 11h14a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7a2 2 0 012-2z" />
+                                  /* Eye-slash icon when revealed */
+                                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
                                   </svg>
                                 ) : (
-                                  /* Closed Lock icon when hidden */
+                                  /* Eye icon when hidden */
                                   <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                                   </svg>
                                 )}
                               </button>

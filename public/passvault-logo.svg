@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 56" fill="none">
+  <defs>
+    <!-- Background Squircle Gradient -->
+    <linearGradient id="pv-emblem-grad" x1="4" y1="4" x2="52" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#135a6d" />
+      <stop offset="55%" stop-color="#0d4554" />
+      <stop offset="100%" stop-color="#062c37" />
+    </linearGradient>
+
+    <!-- Top Highlight Sheen -->
+    <linearGradient id="pv-sheen-grad" x1="28" y1="4" x2="28" y2="28" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22" />
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0" />
+    </linearGradient>
+
+    <filter id="pv-shadow" x="0" y="2" width="56" height="56" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#062c37" flood-opacity="0.32" />
+    </filter>
+  </defs>
+
+  <!-- 1. Emblem Squircle -->
+  <g filter="url(#pv-shadow)">
+    <rect x="4" y="4" width="48" height="48" rx="14" fill="url(#pv-emblem-grad)" stroke="#22d3ee" stroke-opacity="0.35" stroke-width="1.2" />
+    <path d="M4 18 C4 10.27 10.27 4 18 4 H38 C45.73 4 52 10.27 52 18 V28 H4 Z" fill="url(#pv-sheen-grad)" />
+  </g>
+
+  <!-- Padlock Shackle -->
+  <path d="M20.5 25.5V19C20.5 14.86 23.86 11.5 28 11.5C32.14 11.5 35.5 14.86 35.5 19V25.5" stroke="#ffffff" stroke-width="2.6" stroke-linecap="round" />
+  
+  <!-- Padlock Body -->
+  <rect x="15" y="24" width="26" height="18.5" rx="4" stroke="#ffffff" stroke-width="2.6" fill="none" />
+  
+  <!-- Precision Keyhole -->
+  <circle cx="28" cy="31" r="2.1" fill="#ffffff" />
+  <path d="M26.8 31.8 L29.2 31.8 L29.6 36.2 C29.65 36.6 29.35 36.9 28.95 36.9 H27.05 C26.65 36.9 26.35 36.6 26.4 36.2 Z" fill="#ffffff" />
+
+  <!-- Corner Active Indicator -->
+  <circle cx="47" cy="47" r="5.5" fill="#0d9488" stroke="#ffffff" stroke-width="2.4" />
+
+  <!-- 2. Typography Wordmark -->
+  <!-- "PassVault" -->
+  <text x="64" y="29" font-family="'Space Grotesk', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="700" font-size="22" letter-spacing="-0.02em">
+    <tspan fill="#0f172a">Pass</tspan>
+    <tspan fill="#0891b2">Vault</tspan>
+  </text>
+
+  <!-- "ZERO-KNOWLEDGE • AES-256" -->
+  <text x="64.5" y="44.5" font-family="'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="600" font-size="9" letter-spacing="1.5" fill="#476e7d">
+    ZERO-KNOWLEDGE • AES-256
+  </text>
+
+  <!-- 3. Status Pill: Active -->
+  <rect x="238" y="15" width="74" height="26" rx="13" fill="#e8f6f3" stroke="#bfe7df" stroke-width="1" />
+  <circle cx="251" cy="28" r="3" fill="#0d9488" />
+  <text x="259" y="32" font-family="'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="600" font-size="11.5" fill="#0d7369">
+    Active
+  </text>
+</svg>

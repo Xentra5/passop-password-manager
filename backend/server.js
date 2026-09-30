@@ -163,6 +163,90 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
+const extractDomain = (urlOrSite) => {
+  if (!urlOrSite || typeof urlOrSite !== 'string') return '';
+  let cleaned = urlOrSite.trim();
+  if (!cleaned) return '';
+  if (!/^https?:\/\//i.test(cleaned)) {
+    cleaned = 'https://' + cleaned;
+  }
+  try {
+    const parsed = new URL(cleaned);
+    return parsed.hostname.replace(/^www\./i, '').toLowerCase();
+  } catch {
+    return urlOrSite.replace(/^https?:\/\/(www\.)?/i, '').split('/')[0].split('?')[0].toLowerCase();
+  }
+};
+
+const FAMOUS_BRANDS_METADATA = [
+  { id: 'google', name: 'Google', domain: 'google.com', category: 'Productivity', match: /(^|\.)(google\.[a-z.]+|gmail\.com)$/i },
+  { id: 'youtube', name: 'YouTube', domain: 'youtube.com', category: 'Entertainment', match: /(^|\.)(youtube\.com|youtu\.be)$/i },
+  { id: 'github', name: 'GitHub', domain: 'github.com', category: 'Developer', match: /(^|\.)github\.com$/i },
+  { id: 'twitter', name: 'X (Twitter)', domain: 'x.com', category: 'Social', match: /(^|\.)(x\.com|twitter\.com)$/i },
+  { id: 'facebook', name: 'Facebook', domain: 'facebook.com', category: 'Social', match: /(^|\.)(facebook\.com|fb\.com)$/i },
+  { id: 'instagram', name: 'Instagram', domain: 'instagram.com', category: 'Social', match: /(^|\.)instagram\.com$/i },
+  { id: 'linkedin', name: 'LinkedIn', domain: 'linkedin.com', category: 'Professional', match: /(^|\.)linkedin\.com$/i },
+  { id: 'netflix', name: 'Netflix', domain: 'netflix.com', category: 'Entertainment', match: /(^|\.)netflix\.com$/i },
+  { id: 'spotify', name: 'Spotify', domain: 'spotify.com', category: 'Music', match: /(^|\.)spotify\.com$/i },
+  { id: 'discord', name: 'Discord', domain: 'discord.com', category: 'Communication', match: /(^|\.)(discord\.com|discord\.gg)$/i },
+  { id: 'reddit', name: 'Reddit', domain: 'reddit.com', category: 'Social', match: /(^|\.)reddit\.com$/i },
+  { id: 'amazon', name: 'Amazon', domain: 'amazon.com', category: 'Shopping', match: /(^|\.)amazon\.[a-z.]+$/i },
+  { id: 'apple', name: 'Apple', domain: 'apple.com', category: 'Tech', match: /(^|\.)(apple\.com|icloud\.com)$/i },
+  { id: 'microsoft', name: 'Microsoft', domain: 'microsoft.com', category: 'Tech', match: /(^|\.)(microsoft\.com|live\.com|outlook\.com|office\.com)$/i },
+  { id: 'openai', name: 'ChatGPT', domain: 'chatgpt.com', category: 'AI', match: /(^|\.)(openai\.com|chatgpt\.com)$/i },
+  { id: 'claude', name: 'Claude (Anthropic)', domain: 'claude.ai', category: 'AI', match: /(^|\.)(anthropic\.com|claude\.ai)$/i },
+  { id: 'figma', name: 'Figma', domain: 'figma.com', category: 'Design', match: /(^|\.)figma\.com$/i },
+  { id: 'notion', name: 'Notion', domain: 'notion.so', category: 'Productivity', match: /(^|\.)(notion\.so|notion\.com)$/i },
+  { id: 'slack', name: 'Slack', domain: 'slack.com', category: 'Communication', match: /(^|\.)slack\.com$/i },
+  { id: 'zoom', name: 'Zoom', domain: 'zoom.us', category: 'Communication', match: /(^|\.)zoom\.us$/i },
+  { id: 'paypal', name: 'PayPal', domain: 'paypal.com', category: 'Finance', match: /(^|\.)paypal\.com$/i },
+  { id: 'stripe', name: 'Stripe', domain: 'stripe.com', category: 'Finance', match: /(^|\.)stripe\.com$/i },
+  { id: 'steam', name: 'Steam', domain: 'steampowered.com', category: 'Gaming', match: /(^|\.)(steampowered\.com|steamcommunity\.com)$/i },
+  { id: 'twitch', name: 'Twitch', domain: 'twitch.tv', category: 'Entertainment', match: /(^|\.)twitch\.tv$/i },
+  { id: 'tiktok', name: 'TikTok', domain: 'tiktok.com', category: 'Social', match: /(^|\.)tiktok\.com$/i },
+  { id: 'pinterest', name: 'Pinterest', domain: 'pinterest.com', category: 'Social', match: /(^|\.)pinterest\.com$/i },
+  { id: 'gitlab', name: 'GitLab', domain: 'gitlab.com', category: 'Developer', match: /(^|\.)gitlab\.com$/i },
+  { id: 'docker', name: 'Docker', domain: 'docker.com', category: 'Developer', match: /(^|\.)docker\.com$/i },
+  { id: 'vercel', name: 'Vercel', domain: 'vercel.com', category: 'Developer', match: /(^|\.)vercel\.com$/i },
+  { id: 'dropbox', name: 'Dropbox', domain: 'dropbox.com', category: 'Productivity', match: /(^|\.)dropbox\.com$/i },
+  { id: 'adobe', name: 'Adobe', domain: 'adobe.com', category: 'Design', match: /(^|\.)adobe\.com$/i },
+];
+
+app.get('/api/logo/popular', (req, res) => {
+  res.json({
+    success: true,
+    brands: FAMOUS_BRANDS_METADATA.map(({ id, name, domain, category }) => ({
+      id,
+      name,
+      domain,
+      category,
+      logoUrl: `https://www.google.com/s2/favicons?domain=${domain}&sz=128`,
+    })),
+  });
+});
+
+app.get('/api/logo', (req, res) => {
+  const site = req.query.site || req.query.domain || '';
+  const domain = extractDomain(site);
+
+  if (!domain) {
+    return res.status(400).json({ success: false, message: 'Missing or invalid site/domain parameter' });
+  }
+
+  const matchedBrand = FAMOUS_BRANDS_METADATA.find((b) => b.match.test(domain));
+  const googleFavicon = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;
+  const duckDuckGoFavicon = `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`;
+
+  res.json({
+    success: true,
+    domain,
+    brand: matchedBrand ? { id: matchedBrand.id, name: matchedBrand.name, category: matchedBrand.category } : null,
+    isOfficial: Boolean(matchedBrand),
+    logoUrl: googleFavicon,
+    fallbackUrl: duckDuckGoFavicon,
+  });
+});
+
 app.get('/api/passwords', authenticateToken, async (req, res) => {
   try {
     const passwords = await getPasswordsCollection().find({ userId: req.user.userId }).sort({ site: 1 }).toArray();
