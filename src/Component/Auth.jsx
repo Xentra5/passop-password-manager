@@ -2,6 +2,7 @@ import { useState } from "react"
 import { ToastContainer, toast, Bounce } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
 import PassVaultLogo from "./PassVaultLogo"
+import { deriveVaultKey } from "../utils/cryptoVault"
 
 // The backend API base address for all authentication routes
 const AUTH_API_URL = "http://localhost:3000/api/auth"
@@ -115,8 +116,11 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
         throw new Error(data.message || "Authentication failed")
       }
 
-      // 6. Success! Pass user & token data to App.jsx to unlock the vault
-      onAuthenticated(data)
+      // 6. Zero-Knowledge: Derive 256-bit AES vault key in the browser from master password & email
+      const vaultKey = await deriveVaultKey(form.password, form.email)
+
+      // 7. Success! Pass user, token, & vaultKey data to App.jsx to unlock the vault
+      onAuthenticated({ ...data, vaultKey })
       toast.success(isRegistering ? "Account created" : "Welcome back", {
         theme: "dark",
         transition: Bounce,

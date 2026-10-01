@@ -1,10 +1,11 @@
-import { useCallback, useState } from "react"
+import { useCallback, useState, useEffect } from "react"
 import Manager from "./Component/Manger"
 import Navbar from "./Component/NavBar"
 import Footer from "./Component/Footer"
 import Auth from "./Component/Auth"
 import LandingPage from "./Component/LandingPage"
 import { useSmoothScroll } from "./hooks/useSmoothScroll"
+import { getCachedVaultKey, clearCachedVaultKey } from "./utils/cryptoVault"
 
 function App() {
   // Lenis smooth scrolling — disabled automatically when prefers-reduced-motion is set
@@ -15,15 +16,32 @@ function App() {
     user: JSON.parse(localStorage.getItem("passvault_user") || "null"),
   }))
 
+  const [vaultKey, setVaultKey] = useState(null)
   const [activeView, setActiveView] = useState(() => (session.token ? "vault" : "landing"))
   const [authModalOpen, setAuthModalOpen] = useState(false)
   const [authModalMode, setAuthModalMode] = useState("login")
   const [isPasswordRevealed, setIsPasswordRevealed] = useState(false)
 
+  // Restore cached zero-knowledge vault key from volatile session storage on page reload
+  useEffect(() => {
+    let isMounted = true;
+    getCachedVaultKey().then(key => {
+      if (isMounted && key) {
+        setVaultKey(key);
+      }
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const handleAuthenticated = useCallback((data) => {
     localStorage.setItem("passvault_token", data.token)
     localStorage.setItem("passvault_user", JSON.stringify(data.user))
     setSession({ token: data.token, user: data.user })
+    if (data.vaultKey) {
+      setVaultKey(data.vaultKey)
+    }
     setAuthModalOpen(false)
     setActiveView("vault")
   }, [])
@@ -31,6 +49,8 @@ function App() {
   const handleLogout = useCallback(() => {
     localStorage.removeItem("passvault_token")
     localStorage.removeItem("passvault_user")
+    clearCachedVaultKey()
+    setVaultKey(null)
     setSession({ token: null, user: null })
     setActiveView("landing")
   }, [])
@@ -60,6 +80,7 @@ function App() {
         {session.token && activeView === "vault" ? (
           <Manager
             token={session.token}
+            vaultKey={vaultKey}
             onUnauthorized={handleLogout}
             onPasswordRevealChange={setIsPasswordRevealed}
           />

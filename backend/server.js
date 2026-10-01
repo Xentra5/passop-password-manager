@@ -51,6 +51,11 @@ const ENCRYPTION_PREFIX = 'enc:v1:';
 
 const encryptVaultPassword = (plainText) => {
   if (typeof plainText !== 'string' || !plainText) return plainText;
+  // Zero-Knowledge Client-Side Encryption:
+  // If the secret was already encrypted inside the client's browser, preserve ciphertext directly.
+  if (plainText.startsWith('enc:v2:')) {
+    return plainText;
+  }
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', VAULT_CIPHER_KEY, iv);
   const encrypted = Buffer.concat([cipher.update(plainText, 'utf8'), cipher.final()]);
@@ -273,16 +278,24 @@ app.post('/api/passwords', authenticateToken, async (req, res) => {
     }
 
     const recordToInsert = {
-      ...password,
+      id: password.id,
+      site: password.site.trim(),
+      username: password.username.trim(),
       password: encryptVaultPassword(password.password),
       userId: req.user.userId,
+      createdAt: new Date(),
     };
 
     await getPasswordsCollection().insertOne(recordToInsert);
 
     res.status(201).json({
       success: true,
-      password,
+      password: {
+        id: recordToInsert.id,
+        site: recordToInsert.site,
+        username: recordToInsert.username,
+        password: recordToInsert.password,
+      },
     });
   } catch (error) {
     console.error('Failed to save password:', error);
@@ -311,10 +324,10 @@ app.put('/api/passwords/:id', authenticateToken, async (req, res) => {
       { id, userId: req.user.userId },
       {
         $set: {
-          site: password.site,
-          username: password.username,
+          site: password.site.trim(),
+          username: password.username.trim(),
           password: encryptVaultPassword(password.password),
-          id: password.id,
+          updatedAt: new Date(),
         },
       }
     );
@@ -362,6 +375,12 @@ async function startServer() {
   try {
     await client.connect();
     console.log('Connected to MongoDB');
+
+    // Create essential indexes for security & performance
+    const db = client.db(DB_NAME);
+    await db.collection('users').createIndex({ email: 1 }, { unique: true });
+    await db.collection('passwords').createIndex({ userId: 1, id: 1 }, { unique: true });
+    await db.collection('passwords').createIndex({ userId: 1, site: 1 });
 
     app.listen(PORT, () => {
       console.log(`Backend listening on port ${PORT}`);

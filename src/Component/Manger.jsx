@@ -3,10 +3,11 @@ import { ToastContainer, toast, Bounce } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { v4 as uuidv4 } from "uuid";
 import SiteLogo, { extractDomain, getFamousBrand, POPULAR_SERVICES } from './SiteLogo';
+import { encryptCredential, decryptCredential } from '../utils/cryptoVault';
 
 const API_BASE_URL = "http://localhost:3000/api/passwords"
 
-const Manager = ({ token, onUnauthorized, onPasswordRevealChange }) => {
+const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) => {
   const [form, setForm] = useState({ site: "", username: "", password: "" })
   const [passwordArray, setPasswordArray] = useState([])
   const [showPassword, setShowPassword] = useState(false)
@@ -29,6 +30,7 @@ const Manager = ({ token, onUnauthorized, onPasswordRevealChange }) => {
   }
 
   useEffect(() => {
+    let isCancelled = false;
     const loadPasswords = async () => {
       try {
         const req = await fetch(API_BASE_URL, {
@@ -42,16 +44,29 @@ const Manager = ({ token, onUnauthorized, onPasswordRevealChange }) => {
           throw new Error(`Backend returned ${req.status}`)
         }
         const passwords = await req.json()
-        setPasswordArray(passwords)
-        setBackendOnline(true)
+        const decryptedList = await Promise.all(
+          passwords.map(async (item) => ({
+            ...item,
+            password: await decryptCredential(item.password, vaultKey),
+          }))
+        )
+        if (!isCancelled) {
+          setPasswordArray(decryptedList)
+          setBackendOnline(true)
+        }
       } catch (error) {
         console.warn('Backend unavailable, using local session state:', error)
-        setBackendOnline(false)
+        if (!isCancelled) {
+          setBackendOnline(false)
+        }
       }
     }
 
     void loadPasswords()
-  }, [token, onUnauthorized])
+    return () => {
+      isCancelled = true;
+    }
+  }, [token, vaultKey, onUnauthorized])
 
   const generateStrongPassword = () => {
     const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-="
@@ -104,12 +119,30 @@ const Manager = ({ token, onUnauthorized, onPasswordRevealChange }) => {
   const savePassword = async () => {
     if (form.site.trim().length >= 3 && form.username.trim().length >= 3 && form.password.length >= 3) {
       const isEditing = Boolean(form.id)
-      const passwordToSave = { ...form, id: form.id || uuidv4() }
+      const generatedId = form.id || uuidv4()
+
+      // Zero-Knowledge Client-Side Encryption:
+      // The secret is encrypted inside the browser with AES-256-GCM before transmission.
+      const encryptedPassword = await encryptCredential(form.password, vaultKey)
+      const passwordToSave = {
+        site: form.site.trim(),
+        username: form.username.trim(),
+        password: encryptedPassword,
+        id: generatedId,
+      }
+
+      // Local state retains plaintext for instantaneous user display & copy
+      const localPasswordRecord = {
+        site: form.site.trim(),
+        username: form.username.trim(),
+        password: form.password,
+        id: generatedId,
+      }
 
       try {
         if (backendOnline) {
           const response = await fetch(
-            isEditing ? `${API_BASE_URL}/${form.id}` : API_BASE_URL,
+            isEditing ? `${API_BASE_URL}/${generatedId}` : API_BASE_URL,
             {
               method: isEditing ? "PUT" : "POST",
               headers: authHeaders(),
@@ -122,9 +155,9 @@ const Manager = ({ token, onUnauthorized, onPasswordRevealChange }) => {
         setPasswordArray(previousPasswords =>
           isEditing
             ? previousPasswords.map(item =>
-                item.id === passwordToSave.id ? passwordToSave : item
+                item.id === generatedId ? localPasswordRecord : item
               )
-            : [...previousPasswords, passwordToSave]
+            : [...previousPasswords, localPasswordRecord]
         )
 
         toast.success(isEditing ? 'Credential updated!' : 'Credential secured in vault!', {
