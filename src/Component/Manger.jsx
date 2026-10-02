@@ -1,9 +1,11 @@
-import { useState, useEffect, useId } from 'react'
+import { useState, useEffect, useId, useMemo } from 'react'
 import { ToastContainer, toast, Bounce } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { v4 as uuidv4 } from "uuid";
 import SiteLogo, { extractDomain, getFamousBrand, POPULAR_SERVICES } from './SiteLogo';
 import { encryptCredential, decryptCredential } from '../utils/cryptoVault';
+import VaultSecurityAudit from './VaultSecurityAudit';
+import { checkPasswordBreach, auditVaultSecurity } from '../utils/breachCheck';
 
 const API_BASE_URL = "http://localhost:3000/api/passwords"
 
@@ -15,6 +17,9 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
   const [copiedKey, setCopiedKey] = useState(null)
   const [revealedIds, setRevealedIds] = useState({})
   const [backendOnline, setBackendOnline] = useState(true)
+  const [breachResults, setBreachResults] = useState(() => new Map())
+  const [isScanningBreaches, setIsScanningBreaches] = useState(false)
+  const [auditFilter, setAuditFilter] = useState('all')
 
   const siteInputId = useId()
   const usernameInputId = useId()
@@ -219,15 +224,71 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
     }
   }
 
+  const auditData = useMemo(() => {
+    return auditVaultSecurity(passwordArray, breachResults);
+  }, [passwordArray, breachResults]);
+
+  const handleScanBreaches = async () => {
+    if (!passwordArray.length) {
+      toast.info("No credentials in vault to scan.", { theme: "dark" });
+      return;
+    }
+    setIsScanningBreaches(true);
+    toast.info("Checking vault passwords with HaveIBeenPwned k-Anonymity...", {
+      theme: "dark",
+      autoClose: 2000,
+    });
+
+    try {
+      const newMap = new Map(breachResults);
+      const uniquePasswords = Array.from(new Set(passwordArray.map(p => p.password).filter(Boolean)));
+
+      for (const pwd of uniquePasswords) {
+        if (!newMap.has(pwd)) {
+          const res = await checkPasswordBreach(pwd);
+          newMap.set(pwd, res);
+        }
+      }
+
+      setBreachResults(newMap);
+      const updatedAudit = auditVaultSecurity(passwordArray, newMap);
+
+      if (updatedAudit.breachedCount > 0) {
+        toast.error(`Security Alert: ${updatedAudit.breachedCount} account(s) match known public data breaches!`, {
+          theme: "dark",
+          transition: Bounce,
+          autoClose: 5000,
+        });
+      } else {
+        toast.success("Zero compromised credentials found! Your vault is clean.", {
+          theme: "dark",
+          transition: Bounce,
+          autoClose: 3000,
+        });
+      }
+    } catch (err) {
+      console.error("Breach scan error:", err);
+      toast.error("Could not complete breach scan. Check network connection.", { theme: "dark" });
+    } finally {
+      setIsScanningBreaches(false);
+    }
+  };
+
   const filteredPasswords = passwordArray.filter(item => {
-    const q = searchQuery.toLowerCase().trim()
-    if (!q) return true
-    const siteLower = (item.site || '').toLowerCase()
-    const userLower = (item.username || '').toLowerCase()
-    const domainLower = extractDomain(item.site).toLowerCase()
-    const brand = getFamousBrand(item.site)
-    const brandLower = brand ? brand.name.toLowerCase() : ''
-    const categoryLower = brand && brand.category ? brand.category.toLowerCase() : ''
+    // 1. Audit status filter
+    if (auditFilter === 'breached' && !auditData.breachedIds.has(item.id)) return false;
+    if (auditFilter === 'reused' && !auditData.reusedIds.has(item.id)) return false;
+    if (auditFilter === 'weak' && !auditData.weakIds.has(item.id)) return false;
+
+    // 2. Text search query
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return true;
+    const siteLower = (item.site || '').toLowerCase();
+    const userLower = (item.username || '').toLowerCase();
+    const domainLower = extractDomain(item.site).toLowerCase();
+    const brand = getFamousBrand(item.site);
+    const brandLower = brand ? brand.name.toLowerCase() : '';
+    const categoryLower = brand && brand.category ? brand.category.toLowerCase() : '';
 
     return (
       siteLower.includes(q) ||
@@ -235,8 +296,8 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
       domainLower.includes(q) ||
       brandLower.includes(q) ||
       categoryLower.includes(q)
-    )
-  })
+    );
+  });
 
   const strength = getPasswordStrength(form.password)
   const isAnyRevealed = Boolean(showPassword || Object.values(revealedIds).some(Boolean))
@@ -576,8 +637,39 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
           </form>
         </section>
 
+        {/* Vault Security Audit & HaveIBeenPwned Breach Scanner */}
+        <VaultSecurityAudit
+          auditData={auditData}
+          onScanBreaches={handleScanBreaches}
+          isScanning={isScanningBreaches}
+          activeFilter={auditFilter}
+          onSelectFilter={setAuditFilter}
+          onFixPassword={EditPassword}
+        />
+
         {/* Stored Credentials Section */}
         <section className="credential-section section-reveal space-y-4">
+          {/* Active Audit Filter Notice */}
+          {auditFilter !== 'all' && (
+            <div className="flex items-center justify-between rounded-lg border border-[#176b87]/30 bg-[#f0f8fa] px-4 py-2.5 text-xs text-[#176b87]">
+              <div className="flex items-center gap-2">
+                <span className="rounded bg-[#176b87] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                  Filter Active
+                </span>
+                <span>
+                  Displaying only <strong>{auditFilter}</strong> credentials ({filteredPasswords.length} items)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAuditFilter('all')}
+                className="font-bold underline hover:text-[#145d74]"
+              >
+                Show All Accounts ✕
+              </button>
+            </div>
+          )}
+
           <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
             <div>
               <h2 className="font-['Space_Grotesk'] text-xl font-bold tracking-tight text-[#1f2933] sm:text-2xl">
@@ -689,6 +781,31 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
                                       </>
                                     );
                                   })()}
+                                  {/* Security Status Badges */}
+                                  {auditData.breachedIds.has(item.id) && (
+                                    <span
+                                      className="inline-flex items-center gap-1 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 border border-rose-200"
+                                      title="Alert: This password has leaked in public data breaches!"
+                                    >
+                                      🚨 Leaked
+                                    </span>
+                                  )}
+                                  {auditData.reusedIds.has(item.id) && (
+                                    <span
+                                      className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 border border-amber-200"
+                                      title="Notice: Password is used on multiple accounts"
+                                    >
+                                      🔁 Reused
+                                    </span>
+                                  )}
+                                  {auditData.weakIds.has(item.id) && (
+                                    <span
+                                      className="inline-flex items-center gap-1 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-800 border border-orange-200"
+                                      title="Notice: Password length is under 10 or lacks character diversity"
+                                    >
+                                      ⚠️ Weak
+                                    </span>
+                                  )}
                                 </div>
                                 <div className="flex items-center gap-1 mt-0.5">
                                   <a
