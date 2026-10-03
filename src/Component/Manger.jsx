@@ -6,6 +6,7 @@ import SiteLogo, { extractDomain, getFamousBrand, POPULAR_SERVICES } from './Sit
 import { encryptCredential, decryptCredential } from '../utils/cryptoVault';
 import VaultSecurityAudit from './VaultSecurityAudit';
 import { checkPasswordBreach, auditVaultSecurity } from '../utils/breachCheck';
+import PasswordGeneratorModal from './PasswordGeneratorModal';
 
 const API_BASE_URL = "http://localhost:3000/api/passwords"
 
@@ -20,6 +21,7 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
   const [breachResults, setBreachResults] = useState(() => new Map())
   const [isScanningBreaches, setIsScanningBreaches] = useState(false)
   const [auditFilter, setAuditFilter] = useState('all')
+  const [isGeneratorOpen, setIsGeneratorOpen] = useState(false)
 
   const siteInputId = useId()
   const usernameInputId = useId()
@@ -89,6 +91,16 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
       autoClose: 2000,
     })
   }
+
+  const handleApplyGeneratedPassword = (newPassword) => {
+    setForm(prev => ({ ...prev, password: newPassword }));
+    setShowPassword(true);
+    toast.success("Applied fortified secret to credential form!", {
+      theme: "dark",
+      transition: Bounce,
+      autoClose: 2000,
+    });
+  };
 
   const getPasswordStrength = (pwd) => {
     if (!pwd) return { score: 0, label: "None", width: "w-0", color: "bg-slate-700" }
@@ -613,16 +625,27 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
 
             {/* Action Buttons Bar */}
             <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
-              <button
-                type="button"
-                onClick={generateStrongPassword}
-                className="flex items-center gap-2 rounded-md border border-[#d5d0c8] bg-white px-4 py-2.5 text-xs font-semibold text-[#4b5563] transition-all hover:border-[#9ec8d2] hover:bg-[#f5fbfc] hover:text-[#176b87] active:scale-[0.98]"
-              >
-                <svg className="h-4 w-4 text-[#176b87]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-                </svg>
-                <span>Generate password</span>
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsGeneratorOpen(true)}
+                  className="flex items-center gap-2 rounded-md border border-[#176b87]/40 bg-[#f0f8fa] px-3.5 py-2.5 text-xs font-semibold text-[#176b87] transition-all hover:bg-[#176b87] hover:text-white active:scale-[0.98]"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                  </svg>
+                  <span>Customize & Generate</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={generateStrongPassword}
+                  title="Generate 16-character password immediately"
+                  className="flex items-center gap-1.5 rounded-md border border-[#d5d0c8] bg-white px-3 py-2.5 text-xs font-medium text-[#4b5563] transition-all hover:bg-[#f4f1ec] active:scale-[0.98]"
+                >
+                  <span>⚡ Quick 16-char</span>
+                </button>
+              </div>
 
               <button
                 type="submit"
@@ -947,6 +970,13 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
             </div>
           )}
         </section>
+
+        {/* Cryptographic Password & Passphrase Generator Modal */}
+        <PasswordGeneratorModal
+          isOpen={isGeneratorOpen}
+          onClose={() => setIsGeneratorOpen(false)}
+          onApplyPassword={handleApplyGeneratedPassword}
+        />
       </main>
     </div>
   )
