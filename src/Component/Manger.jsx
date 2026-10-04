@@ -7,6 +7,7 @@ import { encryptCredential, decryptCredential } from '../utils/cryptoVault';
 import VaultSecurityAudit from './VaultSecurityAudit';
 import { checkPasswordBreach, auditVaultSecurity } from '../utils/breachCheck';
 import PasswordGeneratorModal from './PasswordGeneratorModal';
+import VaultMigrationModal from './VaultMigrationModal';
 
 const API_BASE_URL = "http://localhost:3000/api/passwords"
 
@@ -22,6 +23,7 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
   const [isScanningBreaches, setIsScanningBreaches] = useState(false)
   const [auditFilter, setAuditFilter] = useState('all')
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false)
+  const [isMigrationOpen, setIsMigrationOpen] = useState(false)
 
   const siteInputId = useId()
   const usernameInputId = useId()
@@ -100,6 +102,38 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
       transition: Bounce,
       autoClose: 2000,
     });
+  };
+
+  const handleBulkImport = async (candidates) => {
+    // 1. Zero-Knowledge Client-Side Encryption for each candidate
+    const encryptedRecords = await Promise.all(
+      candidates.map(async (acc) => ({
+        id: acc.id || uuidv4(),
+        site: acc.site.trim(),
+        username: acc.username.trim(),
+        password: await encryptCredential(acc.password, vaultKey),
+      }))
+    );
+
+    // 2. Persist in bulk to backend database
+    if (backendOnline) {
+      const response = await fetch(`${API_BASE_URL}/bulk`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ passwords: encryptedRecords }),
+      });
+      if (!response.ok) {
+        throw new Error(`Bulk import failed with status ${response.status}`);
+      }
+    }
+
+    // 3. Update local state with plaintext for instant UI display
+    const localCandidates = candidates.map((acc, idx) => ({
+      ...acc,
+      id: encryptedRecords[idx].id,
+    }));
+
+    setPasswordArray(prev => [...prev, ...localCandidates]);
   };
 
   const getPasswordStrength = (pwd) => {
@@ -703,23 +737,38 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
               </p>
             </div>
 
-            {/* Search Input Filter */}
-            {passwordArray.length > 0 && (
-              <div className="relative w-full sm:w-72">
-                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                  </svg>
-                </span>
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Filter by site or username..."
-                  className="w-full rounded-md border border-[#d5d0c8] bg-white py-2 pl-9 pr-4 text-xs text-[#1f2933] placeholder:text-[#aaa39a] transition-all focus:border-[#176b87] focus:outline-none focus:ring-1 focus:ring-[#176b87]/30"
-                />
-              </div>
-            )}
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Import & Export Migration Button */}
+              <button
+                type="button"
+                onClick={() => setIsMigrationOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-[#d5d0c8] bg-white px-3 py-2 text-xs font-semibold text-[#4b5563] transition-all hover:border-[#176b87] hover:bg-[#f0f8fa] hover:text-[#176b87] active:scale-95"
+                title="Import from Chrome/Firefox/Bitwarden or export vault"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                <span>Import / Export</span>
+              </button>
+
+              {/* Search Input Filter */}
+              {passwordArray.length > 0 && (
+                <div className="relative w-full sm:w-64">
+                  <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </span>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Filter by site or username..."
+                    className="w-full rounded-md border border-[#d5d0c8] bg-white py-2 pl-9 pr-4 text-xs text-[#1f2933] placeholder:text-[#aaa39a] transition-all focus:border-[#176b87] focus:outline-none focus:ring-1 focus:ring-[#176b87]/30"
+                  />
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Credentials Display List / Table */}
@@ -976,6 +1025,16 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
           isOpen={isGeneratorOpen}
           onClose={() => setIsGeneratorOpen(false)}
           onApplyPassword={handleApplyGeneratedPassword}
+        />
+
+        {/* Vault Migration & Backup Modal (CSV / JSON) */}
+        <VaultMigrationModal
+          isOpen={isMigrationOpen}
+          onClose={() => setIsMigrationOpen(false)}
+          passwordArray={passwordArray}
+          onBulkImportSuccess={handleBulkImport}
+          vaultKey={vaultKey}
+          token={token}
         />
       </main>
     </div>

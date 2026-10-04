@@ -303,6 +303,46 @@ app.post('/api/passwords', authenticateToken, async (req, res) => {
   }
 });
 
+app.post('/api/passwords/bulk', authenticateToken, async (req, res) => {
+  try {
+    const { passwords } = req.body;
+    if (!Array.isArray(passwords) || passwords.length === 0) {
+      return res.status(400).json({ success: false, message: 'Invalid or empty passwords array' });
+    }
+
+    const records = [];
+    const now = new Date();
+
+    for (const item of passwords) {
+      if (isValidPasswordPayload(item)) {
+        records.push({
+          id: item.id,
+          site: item.site.trim(),
+          username: item.username.trim(),
+          password: encryptVaultPassword(item.password),
+          userId: req.user.userId,
+          createdAt: now,
+        });
+      }
+    }
+
+    if (records.length === 0) {
+      return res.status(400).json({ success: false, message: 'No valid credential records in payload' });
+    }
+
+    // Insert all records, ordered: false to continue if an individual ID duplicates
+    await getPasswordsCollection().insertMany(records, { ordered: false });
+
+    res.status(201).json({
+      success: true,
+      insertedCount: records.length,
+    });
+  } catch (error) {
+    console.error('Failed to bulk save passwords:', error);
+    res.status(500).json({ success: false, message: 'Failed to bulk import passwords' });
+  }
+});
+
 app.put('/api/passwords/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
