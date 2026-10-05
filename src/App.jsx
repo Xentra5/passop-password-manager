@@ -6,6 +6,8 @@ import Auth from "./Component/Auth"
 import LandingPage from "./Component/LandingPage"
 import { useSmoothScroll } from "./hooks/useSmoothScroll"
 import { getCachedVaultKey, clearCachedVaultKey } from "./utils/cryptoVault"
+import { useAutoLock } from "./hooks/useAutoLock"
+import LockScreenModal from "./Component/LockScreenModal"
 
 function App() {
   // Lenis smooth scrolling — disabled automatically when prefers-reduced-motion is set
@@ -21,6 +23,9 @@ function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false)
   const [authModalMode, setAuthModalMode] = useState("login")
   const [isPasswordRevealed, setIsPasswordRevealed] = useState(false)
+
+  // Inactivity auto-lock and PIN security
+  const { isLocked, lockVault, unlockVault } = useAutoLock(Boolean(session.token && activeView === "vault"))
 
   // Restore cached zero-knowledge vault key from volatile session storage on page reload
   useEffect(() => {
@@ -71,6 +76,7 @@ function App() {
         user={session.user}
         onLogout={handleLogout}
         onOpenAuth={handleOpenAuth}
+        onLockVault={lockVault}
         activeView={activeView}
         setActiveView={setActiveView}
         isPasswordRevealed={isPasswordRevealed}
@@ -101,6 +107,14 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* Auto-Lock & Quick 4-Digit PIN Modal */}
+      <LockScreenModal
+        isOpen={isLocked && Boolean(session.token)}
+        user={session.user}
+        onUnlock={unlockVault}
+        onLogout={handleLogout}
+      />
 
       <Footer />
     </div>

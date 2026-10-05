@@ -1,7 +1,7 @@
 import githubIcon from "../assets/github-icon-1-logo.svg";
 import PassVaultLogo from "./PassVaultLogo";
 
-const NavBar = ({ user, onLogout, onOpenAuth, activeView, setActiveView, isPasswordRevealed = false }) => {
+const NavBar = ({ user, onLogout, onOpenAuth, onLockVault, activeView, setActiveView, isPasswordRevealed = false }) => {
   return (
     <header className="site-nav nav-reveal sticky top-0 z-30 w-full border-b border-[#ddd8d0]/80 bg-[#f4f1ec]/85 backdrop-blur-md transition-all">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
@@ -49,13 +49,27 @@ const NavBar = ({ user, onLogout, onOpenAuth, activeView, setActiveView, isPassw
           {user ? (
             <>
               {activeView === "vault" ? (
-                <button
-                  type="button"
-                  onClick={() => setActiveView("landing")}
-                  className="hidden rounded-md border border-[#d5d0c8] bg-white px-3 py-1.5 text-xs font-medium text-[#4b5563] hover:bg-[#faf9f7] sm:inline-block"
-                >
-                  Landing Page
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={onLockVault}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-[#d5d0c8] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#4b5563] transition hover:border-[#176b87] hover:bg-[#f0f8fa] hover:text-[#176b87] active:scale-95"
+                    title="Lock vault immediately"
+                  >
+                    <svg className="h-3.5 w-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <span className="hidden sm:inline">Lock Vault</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveView("landing")}
+                    className="hidden rounded-md border border-[#d5d0c8] bg-white px-3 py-1.5 text-xs font-medium text-[#4b5563] hover:bg-[#faf9f7] sm:inline-block"
+                  >
+                    Landing Page
+                  </button>
+                </>
               ) : (
                 <button
                   type="button"
