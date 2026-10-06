@@ -1,3 +1,39 @@
+// ============================================================================
+// LANDINGPAGE.JSX - MARKETING & ARCHITECTURE OVERVIEW COMPONENT
+// ============================================================================
+// This is the public homepage shown when the user is logged out.
+// It contains 7 major sections:
+//
+// 1. HERO SECTION:
+//    - Headline, subheadline, trust badges
+//    - Primary "Open Vault" and "Simulate Cipher" CTA buttons
+//    - 3D Interactive Cryptographic Network Globe with HUD status indicators
+//
+// 2. CRYPTOGRAPHIC STANDARDS STRIP:
+//    - Interactive technology logos (MongoDB, Node.js Crypto, React 19, POSIX, Auditable)
+//
+// 3. ASYMMETRIC BENTO GRID:
+//    - Card 1: Hardware-Grade Envelope Encryption (Macro silicon image with scanline)
+//    - Card 2: Live Entropy Analyzer (Real-time Shannon entropy calculation & password meter)
+//    - Card 3: Zero Plaintext Ingestion (Visual checklist of security guarantees)
+//    - Card 4: Seamless Encrypted State Replication (MongoDB sync badges)
+//
+// 4. INTERACTIVE LIVE CIPHER SANDBOX:
+//    - Type any text -> simulates real-time AES-256-GCM cipher transformation
+//    - Copy hexadecimal ciphertext hash to clipboard
+//
+// 5. ARCHITECTURE THREE-TIER PIPELINE:
+//    - Stage 01: Client-Side PBKDF2 local key derivation
+//    - Stage 02: AES-256-GCM individual credential envelopes
+//    - Stage 03: Blind document storage in MongoDB
+//
+// 6. TESTIMONIALS:
+//    - Verified security practitioner quotes
+//
+// 7. CLOSING CTA BANNER:
+//    - Final call-to-action to register or sign in
+// ============================================================================
+
 import { useState, useMemo } from "react";
 import securityCoreImg from "../assets/security-core.jpg";
 import {
@@ -22,6 +58,7 @@ import {
 import { useSpotlight, useTilt, useScrollReveal, useMagnetic } from "../hooks/useMotion";
 import CryptographicNetworkGlobe from "./CryptographicNetworkGlobe";
 
+// Sample test passwords for the interactive Entropy Analyzer
 const SAMPLE_SEEDS = [
   "alpha-phoenix-982#delta",
   "k9!Vektor$Vault_2026",
@@ -30,12 +67,12 @@ const SAMPLE_SEEDS = [
   "hyper-symmetric-vault#09"
 ];
 
-/**
- * Reusable Spotlight Card Component (Linear / Vercel style)
- * Generates an ambient radial specular glow tracking cursor position in real-time.
- */
+// ============================================================================
+// HELPER COMPONENT: SpotlightCard
+// Creates a card with an ambient radial spotlight that follows the mouse cursor.
+// ============================================================================
 const SpotlightCard = ({ children, className = "", ...props }) => {
-  const cardRef = useSpotlight();
+  const cardRef = useSpotlight(); // Hook calculating mouse coordinates relative to the card
   return (
     <div
       ref={cardRef}
@@ -47,9 +84,10 @@ const SpotlightCard = ({ children, className = "", ...props }) => {
   );
 };
 
-/**
- * Reusable Scroll Reveal Wrapper with Stagger Support
- */
+// ============================================================================
+// HELPER COMPONENT: ScrollRevealSection
+// Uses IntersectionObserver to smoothly fade and slide in sections as the user scrolls.
+// ============================================================================
 const ScrollRevealSection = ({ children, className = "", delayClass = "" }) => {
   const [ref, isVisible] = useScrollReveal({ threshold: 0.12 });
   return (
@@ -62,6 +100,10 @@ const ScrollRevealSection = ({ children, className = "", delayClass = "" }) => {
   );
 };
 
+// ============================================================================
+// HELPER FUNCTION: computeHash
+// Fast deterministic pseudo-hash used for instant live simulation in the sandbox.
+// ============================================================================
 const computeHash = (text) => {
   let hash = 0;
   for (let i = 0; i < text.length; i++) {
@@ -77,32 +119,46 @@ const computeHash = (text) => {
   return `0x${hex.slice(0, 32)}...${hex.slice(-8)}`;
 };
 
+// ============================================================================
+// MAIN COMPONENT: LandingPage
+// Props:
+// - onOpenAuth: Callback from App.jsx to open the Login ("login") or Register ("register") modal.
+// ============================================================================
 const LandingPage = ({ onOpenAuth }) => {
-  // Live Cipher Sandbox State
-  const [inputText, setInputText] = useState("passvault_master_key_2026");
-  const [isScrambling, setIsScrambling] = useState(false);
-  const [scrambledHex, setScrambledHex] = useState(null);
-  const [copiedCipher, setCopiedCipher] = useState(false);
+  // --------------------------------------------------------------------------
+  // STATE: Live Cipher Sandbox
+  // --------------------------------------------------------------------------
+  const [inputText, setInputText] = useState("passvault_master_key_2026"); // User text input in sandbox
+  const [isScrambling, setIsScrambling] = useState(false);               // Animation running state
+  const [scrambledHex, setScrambledHex] = useState(null);                 // Temporary randomized hex text
+  const [copiedCipher, setCopiedCipher] = useState(false);               // "Copied!" feedback state
 
-  // Derived deterministic cipher
+  // Compute cipher deterministically whenever inputText changes:
   const defaultCipher = useMemo(() => computeHash(inputText), [inputText]);
   const cipherHex = scrambledHex ?? defaultCipher;
 
-  // Live Entropy & Password Simulator State
-  const [simPassword, setSimPassword] = useState("K9#vX92$qL1!mZ");
-  const [showSimPassword, setShowSimPassword] = useState(false);
-  const [randomizeSpin, setRandomizeSpin] = useState(false);
+  // --------------------------------------------------------------------------
+  // STATE: Live Password Entropy Simulator
+  // --------------------------------------------------------------------------
+  const [simPassword, setSimPassword] = useState("K9#vX92$qL1!mZ"); // Password being tested
+  const [showSimPassword, setShowSimPassword] = useState(false);    // Toggle eye icon (masked vs plain)
+  const [randomizeSpin, setRandomizeSpin] = useState(false);        // Button icon spin animation
 
-  // Active Stage in Protocol Pipeline
-  const [hoveredStage, setHoveredStage] = useState(null);
+  // --------------------------------------------------------------------------
+  // STATE: Architecture Pipeline Hover
+  // --------------------------------------------------------------------------
+  const [hoveredStage, setHoveredStage] = useState(null); // Stage 1, 2, or 3 hovered
 
-  // 3D Tilt Hook for Hero Asset Card
-  const heroTiltRef = useTilt({ maxTilt: 7, scale: 1.015 });
+  // --------------------------------------------------------------------------
+  // MOTION HOOKS
+  // --------------------------------------------------------------------------
+  const heroTiltRef = useTilt({ maxTilt: 7, scale: 1.015 });        // 3D tilt effect on card
+  const primaryCtaRef = useMagnetic({ strength: 6, ease: 0.12 });     // Button pulled towards cursor
 
-  // Magnetic hook for primary CTA
-  const primaryCtaRef = useMagnetic({ strength: 6, ease: 0.12 });
-
-  // Kinetic Scramble Trigger
+  // --------------------------------------------------------------------------
+  // HANDLERS: Cipher Sandbox
+  // --------------------------------------------------------------------------
+  // Simulates rapid encryption cycles with cycling hex characters:
   const handleScrambleTrigger = () => {
     setIsScrambling(true);
     let count = 0;
@@ -122,22 +178,27 @@ const LandingPage = ({ onOpenAuth }) => {
     }, 45);
   };
 
+  // Copies the output ciphertext to system clipboard:
   const handleCopyCipher = () => {
     navigator.clipboard.writeText(cipherHex);
     setCopiedCipher(true);
     setTimeout(() => setCopiedCipher(false), 2000);
   };
 
-  // Entropy Calculation for Simulator
+  // --------------------------------------------------------------------------
+  // ENTROPY CALCULATION (Information Theory - Shannon Bits)
+  // Calculates mathematical resistance against brute-force attacks:
+  // --------------------------------------------------------------------------
   const entropyStats = useMemo(() => {
     const len = simPassword.length;
     let poolSize = 0;
-    if (/[a-z]/.test(simPassword)) poolSize += 26;
-    if (/[A-Z]/.test(simPassword)) poolSize += 26;
-    if (/[0-9]/.test(simPassword)) poolSize += 10;
-    if (/[^a-zA-Z0-9]/.test(simPassword)) poolSize += 32;
+    if (/[a-z]/.test(simPassword)) poolSize += 26;        // Lowercase letters
+    if (/[A-Z]/.test(simPassword)) poolSize += 26;        // Uppercase letters
+    if (/[0-9]/.test(simPassword)) poolSize += 10;        // Numbers
+    if (/[^a-zA-Z0-9]/.test(simPassword)) poolSize += 32; // Special characters
     if (poolSize === 0 || len === 0) return { bits: 0, label: "Empty", rating: "poor", percentage: 5 };
 
+    // Shannon Entropy formula: bits = length * log2(poolSize)
     const bits = Math.round(len * (Math.log(poolSize) / Math.log(2)));
     if (bits < 40) return { bits, label: "Weak", rating: "weak", percentage: 25 };
     if (bits < 65) return { bits, label: "Moderate", rating: "moderate", percentage: 55 };
@@ -145,6 +206,7 @@ const LandingPage = ({ onOpenAuth }) => {
     return { bits, label: "Optimal", rating: "optimal", percentage: 100 };
   }, [simPassword]);
 
+  // Picks a random seed password for testing:
   const randomizeSimPassword = () => {
     setRandomizeSpin(true);
     const available = SAMPLE_SEEDS.filter((s) => s !== simPassword);
@@ -153,23 +215,27 @@ const LandingPage = ({ onOpenAuth }) => {
     setTimeout(() => setRandomizeSpin(false), 500);
   };
 
+  // ==========================================================================
+  // RENDERED PAGE SECTIONS
+  // ==========================================================================
   return (
     <div className="w-full">
-      {/* 1. HERO — Full-Bleed Gradient Mesh */}
+      {/* =====================================================================
+          SECTION 1: HERO (Gradient mesh, headline, CTAs, 3D Canvas Globe)
+          ===================================================================== */}
       <div className="hero-full-bleed">
-        {/* Dot grid texture */}
+        {/* Background ambient texture & colored light blooms */}
         <div className="hero-dot-grid" aria-hidden="true" />
-        {/* Gradient bloom layers */}
         <div className="hero-bloom-left" aria-hidden="true" />
         <div className="hero-bloom-right" aria-hidden="true" />
 
         <section className="relative z-10 mx-auto max-w-6xl px-4 pt-16 pb-20 sm:px-6 md:pt-24 md:pb-32">
           <div className="grid grid-cols-1 items-center gap-12 lg:grid-cols-12 lg:gap-10">
 
-            {/* Left: Text Column */}
+            {/* Left Column: Headlines & Call to Actions */}
             <div className="lg:col-span-7">
               <ScrollRevealSection delayClass="stagger-1">
-                {/* Premium eyebrow pill */}
+                {/* Security badge pill */}
                 <div className="inline-flex items-center gap-2 rounded-full border border-[#26968a]/30 bg-white/70 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.15em] text-[#176b87] shadow-sm backdrop-blur-sm">
                   <span className="beacon-dot h-1.5 w-1.5 rounded-full bg-[#26968a]" />
                   Cryptographic Key Vault · AES-256-GCM
@@ -199,6 +265,7 @@ const LandingPage = ({ onOpenAuth }) => {
 
               <ScrollRevealSection delayClass="stagger-4">
                 <div className="mt-9 flex flex-wrap items-center gap-4">
+                  {/* Primary CTA: Pops open registration modal */}
                   <div ref={primaryCtaRef} className="magnetic-btn">
                     <button
                       type="button"
@@ -211,6 +278,7 @@ const LandingPage = ({ onOpenAuth }) => {
                     </button>
                   </div>
 
+                  {/* Secondary CTA: Scrolls down to live interactive cipher sandbox */}
                   <a
                     href="#cipher-sandbox"
                     className="hero-cta-secondary group inline-flex items-center gap-2.5 rounded-xl border border-[#c8c3bb] bg-white/80 px-6 py-4 text-sm font-semibold text-[#1f2933] backdrop-blur-sm transition-all hover:border-[#176b87]/40 hover:bg-white hover:shadow-md"
@@ -220,7 +288,7 @@ const LandingPage = ({ onOpenAuth }) => {
                   </a>
                 </div>
 
-                {/* Trust badges */}
+                {/* 3 Core Trust Badges */}
                 <div className="mt-9 flex flex-wrap items-center gap-6 text-xs font-medium text-[#6b6560]">
                   <div className="flex items-center gap-1.5">
                     <ShieldCheck size={15} className="text-[#26968a]" weight="fill" />
@@ -238,21 +306,19 @@ const LandingPage = ({ onOpenAuth }) => {
               </ScrollRevealSection>
             </div>
 
-            {/* Right: Cryptographic Network Globe */}
+            {/* Right Column: 3D Cryptographic Network Globe Canvas */}
             <div className="lg:col-span-5">
               <ScrollRevealSection delayClass="stagger-3">
-                {/* Globe card — no inline minHeight needed, CSS handles it */}
                 <div className="hero-globe-wrapper" style={{ position: "relative" }}>
-                  {/* Globe fills wrapper absolutely */}
                   <CryptographicNetworkGlobe
                     className=""
                     style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }}
                   />
 
-                  {/* Spacer to maintain card height */}
+                  {/* Spacer to maintain card height for responsive layouts */}
                   <div style={{ height: "420px" }} aria-hidden="true" />
 
-                  {/* Glassmorphic Telemetry HUD pinned to bottom */}
+                  {/* Glassmorphic Telemetry HUD pinned to bottom of globe */}
                   <div className="globe-hud" aria-label="Vault telemetry status">
                     <div className="globe-hud-row">
                       <div className="globe-hud-metric">
@@ -277,14 +343,16 @@ const LandingPage = ({ onOpenAuth }) => {
         </section>
       </div>
 
-      {/* 2. LOGO & STANDARDS STRIP: Interactive Monochromatic Marks */}
+      {/* =====================================================================
+          SECTION 2: CRYPTOGRAPHIC STANDARDS & TECHNOLOGY LOGOS STRIP
+          ===================================================================== */}
       <section className="border-y border-[#ddd8d0]/80 bg-[#eae6df]/45 py-9">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <p className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-[#857e75]">
             Engineered on Open Cryptographic Standards
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-8 sm:gap-14">
-            {/* MongoDB SVG */}
+            {/* MongoDB */}
             <div className="group flex cursor-default items-center gap-2 text-sm font-semibold text-[#5b564e] opacity-75 transition-all duration-200 hover:opacity-100 hover:text-[#13aa52] hover:-translate-y-0.5">
               <svg className="h-6 w-6 transition-colors group-hover:text-[#13aa52]" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M17.193 9.555c-1.264-5.58-4.252-7.414-4.573-8.12-.28-.395-.56-.948-.56-.948s-.246.513-.526.908c-.32.707-3.309 2.54-4.574 8.12-1.424 6.273 1.347 11.233 4.708 13.998.14.116.31.282.452.395.14-.113.311-.28.451-.395 3.361-2.765 6.132-7.725 4.708-13.998l-.086.04z" />
@@ -292,7 +360,7 @@ const LandingPage = ({ onOpenAuth }) => {
               <span>MongoDB</span>
             </div>
 
-            {/* Node.js SVG */}
+            {/* Node.js Crypto */}
             <div className="group flex cursor-default items-center gap-2 text-sm font-semibold text-[#5b564e] opacity-75 transition-all duration-200 hover:opacity-100 hover:text-[#539e43] hover:-translate-y-0.5">
               <svg className="h-6 w-6 transition-colors group-hover:text-[#539e43]" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 1.25L2 7v10l10 5.75L22 17V7L12 1.25zM12 3.5l7.5 4.3v8.6L12 20.7l-7.5-4.3V7.8L12 3.5z" />
@@ -300,7 +368,7 @@ const LandingPage = ({ onOpenAuth }) => {
               <span>Node.js Crypto</span>
             </div>
 
-            {/* React SVG */}
+            {/* React 19 */}
             <div className="group flex cursor-default items-center gap-2 text-sm font-semibold text-[#5b564e] opacity-75 transition-all duration-200 hover:opacity-100 hover:text-[#00b4d8] hover:-translate-y-0.5">
               <svg className="h-6 w-6 transition-colors group-hover:text-[#00b4d8]" viewBox="0 0 24 24" fill="currentColor">
                 <circle cx="12" cy="12" r="2.2" />
@@ -312,7 +380,7 @@ const LandingPage = ({ onOpenAuth }) => {
               <span>React 19</span>
             </div>
 
-            {/* POSIX Crypto SVG */}
+            {/* POSIX Crypto */}
             <div className="group flex cursor-default items-center gap-2 text-sm font-semibold text-[#5b564e] opacity-75 transition-all duration-200 hover:opacity-100 hover:text-[#1f2933] hover:-translate-y-0.5">
               <svg className="h-6 w-6 transition-colors group-hover:text-[#1f2933]" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12.002 0c-4.5 0-6.75 3.375-6.75 7.875 0 2.25.75 4.5 1.5 5.625-.75 1.5-2.25 3-2.25 4.5 0 3 3.375 6 7.5 6s7.5-3 7.5-6c0-1.5-1.5-3-2.25-4.5.75-1.125 1.5-3.375 1.5-5.625 0-4.5-2.25-7.875-6.75-7.875z" />
@@ -320,7 +388,7 @@ const LandingPage = ({ onOpenAuth }) => {
               <span>POSIX Crypto</span>
             </div>
 
-            {/* Auditable Code SVG */}
+            {/* Auditable Source */}
             <div className="group flex cursor-default items-center gap-2 text-sm font-semibold text-[#5b564e] opacity-75 transition-all duration-200 hover:opacity-100 hover:text-[#24292f] hover:-translate-y-0.5">
               <svg className="h-6 w-6 transition-colors group-hover:text-[#24292f]" viewBox="0 0 24 24" fill="currentColor">
                 <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
@@ -331,7 +399,9 @@ const LandingPage = ({ onOpenAuth }) => {
         </div>
       </section>
 
-      {/* 3. ASYMMETRIC BENTO GRID: Spotlight Hover Cards & Live Entropy Engine */}
+      {/* =====================================================================
+          SECTION 3: ASYMMETRIC BENTO GRID (Spotlight cards & features)
+          ===================================================================== */}
       <section id="features" className="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
         <ScrollRevealSection>
           <div className="mb-14 max-w-2xl">
@@ -348,7 +418,7 @@ const LandingPage = ({ onOpenAuth }) => {
         </ScrollRevealSection>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-          {/* Cell 1: Large Feature with Real Macro Silicon Chip Asset (Col 7) */}
+          {/* Card 1: Envelope Encryption with silicon core image (7 Cols) */}
           <div className="md:col-span-7">
             <ScrollRevealSection delayClass="stagger-1" className="h-full">
               <SpotlightCard className="p-7">
@@ -377,7 +447,6 @@ const LandingPage = ({ onOpenAuth }) => {
                       alt="Cryptographic silicon core"
                       className="h-52 w-full object-cover opacity-90 transition-transform duration-700 ease-out group-hover:scale-105"
                     />
-                    {/* Interactive Scan Line Effect on Hover */}
                     <div className="cipher-stream-scan opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
                     <div className="absolute bottom-3 left-4 flex items-center gap-2 text-xs font-mono text-emerald-400">
@@ -390,7 +459,7 @@ const LandingPage = ({ onOpenAuth }) => {
             </ScrollRevealSection>
           </div>
 
-          {/* Cell 2: Live Interactive Password Strength & Entropy Simulator (Col 5) */}
+          {/* Card 2: Interactive Password Strength & Entropy Simulator (5 Cols) */}
           <div className="md:col-span-5">
             <ScrollRevealSection delayClass="stagger-2" className="h-full">
               <SpotlightCard className="p-7">
@@ -424,7 +493,7 @@ const LandingPage = ({ onOpenAuth }) => {
                       Test key combinations to observe mathematically verifiable bit resistance against cluster attacks.
                     </p>
 
-                    {/* Interactive Key Input */}
+                    {/* Interactive Input with Show/Hide toggle */}
                     <div className="mt-6">
                       <div className="relative">
                         <input
@@ -445,7 +514,7 @@ const LandingPage = ({ onOpenAuth }) => {
                         </button>
                       </div>
 
-                      {/* Live Entropy Bar with Smooth Spring Transition */}
+                      {/* Dynamic Entropy Progress Bar */}
                       <div className="mt-5">
                         <div className="flex items-center justify-between text-xs font-medium">
                           <span className="text-[#6f6a63]">Calculated Entropy</span>
@@ -484,7 +553,7 @@ const LandingPage = ({ onOpenAuth }) => {
             </ScrollRevealSection>
           </div>
 
-          {/* Cell 3: Client-Side Isolation (Col 5) */}
+          {/* Card 3: Zero Plaintext Ingestion (5 Cols) */}
           <div className="md:col-span-5">
             <ScrollRevealSection delayClass="stagger-3" className="h-full">
               <SpotlightCard className="p-7">
@@ -515,7 +584,7 @@ const LandingPage = ({ onOpenAuth }) => {
             </ScrollRevealSection>
           </div>
 
-          {/* Cell 4: Instant Document Sync (Col 7) */}
+          {/* Card 4: MongoDB Realtime State Replication (7 Cols) */}
           <div className="md:col-span-7">
             <ScrollRevealSection delayClass="stagger-4" className="h-full">
               <SpotlightCard className="p-7">
@@ -556,7 +625,9 @@ const LandingPage = ({ onOpenAuth }) => {
         </div>
       </section>
 
-      {/* 4. INTERACTIVE LIVE CIPHER SANDBOX: Kinetic Scrambler & Tactile Feedback */}
+      {/* =====================================================================
+          SECTION 4: INTERACTIVE LIVE CIPHER SANDBOX (Type & Scramble)
+          ===================================================================== */}
       <section id="cipher-sandbox" className="border-y border-[#ddd8d0] bg-[#ebe7e0]/45 py-20 md:py-28">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <ScrollRevealSection>
@@ -576,7 +647,7 @@ const LandingPage = ({ onOpenAuth }) => {
           <ScrollRevealSection delayClass="stagger-2">
             <div className="mx-auto mt-10 max-w-3xl rounded-3xl border border-[#ddd8d0] bg-white p-6 shadow-xl sm:p-9">
               <div className="space-y-6">
-                {/* Plaintext Input */}
+                {/* Input Field */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
                     <label
@@ -615,7 +686,7 @@ const LandingPage = ({ onOpenAuth }) => {
                   </div>
                 </div>
 
-                {/* Scrambled Cipher Stream Output with Kinetic Scanline */}
+                {/* Encrypted Hex Output Terminal Box */}
                 <div className="relative overflow-hidden rounded-2xl border border-slate-700/80 bg-[#161d26] p-5 text-white shadow-inner">
                   <div className="cipher-stream-scan" />
 
@@ -679,7 +750,9 @@ const LandingPage = ({ onOpenAuth }) => {
         </div>
       </section>
 
-      {/* 5. ARCHITECTURE THREE-TIER PIPELINE: Interactive Flow */}
+      {/* =====================================================================
+          SECTION 5: PROTOCOL PIPELINE (Life of a Packet: 3 Stages)
+          ===================================================================== */}
       <section id="architecture" className="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
         <ScrollRevealSection>
           <div className="mb-14 max-w-2xl">
@@ -696,7 +769,7 @@ const LandingPage = ({ onOpenAuth }) => {
         </ScrollRevealSection>
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-          {/* Stage 1 */}
+          {/* Stage 1: Key Derivation */}
           <ScrollRevealSection delayClass="stagger-1">
             <div
               onMouseEnter={() => setHoveredStage(1)}
@@ -722,7 +795,7 @@ const LandingPage = ({ onOpenAuth }) => {
             </div>
           </ScrollRevealSection>
 
-          {/* Stage 2 */}
+          {/* Stage 2: Envelope Encryption */}
           <ScrollRevealSection delayClass="stagger-2">
             <div
               onMouseEnter={() => setHoveredStage(2)}
@@ -748,7 +821,7 @@ const LandingPage = ({ onOpenAuth }) => {
             </div>
           </ScrollRevealSection>
 
-          {/* Stage 3 */}
+          {/* Stage 3: Blind Document Storage */}
           <ScrollRevealSection delayClass="stagger-3">
             <div
               onMouseEnter={() => setHoveredStage(3)}
@@ -776,7 +849,9 @@ const LandingPage = ({ onOpenAuth }) => {
         </div>
       </section>
 
-      {/* 6. TESTIMONIALS DUO: Verified Practitioners */}
+      {/* =====================================================================
+          SECTION 6: VERIFIED PRACTITIONER TESTIMONIALS
+          ===================================================================== */}
       <section className="border-t border-[#ddd8d0] bg-[#eae6df]/35 py-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <ScrollRevealSection>
@@ -824,7 +899,9 @@ const LandingPage = ({ onOpenAuth }) => {
         </div>
       </section>
 
-      {/* 7. CLOSING CTA TERMINAL */}
+      {/* =====================================================================
+          SECTION 7: CLOSING CALL-TO-ACTION TERMINAL
+          ===================================================================== */}
       <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28 text-center">
         <ScrollRevealSection>
           <div className="relative mx-auto max-w-3xl overflow-hidden rounded-3xl border border-[#ddd8d0] bg-white p-8 sm:p-14 shadow-xl">
@@ -847,6 +924,7 @@ const LandingPage = ({ onOpenAuth }) => {
             </p>
 
             <div className="mt-9 flex flex-wrap items-center justify-center gap-4">
+              {/* Button to open registration */}
               <button
                 type="button"
                 onClick={() => onOpenAuth("register")}
@@ -854,6 +932,7 @@ const LandingPage = ({ onOpenAuth }) => {
               >
                 Open Vault Now
               </button>
+              {/* Button to open login */}
               <button
                 type="button"
                 onClick={() => onOpenAuth("login")}
