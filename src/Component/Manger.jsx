@@ -8,6 +8,7 @@ import VaultSecurityAudit from './VaultSecurityAudit';
 import { checkPasswordBreach, auditVaultSecurity } from '../utils/breachCheck';
 import PasswordGeneratorModal from './PasswordGeneratorModal';
 import VaultMigrationModal from './VaultMigrationModal';
+import PasswordHistoryModal from './PasswordHistoryModal';
 
 const API_BASE_URL = "http://localhost:3000/api/passwords"
 
@@ -24,6 +25,7 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
   const [auditFilter, setAuditFilter] = useState('all')
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false)
   const [isMigrationOpen, setIsMigrationOpen] = useState(false)
+  const [selectedHistoryAccount, setSelectedHistoryAccount] = useState(null)
 
   const siteInputId = useId()
   const usernameInputId = useId()
@@ -54,10 +56,22 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
         }
         const passwords = await req.json()
         const decryptedList = await Promise.all(
-          passwords.map(async (item) => ({
-            ...item,
-            password: await decryptCredential(item.password, vaultKey),
-          }))
+          passwords.map(async (item) => {
+            const decryptedPass = await decryptCredential(item.password, vaultKey);
+            const decryptedHistory = Array.isArray(item.history)
+              ? await Promise.all(
+                  item.history.map(async (h) => ({
+                    password: await decryptCredential(h.password, vaultKey),
+                    changedAt: h.changedAt,
+                  }))
+                )
+              : [];
+            return {
+              ...item,
+              password: decryptedPass,
+              history: decryptedHistory,
+            };
+          })
         )
         if (!isCancelled) {
           setPasswordArray(decryptedList)
@@ -172,6 +186,32 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
       const isEditing = Boolean(form.id)
       const generatedId = form.id || uuidv4()
 
+      let updatedHistoryPlain = [];
+      let updatedHistoryEncrypted = [];
+
+      if (isEditing) {
+        const existingRecord = passwordArray.find(item => item.id === form.id);
+        const prevHistory = existingRecord?.history || [];
+
+        // If password was edited and differs from previous password, record to history
+        if (existingRecord && existingRecord.password && existingRecord.password !== form.password) {
+          const newEntry = {
+            password: existingRecord.password,
+            changedAt: new Date().toISOString(),
+          };
+          updatedHistoryPlain = [newEntry, ...prevHistory].slice(0, 5);
+        } else {
+          updatedHistoryPlain = prevHistory;
+        }
+
+        updatedHistoryEncrypted = await Promise.all(
+          updatedHistoryPlain.map(async (h) => ({
+            password: await encryptCredential(h.password, vaultKey),
+            changedAt: h.changedAt,
+          }))
+        );
+      }
+
       // Zero-Knowledge Client-Side Encryption:
       // The secret is encrypted inside the browser with AES-256-GCM before transmission.
       const encryptedPassword = await encryptCredential(form.password, vaultKey)
@@ -180,6 +220,7 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
         username: form.username.trim(),
         password: encryptedPassword,
         id: generatedId,
+        history: updatedHistoryEncrypted,
       }
 
       // Local state retains plaintext for instantaneous user display & copy
@@ -188,6 +229,7 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
         username: form.username.trim(),
         password: form.password,
         id: generatedId,
+        history: updatedHistoryPlain,
       }
 
       try {
@@ -228,6 +270,54 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
       })
     }
   }
+
+  const handleRestorePassword = (accountId, oldPassword) => {
+    const account = passwordArray.find(item => item.id === accountId);
+    if (account) {
+      setForm({
+        site: account.site,
+        username: account.username,
+        password: oldPassword,
+        id: account.id,
+      });
+      setShowPassword(true);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      toast.info('Restored previous password into form! Click "Update account" to save.', {
+        theme: 'dark',
+        autoClose: 3500,
+      });
+    }
+  };
+
+  const handleClearHistory = async (accountId) => {
+    try {
+      const account = passwordArray.find(item => item.id === accountId);
+      if (!account) return;
+
+      const updatedAccount = { ...account, history: [] };
+
+      if (backendOnline) {
+        await fetch(`${API_BASE_URL}/${accountId}`, {
+          method: 'PUT',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            id: account.id,
+            site: account.site,
+            username: account.username,
+            password: await encryptCredential(account.password, vaultKey),
+            history: [],
+          }),
+        });
+      }
+
+      setPasswordArray(prev => prev.map(p => p.id === accountId ? updatedAccount : p));
+      setSelectedHistoryAccount(updatedAccount);
+      toast.success('Password history cleared for this account', { theme: 'dark', autoClose: 2000 });
+    } catch (err) {
+      console.error('Failed to clear password history:', err);
+      toast.error('Failed to clear history', { theme: 'dark' });
+    }
+  };
 
   const DeletePassword = async (id) => {
     const confirmed = window.confirm("Are you sure you want to delete this credential from your vault?")
@@ -990,6 +1080,20 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 type="button"
+                                onClick={() => setSelectedHistoryAccount(item)}
+                                title={item.history && item.history.length > 0 ? `View ${item.history.length} previous version${item.history.length > 1 ? 's' : ''}` : "View password history"}
+                                className={`rounded-md border p-1.5 transition-all active:scale-95 ${
+                                  item.history && item.history.length > 0
+                                    ? "border-[#176b87]/40 bg-[#f0f8fa] text-[#176b87] hover:bg-[#176b87] hover:text-white"
+                                    : "border-[#d5d0c8] bg-white text-[#aaa39a] hover:border-[#9ec8d2] hover:text-[#176b87]"
+                                }`}
+                              >
+                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() => EditPassword(item.id)}
                                 title="Edit credential"
                                 className="rounded-md border border-[#d5d0c8] bg-white p-1.5 text-[#7b746b] transition-all hover:border-[#9ec8d2] hover:bg-[#f5fbfc] hover:text-[#176b87] active:scale-95"
@@ -1035,6 +1139,15 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
           onBulkImportSuccess={handleBulkImport}
           vaultKey={vaultKey}
           token={token}
+        />
+
+        {/* Password Version History Modal */}
+        <PasswordHistoryModal
+          isOpen={Boolean(selectedHistoryAccount)}
+          onClose={() => setSelectedHistoryAccount(null)}
+          account={selectedHistoryAccount}
+          onRestorePassword={handleRestorePassword}
+          onClearHistory={handleClearHistory}
         />
       </main>
     </div>

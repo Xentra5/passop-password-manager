@@ -258,6 +258,12 @@ app.get('/api/passwords', authenticateToken, async (req, res) => {
     const decryptedPasswords = passwords.map((item) => ({
       ...item,
       password: decryptVaultPassword(item.password),
+      history: Array.isArray(item.history)
+        ? item.history.map(h => ({
+            ...h,
+            password: decryptVaultPassword(h.password),
+          }))
+        : [],
     }));
     res.json(decryptedPasswords);
   } catch (error) {
@@ -359,17 +365,24 @@ app.put('/api/passwords/:id', authenticateToken, async (req, res) => {
       });
     }
 
+    const updateFields = {
+      site: password.site.trim(),
+      username: password.username.trim(),
+      password: encryptVaultPassword(password.password),
+      updatedAt: new Date(),
+    };
+
+    if (Array.isArray(password.history)) {
+      updateFields.history = password.history.slice(0, 5).map(h => ({
+        password: encryptVaultPassword(h.password),
+        changedAt: h.changedAt ? new Date(h.changedAt) : new Date(),
+      }));
+    }
+
     const collection = getPasswordsCollection();
     const result = await collection.updateOne(
       { id, userId: req.user.userId },
-      {
-        $set: {
-          site: password.site.trim(),
-          username: password.username.trim(),
-          password: encryptVaultPassword(password.password),
-          updatedAt: new Date(),
-        },
-      }
+      { $set: updateFields }
     );
 
     if (result.matchedCount === 0) {
