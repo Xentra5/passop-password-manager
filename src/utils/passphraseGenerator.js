@@ -48,10 +48,17 @@ const AMBIGUOUS = /[0O1lI|]/g;
 
 /**
  * Returns a cryptographically secure random integer in [0, max - 1].
+ * BUG #10 FIX: Uses rejection sampling to eliminate modulo bias.
+ * Without this fix, values in [0, (2^32 % max)) would appear slightly
+ * more often than the rest, weakening the entropy of generated passwords.
  */
 function getRandomInt(max) {
+  // Largest multiple of max that fits in a Uint32 (avoids bias)
+  const limit = Math.floor(0x100000000 / max) * max;
   const array = new Uint32Array(1);
-  window.crypto.getRandomValues(array);
+  do {
+    window.crypto.getRandomValues(array);
+  } while (array[0] >= limit);
   return array[0] % max;
 }
 

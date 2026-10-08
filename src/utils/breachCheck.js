@@ -8,9 +8,19 @@
  * 3. HIBP returns ~500-1000 matching hash suffixes of previously breached passwords.
  * 4. The browser checks if the remaining 35 characters match any returned suffix.
  * The actual password and its full hash NEVER leave the browser!
+ *
+ * SECURITY FIXES APPLIED:
+ * - BUG #5 FIX: Cache is now keyed by the SHA-1 prefix (first 5 hex chars),
+ *   NOT the plaintext password. This means no plaintext passwords are ever
+ *   held in the cache Map.
+ * - BUG #14 FIX: Cache entries now have a TTL of 1 hour so they expire and
+ *   force a fresh HIBP check on re-scan.
  */
 
-// Memory cache to avoid redundant API network queries for identical passwords
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+// BUG #5 FIX: Cache keyed by SHA-1 prefix (5 hex chars), NOT plaintext password.
+// Each entry: { result: { pwned, count }, expiresAt: timestamp }
 const breachCache = new Map();
 
 /**
@@ -37,16 +47,20 @@ export async function checkPasswordBreach(password) {
     return { pwned: false, count: 0 };
   }
 
-  // Check in-memory session cache first
-  if (breachCache.has(password)) {
-    return breachCache.get(password);
+  const fullHash = await sha1(password);
+  const prefix = fullHash.slice(0, 5);
+  const suffix = fullHash.slice(5);
+
+  // BUG #5 + #14 FIX: Cache keyed by hash prefix with TTL check — never stores plaintext
+  const cached = breachCache.get(prefix);
+  if (cached && Date.now() < cached.expiresAt) {
+    // Find if this specific suffix is in the cached response suffixes map
+    return cached.suffixMap.has(suffix)
+      ? { pwned: true, count: cached.suffixMap.get(suffix) }
+      : { pwned: false, count: 0 };
   }
 
   try {
-    const fullHash = await sha1(password);
-    const prefix = fullHash.slice(0, 5);
-    const suffix = fullHash.slice(5);
-
     const response = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`, {
       method: 'GET',
       headers: {
@@ -61,23 +75,29 @@ export async function checkPasswordBreach(password) {
     const responseText = await response.text();
     const lines = responseText.split('\n');
 
-    let pwned = false;
-    let count = 0;
-
+    // Build a suffix → count map for this prefix and cache the entire map
+    const suffixMap = new Map();
     for (const line of lines) {
       const parts = line.trim().split(':');
-      if (parts[0] && parts[0].toUpperCase() === suffix) {
-        pwned = true;
-        count = parseInt(parts[1], 10) || 1;
-        break;
+      if (parts[0]) {
+        suffixMap.set(parts[0].toUpperCase(), parseInt(parts[1], 10) || 1);
       }
     }
 
-    const result = { pwned, count };
-    breachCache.set(password, result);
-    return result;
+    // BUG #5 FIX: Store the suffix map (NOT plaintext) in cache with a TTL
+    breachCache.set(prefix, {
+      suffixMap,
+      expiresAt: Date.now() + CACHE_TTL_MS,
+    });
+
+    if (suffixMap.has(suffix)) {
+      return { pwned: true, count: suffixMap.get(suffix) };
+    }
+    return { pwned: false, count: 0 };
   } catch (error) {
-    console.warn('HIBP breach check query failed:', error);
+    if (import.meta.env.DEV) {
+      console.warn('HIBP breach check query failed:', error);
+    }
     return { pwned: false, count: 0, error: true };
   }
 }
@@ -152,21 +172,13 @@ export function auditVaultSecurity(passwordList = [], breachResultsMap = new Map
   });
 
   // 4. Calculate Health Score (0 - 100)
-  // Base 100 points
   let score = 100;
-
-  // Penalize for breached passwords (heavy penalty: up to -50)
   const breachPenalty = Math.min(breachedIds.size * 25, 50);
   score -= breachPenalty;
-
-  // Penalize for reused credentials (up to -30)
   const reusePenalty = Math.min(reusedIds.size * 10, 30);
   score -= reusePenalty;
-
-  // Penalize for weak passwords (up to -20)
   const weakPenalty = Math.min(weakIds.size * 5, 20);
   score -= weakPenalty;
-
   score = Math.max(0, Math.min(100, Math.round(score)));
 
   let grade = 'Fortified';

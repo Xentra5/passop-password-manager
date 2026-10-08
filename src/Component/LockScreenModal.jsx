@@ -8,6 +8,17 @@ import {
   setAutoLockTimeoutMinutes,
 } from '../utils/pinAuth';
 
+/**
+ * SECURITY FIXES APPLIED:
+ * - BUG #4 FIX: verifyUserPin now returns { valid, locked, remainingAttempts, secondsLeft }.
+ *   The UI surfaces remaining attempts, shows a lockout countdown timer, and
+ *   disables the keypad during the lockout period.
+ * - BUG #12 FIX: The hidden keyboard <input> also respects the lockout — it
+ *   checks the return value from verifyUserPin and displays the same lockout UI.
+ * - BUG #13 FIX (in App.jsx): onUnlockWithMasterPassword is now passed from App.jsx.
+ *   Here we ensure that if it IS undefined, we throw an error rather than silently
+ *   unlocking the vault.
+ */
 export default function LockScreenModal({
   isOpen,
   user,
@@ -24,9 +35,21 @@ export default function LockScreenModal({
   const [usePasswordMode, setUsePasswordMode] = useState(false);
   const [timeoutSetting, setTimeoutSetting] = useState(5);
   const [showSettings, setShowSettings] = useState(false);
+  // BUG #4 FIX: track lockout state for UI feedback
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
+  const [remainingAttempts, setRemainingAttempts] = useState(5);
+  const lockoutTimerRef = useRef(null);
   const inputRef = useRef(null);
 
   const userEmail = user?.email || 'user';
+
+  // Countdown tick for lockout display
+  useEffect(() => {
+    if (lockoutSeconds > 0) {
+      lockoutTimerRef.current = setTimeout(() => setLockoutSeconds(s => s - 1), 1000);
+    }
+    return () => clearTimeout(lockoutTimerRef.current);
+  }, [lockoutSeconds]);
 
   // Check if PIN is configured whenever modal opens
   useEffect(() => {
@@ -38,6 +61,8 @@ export default function LockScreenModal({
       setConfirmPin('');
       setMasterPassword('');
       setUsePasswordMode(false);
+      setLockoutSeconds(0);
+      setRemainingAttempts(5);
       setTimeoutSetting(getAutoLockTimeoutMinutes());
       setTimeout(() => inputRef.current?.focus(), 150);
     }
@@ -51,31 +76,47 @@ export default function LockScreenModal({
     setPin('');
   };
 
+  // BUG #4 + #12 FIX: Shared PIN verification handler — reads lockout from pinAuth
+  const handlePinVerification = async (enteredPin) => {
+    // Don't allow attempts during lockout
+    if (lockoutSeconds > 0) return;
+
+    const result = await verifyUserPin(enteredPin, userEmail);
+
+    if (result.valid) {
+      setLockoutSeconds(0);
+      toast.success('Vault unlocked!', {
+        theme: 'dark',
+        transition: Bounce,
+        autoClose: 1500,
+      });
+      onUnlock();
+    } else if (result.locked) {
+      setLockoutSeconds(result.secondsLeft || 30);
+      setRemainingAttempts(0);
+      toast.error(
+        `Too many wrong attempts. Try again in ${result.secondsLeft || 30} seconds.`,
+        { theme: 'dark', autoClose: 4000 }
+      );
+      triggerErrorShake();
+    } else {
+      setRemainingAttempts(result.remainingAttempts ?? 5);
+      toast.error(
+        `Incorrect PIN. ${result.remainingAttempts} attempt${result.remainingAttempts !== 1 ? 's' : ''} remaining.`,
+        { theme: 'dark', autoClose: 1800 }
+      );
+      triggerErrorShake();
+    }
+  };
+
   const handleKeypadPress = async (digit) => {
-    if (pin.length >= 4) return;
+    if (lockoutSeconds > 0 || pin.length >= 4) return;
     const nextPin = pin + digit;
     setPin(nextPin);
 
-    // If reached 4 digits, evaluate automatically
     if (nextPin.length === 4) {
-      if (isSettingUpPin) {
-        // Step 1 of PIN setup complete
-        return;
-      }
-
-      // Verify existing PIN
-      const isValid = await verifyUserPin(nextPin, userEmail);
-      if (isValid) {
-        toast.success('Vault unlocked!', {
-          theme: 'dark',
-          transition: Bounce,
-          autoClose: 1500,
-        });
-        onUnlock();
-      } else {
-        toast.error('Incorrect PIN. Please try again.', { theme: 'dark', autoClose: 1800 });
-        triggerErrorShake();
-      }
+      if (isSettingUpPin) return; // Step 1 of PIN setup — wait for confirm
+      await handlePinVerification(nextPin);
     }
   };
 
@@ -112,9 +153,11 @@ export default function LockScreenModal({
     if (!masterPassword) return;
 
     try {
-      if (onUnlockWithMasterPassword) {
-        await onUnlockWithMasterPassword(masterPassword);
+      // BUG #13 FIX: Guard against undefined callback — it MUST be provided by App.jsx
+      if (!onUnlockWithMasterPassword) {
+        throw new Error('Master password verification is not available. Please log out and log in again.');
       }
+      await onUnlockWithMasterPassword(masterPassword);
       onUnlock();
     } catch (err) {
       toast.error(err.message || 'Incorrect master password', { theme: 'dark' });
@@ -131,27 +174,25 @@ export default function LockScreenModal({
     });
   };
 
+  const isLockedOut = lockoutSeconds > 0;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#141b22]/75 p-4 backdrop-blur-md animate-fadeIn">
-      {/* Invisible global keyboard listener for numpad typing */}
+      {/* BUG #12 FIX: Keyboard PIN input — respects lockout via handlePinVerification */}
       <input
         ref={inputRef}
         type="password"
         pattern="[0-9]*"
         maxLength={4}
         value={pin}
+        disabled={isLockedOut}
         onChange={(e) => {
+          if (isLockedOut) return;
           const val = e.target.value.replace(/\D/g, '');
           if (val.length <= 4) {
             setPin(val);
             if (val.length === 4 && !isSettingUpPin) {
-              verifyUserPin(val, userEmail).then((isValid) => {
-                if (isValid) {
-                  onUnlock();
-                } else {
-                  triggerErrorShake();
-                }
-              });
+              handlePinVerification(val);
             }
           }
         }}
@@ -181,6 +222,14 @@ export default function LockScreenModal({
           </p>
         </div>
 
+        {/* BUG #4 FIX: Lockout Banner */}
+        {isLockedOut && (
+          <div className="mt-4 rounded-lg border border-rose-700 bg-rose-900/40 px-4 py-3 text-center text-xs text-rose-300">
+            🔒 Too many wrong attempts.<br />
+            <span className="font-bold text-rose-200">Try again in {lockoutSeconds}s</span>
+          </div>
+        )}
+
         {/* PIN MODE: Normal Unlock with Existing PIN */}
         {!usePasswordMode && !isSettingUpPin && (
           <div className="mt-6 flex flex-col items-center">
@@ -201,8 +250,15 @@ export default function LockScreenModal({
               })}
             </div>
 
+            {/* BUG #4 FIX: Show remaining attempts (when not locked out) */}
+            {!isLockedOut && remainingAttempts < 5 && (
+              <p className="mt-1 text-[11px] text-rose-400 font-semibold">
+                {remainingAttempts} attempt{remainingAttempts !== 1 ? 's' : ''} remaining before lockout
+              </p>
+            )}
+
             <p className="mt-2 text-[11px] text-slate-400">
-              Enter 4-digit PIN (type on keyboard or tap below)
+              {isLockedOut ? 'Keypad disabled during lockout' : 'Enter 4-digit PIN (type on keyboard or tap below)'}
             </p>
 
             {/* Numeric Keypad */}
@@ -212,7 +268,8 @@ export default function LockScreenModal({
                   key={num}
                   type="button"
                   onClick={() => handleKeypadPress(String(num))}
-                  className="flex h-12 items-center justify-center rounded-xl border border-slate-700/60 bg-[#222d3b]/80 font-mono text-lg font-semibold text-white shadow-sm transition-all hover:border-slate-500 hover:bg-[#2c394a] active:scale-95"
+                  disabled={isLockedOut}
+                  className="flex h-12 items-center justify-center rounded-xl border border-slate-700/60 bg-[#222d3b]/80 font-mono text-lg font-semibold text-white shadow-sm transition-all hover:border-slate-500 hover:bg-[#2c394a] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {num}
                 </button>
@@ -223,14 +280,16 @@ export default function LockScreenModal({
               <button
                 type="button"
                 onClick={() => handleKeypadPress('0')}
-                className="flex h-12 items-center justify-center rounded-xl border border-slate-700/60 bg-[#222d3b]/80 font-mono text-lg font-semibold text-white shadow-sm transition-all hover:border-slate-500 hover:bg-[#2c394a] active:scale-95"
+                disabled={isLockedOut}
+                className="flex h-12 items-center justify-center rounded-xl border border-slate-700/60 bg-[#222d3b]/80 font-mono text-lg font-semibold text-white shadow-sm transition-all hover:border-slate-500 hover:bg-[#2c394a] active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 0
               </button>
               <button
                 type="button"
                 onClick={handleBackspace}
-                className="flex h-12 items-center justify-center rounded-xl border border-slate-700/60 bg-[#222d3b]/80 text-slate-400 transition-all hover:border-slate-500 hover:text-white active:scale-95"
+                disabled={isLockedOut}
+                className="flex h-12 items-center justify-center rounded-xl border border-slate-700/60 bg-[#222d3b]/80 text-slate-400 transition-all hover:border-slate-500 hover:text-white active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                 title="Backspace"
               >
                 ⌫
@@ -305,7 +364,7 @@ export default function LockScreenModal({
                 type="submit"
                 className="w-full rounded-md bg-emerald-600 py-2 text-xs font-bold text-white shadow transition-all hover:bg-emerald-500 active:scale-95"
               >
-                Save PIN & Unlock
+                Save PIN &amp; Unlock
               </button>
             </div>
           </form>

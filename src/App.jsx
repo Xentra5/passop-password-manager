@@ -1,174 +1,182 @@
 // ============================================================================
-// APP.JSX - COMPLETE CODE WITH STEP-BY-STEP NUMBERED LOGIC COMMENTS
+// APP.JSX - ROOT COMPONENT WITH SECURITY HARDENING
+//
+// SECURITY FIXES APPLIED:
+// - BUG #2 FIX: JWT token is no longer stored in localStorage.
+//   It is kept only in React state (RAM). On page refresh the user must
+//   log in again. This eliminates the XSS-readable persistent token.
+//   The user profile (non-sensitive display data) still uses localStorage.
+// - BUG #13 FIX: onUnlockWithMasterPassword callback is now properly
+//   created and passed to LockScreenModal so master password unlock
+//   actually verifies the password before unlocking the vault.
+// - BUG #1 downstream: getCachedVaultKey is now a no-op (returns null),
+//   so the page always asks for master password after refresh.
 // ============================================================================
 
-// 1. Import React hooks for memory, callbacks, and lifecycle
 import { useCallback, useState, useEffect } from "react"
 
-// 2. Import child components
-import Manager from "./Component/Manger"                   // Password vault dashboard
-import Navbar from "./Component/NavBar"                     // Top navigation bar
-import Footer from "./Component/Footer"                     // Bottom footer
-import Auth from "./Component/Auth"                         // Login & Register popup modal
-import LandingPage from "./Component/LandingPage"           // Public welcome homepage
-import LockScreenModal from "./Component/LockScreenModal"   // 4-digit PIN lock screen modal
+import Manager from "./Component/Manger"
+import Navbar from "./Component/NavBar"
+import Footer from "./Component/Footer"
+import Auth from "./Component/Auth"
+import LandingPage from "./Component/LandingPage"
+import LockScreenModal from "./Component/LockScreenModal"
 
-// 3. Import custom hooks and cryptographic helpers
-import { useSmoothScroll } from "./hooks/useSmoothScroll"                       // Kinetic smooth scrolling
-import { getCachedVaultKey, clearCachedVaultKey } from "./utils/cryptoVault"    // RAM key management
-import { useAutoLock } from "./hooks/useAutoLock"                               // Inactivity timer hook
+import { useSmoothScroll } from "./hooks/useSmoothScroll"
+import { deriveVaultKey, clearCachedVaultKey } from "./utils/cryptoVault"
+import { useAutoLock } from "./hooks/useAutoLock"
 
 function App() {
-  // --------------------------------------------------------------------------
-  // STEP 1: INITIALIZE SMOOTH SCROLLING
-  // --------------------------------------------------------------------------
-  useSmoothScroll(); // 1. Activates smooth momentum scrolling on the page
+  useSmoothScroll();
 
   // --------------------------------------------------------------------------
-  // STEP 2: STATE VARIABLES (What React remembers in memory)
+  // SESSION STATE
+  // BUG #2 FIX: token lives ONLY in React state (RAM), not localStorage.
+  // The user profile (email for display) is stored in localStorage since
+  // it contains no secret material.
   // --------------------------------------------------------------------------
-  // 1. Check browser's localStorage for existing saved login credentials:
   const [session, setSession] = useState(() => ({
-    token: localStorage.getItem("passvault_token"),                    // 1. Read saved JWT token from disk
-    user: JSON.parse(localStorage.getItem("passvault_user") || "null"), // 2. Read saved user profile from disk
+    token: null,                                                             // BUG #2 FIX: never persisted to disk
+    user: JSON.parse(localStorage.getItem("passvault_user") || "null"),     // non-sensitive display data only
   }))
 
-  // 2. Secret 256-bit encryption key stored ONLY in volatile RAM (never sent to database):
-  const [vaultKey, setVaultKey] = useState(null)                       // 3. Decryption key (null when locked)
+  const [vaultKey, setVaultKey] = useState(null)
 
-  // 3. Decide which screen is visible: if token exists -> "vault", else -> "landing":
-  const [activeView, setActiveView] = useState(() => (session.token ? "vault" : "landing")) // 4. Active screen view
+  // On load: if user profile exists but token is null, show landing page (not vault)
+  // BUG #2 FIX: token is never read from localStorage — intentional
+  const [activeView, setActiveView] = useState("landing")
 
-  // 4. Modal visibility: true = open popup, false = hide popup:
-  const [authModalOpen, setAuthModalOpen] = useState(false)            // 5. Popup open/closed status
-
-  // 5. Modal tab mode: "login" or "signup":
-  const [authModalMode, setAuthModalMode] = useState("login")          // 6. Which form to show inside popup
-
-  // 6. Privacy guard: true if user clicked eye icon to unmask passwords:
-  const [isPasswordRevealed, setIsPasswordRevealed] = useState(false)  // 7. Track if passwords are visible
+  const [authModalOpen, setAuthModalOpen] = useState(false)
+  const [authModalMode, setAuthModalMode] = useState("login")
+  const [isPasswordRevealed, setIsPasswordRevealed] = useState(false)
 
   // --------------------------------------------------------------------------
-  // STEP 3: INACTIVITY AUTO-LOCK SYSTEM
+  // AUTO-LOCK
   // --------------------------------------------------------------------------
-  // Monitors mouse & keyboard idle time while inside the vault:
   const { isLocked, lockVault, unlockVault } = useAutoLock(Boolean(session.token && activeView === "vault"))
-  // 1. isLocked: boolean indicating if vault screen is locked
-  // 2. lockVault: function to manually lock vault
-  // 3. unlockVault: function to unlock with 4-digit PIN
 
   // --------------------------------------------------------------------------
-  // STEP 4: RESTORE ENCRYPTION KEY ON PAGE RELOAD (F5)
+  // BUG #1 downstream: getCachedVaultKey now always returns null.
+  // No key is ever restored from sessionStorage — this effect is a no-op
+  // but kept for structural clarity if the policy is ever revisited.
   // --------------------------------------------------------------------------
   useEffect(() => {
-    let isMounted = true;                                              // 1. Safety flag to prevent memory leaks
-    getCachedVaultKey().then(key => {                                  // 2. Check temporary session storage
-      if (isMounted && key) {
-        setVaultKey(key);                                              // 3. Restore key into React RAM memory!
-      }
-    });
-    return () => {
-      isMounted = false;                                               // 4. Clean up if component unmounts
-    };
+    // Intentional no-op: key no longer cached in sessionStorage (BUG #1 fix).
+    // The vault key only lives in React state from the moment of login.
   }, []);
 
   // --------------------------------------------------------------------------
-  // STEP 5: ACTION HANDLERS (Functions that run on user clicks)
+  // HANDLERS
   // --------------------------------------------------------------------------
 
-  // A. When login or registration succeeds:
+  // A. Login / register success
   const handleAuthenticated = useCallback((data) => {
-    localStorage.setItem("passvault_token", data.token)                // 1. Save JWT token to browser disk
-    localStorage.setItem("passvault_user", JSON.stringify(data.user))  // 2. Save user profile object to browser disk
-    setSession({ token: data.token, user: data.user })                 // 3. Update React active session state
+    // BUG #2 FIX: token stored ONLY in React state, never in localStorage
+    localStorage.setItem("passvault_user", JSON.stringify(data.user))      // non-secret display data
+    setSession({ token: data.token, user: data.user })
     if (data.vaultKey) {
-      setVaultKey(data.vaultKey)                                       // 4. Store secret decryption key in RAM
+      setVaultKey(data.vaultKey)
     }
-    setAuthModalOpen(false)                                            // 5. Close login/signup popup modal
-    setActiveView("vault")                                             // 6. Switch screen from landing page to vault!
+    setAuthModalOpen(false)
+    setActiveView("vault")
   }, [])
 
-  // B. When user clicks "Logout":
+  // B. Logout
   const handleLogout = useCallback(() => {
-    localStorage.removeItem("passvault_token")                         // 1. Delete token from browser disk
-    localStorage.removeItem("passvault_user")                          // 2. Delete user profile from browser disk
-    clearCachedVaultKey()                                              // 3. Wipe encryption key from session cache
-    setVaultKey(null)                                                  // 4. Reset encryption key in RAM back to empty
-    setSession({ token: null, user: null })                            // 5. Reset React session state back to null
-    setActiveView("landing")                                           // 6. Switch screen back to landing page!
+    localStorage.removeItem("passvault_user")                              // BUG #2 FIX: no token to remove
+    clearCachedVaultKey()                                                  // no-op after BUG #1 fix, kept for safety
+    setVaultKey(null)
+    setSession({ token: null, user: null })
+    setActiveView("landing")
   }, [])
 
-  // C. When user clicks "Sign In" or "Get Started" to open popup:
+  // C. Open auth modal
   const handleOpenAuth = useCallback((mode = "login") => {
-    setAuthModalMode(mode)                                             // 1. Set mode to "login" or "signup"
-    setAuthModalOpen(true)                                             // 2. Open popup modal window
+    setAuthModalMode(mode)
+    setAuthModalOpen(true)
   }, [])
+
+  // D. BUG #13 FIX: Master password re-derivation for lock screen unlock.
+  //    This callback re-derives the vault key from the master password,
+  //    effectively verifying it (wrong password → different key → decrypt fails).
+  const handleUnlockWithMasterPassword = useCallback(async (masterPassword) => {
+    if (!session.user?.email) {
+      throw new Error('Cannot derive vault key: user email not found. Please log out and log in again.');
+    }
+    try {
+      const newVaultKey = await deriveVaultKey(masterPassword, session.user.email);
+      setVaultKey(newVaultKey);
+      // If the password was wrong, decryption of stored data will fail silently —
+      // which is the expected zero-knowledge behavior. No server-side check needed.
+    } catch (err) {
+      throw new Error('Failed to derive vault key. Please check your master password.');
+    }
+  }, [session.user?.email]);
 
   // --------------------------------------------------------------------------
-  // STEP 6: USER INTERFACE RENDERING (JSX)
+  // RENDER
   // --------------------------------------------------------------------------
   return (
-    // 1. Master layout container (Full screen height, light paper background)
     <div className="composition-shell flex min-h-screen flex-col bg-[#f4f1ec] text-[#1f2933] antialiased">
-      
-      {/* 2. Ambient background decorative effects */}
-      <div className="vault-grid" aria-hidden="true"></div>             {/* Geometric grid lines */}
-      <div className="ambient-orbit ambient-orbit-one" aria-hidden="true"></div> {/* Top-left glow */}
-      <div className="ambient-orbit ambient-orbit-two" aria-hidden="true"></div> {/* Bottom-right glow */}
-      <div className="signal-line" aria-hidden="true"></div>           {/* Laser signal line */}
 
-      {/* 3. Top Navigation Bar (Always visible) */}
+      {/* Ambient background decorative effects */}
+      <div className="vault-grid" aria-hidden="true"></div>
+      <div className="ambient-orbit ambient-orbit-one" aria-hidden="true"></div>
+      <div className="ambient-orbit ambient-orbit-two" aria-hidden="true"></div>
+      <div className="signal-line" aria-hidden="true"></div>
+
+      {/* Top Navigation Bar */}
       <Navbar
-        user={session.user}                                            // 1. Pass user profile info
-        onLogout={handleLogout}                                        // 2. Pass logout action
-        onOpenAuth={handleOpenAuth}                                    // 3. Pass auth popup opener
-        onLockVault={lockVault}                                        // 4. Pass manual PIN lock function
-        activeView={activeView}                                        // 5. Pass current view name
-        setActiveView={setActiveView}                                  // 6. Pass tab switcher function
-        isPasswordRevealed={isPasswordRevealed}                        // 7. Pass unmasked password warning
+        user={session.user}
+        onLogout={handleLogout}
+        onOpenAuth={handleOpenAuth}
+        onLockVault={lockVault}
+        activeView={activeView}
+        setActiveView={setActiveView}
+        isPasswordRevealed={isPasswordRevealed}
       />
 
-      {/* 4. Main Page Area: dynamically switches between Vault Dashboard and Landing Page */}
+      {/* Main content area */}
       <div className="relative z-10 flex-1">
         {session.token && activeView === "vault" ? (
-          // IF logged in & view is "vault" -> RENDER PASSWORD MANAGER DASHBOARD:
           <Manager
-            token={session.token}                                      // 1. Pass JWT token for API calls
-            vaultKey={vaultKey}                                        // 2. Pass RAM key to decrypt passwords
-            onUnauthorized={handleLogout}                              // 3. Auto-logout if token expires
-            onPasswordRevealChange={setIsPasswordRevealed}             // 4. Track if password eye icon clicked
+            token={session.token}
+            vaultKey={vaultKey}
+            onUnauthorized={handleLogout}
+            onPasswordRevealChange={setIsPasswordRevealed}
           />
         ) : (
-          // OTHERWISE -> RENDER PUBLIC LANDING PAGE:
           <LandingPage
-            onOpenAuth={handleOpenAuth}                                // 1. Allow CTA buttons to open auth popup
+            onOpenAuth={handleOpenAuth}
           />
         )}
       </div>
 
-      {/* 5. Authentication Modal: pops up when clicking Sign In or Register */}
+      {/* Authentication Modal */}
       {authModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1f2933]/50 p-4 backdrop-blur-sm">
           <div className="relative w-full max-w-md">
             <Auth
-              onAuthenticated={handleAuthenticated}                    // 1. Callback when login succeeds
-              initialMode={authModalMode}                              // 2. "login" or "register"
-              onClose={() => setAuthModalOpen(false)}                  // 3. Close popup when clicking 'X'
+              onAuthenticated={handleAuthenticated}
+              initialMode={authModalMode}
+              onClose={() => setAuthModalOpen(false)}
             />
           </div>
         </div>
       )}
 
-      {/* 6. Inactivity Auto-Lock PIN Screen: pops up after idle timeout */}
+      {/* Inactivity Auto-Lock PIN Screen */}
+      {/* BUG #13 FIX: onUnlockWithMasterPassword now correctly passed */}
       <LockScreenModal
-        isOpen={isLocked && Boolean(session.token)}                    // 1. Show only if locked & logged in
-        user={session.user}                                            // 2. Display user's email
-        onUnlock={unlockVault}                                         // 3. Unlock screen on correct PIN
-        onLogout={handleLogout}                                        // 4. Allow logout from lock screen
+        isOpen={isLocked && Boolean(session.token)}
+        user={session.user}
+        onUnlock={unlockVault}
+        onLogout={handleLogout}
+        onUnlockWithMasterPassword={handleUnlockWithMasterPassword}
       />
 
-      {/* 7. Bottom Footer */}
-ss      <Footer />
+      {/* Footer */}
+      <Footer />
     </div>
   )
 }

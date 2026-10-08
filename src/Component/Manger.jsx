@@ -10,7 +10,10 @@ import PasswordGeneratorModal from './PasswordGeneratorModal';
 import VaultMigrationModal from './VaultMigrationModal';
 import PasswordHistoryModal from './PasswordHistoryModal';
 
-const API_BASE_URL = "http://localhost:3000/api/passwords"
+// BUG #6 FIX: Use env variable so production deploys use HTTPS.
+// Set VITE_API_BASE_URL=https://your-domain.com/api/passwords in .env
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api/passwords"
+
 
 const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) => {
   const [form, setForm] = useState({ site: "", username: "", password: "" })
@@ -93,12 +96,26 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
 
   const generateStrongPassword = () => {
     const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-="
-    const randomBuffer = new Uint32Array(16)
-    crypto.getRandomValues(randomBuffer)
+    const charsetLen = charset.length
+    // BUG #11 FIX: Rejection-sampling to eliminate modulo bias
+    const limit = Math.floor(0x100000000 / charsetLen) * charsetLen
     let generated = ""
-    for (let i = 0; i < 16; i++) {
-      generated += charset[randomBuffer[i] % charset.length]
+    const randomBuffer = new Uint32Array(64) // oversample; we'll filter
+    let idx = 0
+    while (generated.length < 16) {
+      if (idx >= randomBuffer.length) {
+        crypto.getRandomValues(randomBuffer)
+        idx = 0
+      }
+      crypto.getRandomValues(randomBuffer)
+      for (let i = 0; i < randomBuffer.length && generated.length < 16; i++) {
+        if (randomBuffer[i] < limit) {
+          generated += charset[randomBuffer[i] % charsetLen]
+        }
+      }
+      idx = randomBuffer.length // force refill next iteration if needed
     }
+
     setForm(prev => ({ ...prev, password: generated }))
     setShowPassword(true)
     toast.success("Generated 16-character fortified password", {

@@ -4,8 +4,10 @@ import "react-toastify/dist/ReactToastify.css"
 import PassVaultLogo from "./PassVaultLogo"
 import { deriveVaultKey } from "../utils/cryptoVault"
 
-// The backend API base address for all authentication routes
-const AUTH_API_URL = "http://localhost:3000/api/auth"
+// BUG #6 FIX: Use env variable so production deploys use HTTPS.
+// Set VITE_AUTH_API_URL=https://your-domain.com/api/auth in .env
+const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL ?? "http://localhost:3000/api/auth"
+
 
 // ============================================================================
 // COMPONENT: Auth
@@ -77,9 +79,10 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
 
     // 2. Client-side validation: ONLY check password rules when registering!
     if (isRegistering) {
-      if (form.password.length < 8) {
-        toast.error("Password must be at least 8 characters", { theme: "dark" })
-        return // Stop right here, do not call backend
+      // BUG #15 FIX: 12-char minimum — master password IS the encryption key material
+      if (form.password.length < 12) {
+        toast.error("Master password must be at least 12 characters", { theme: "dark" })
+        return
       }
       if (form.password !== form.confirmPassword) {
         toast.error("Passwords do not match", { theme: "dark" })
@@ -213,14 +216,15 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
               name="password"
               type="password"
               autoComplete={isRegistering ? "new-password" : "current-password"}
-              minLength={isRegistering ? 8 : undefined}
+              minLength={isRegistering ? 12 : undefined}
               value={form.password}
               onChange={handleChange}
               required
               className="w-full rounded-md border border-[#d5d0c8] bg-[#faf9f7] px-3 py-2.5 text-sm text-[#1f2933] outline-none transition focus:border-[#176b87] focus:ring-1 focus:ring-[#176b87]/30"
             />
             {/* Helper text shown ONLY on register */}
-            {isRegistering && <p className="mt-1.5 text-xs text-[#7b746b]">Use at least 8 characters.</p>}
+            {isRegistering && <p className="mt-1.5 text-xs text-[#7b746b]">Use at least 12 characters (master password is your encryption key).</p>}
+
           </div>
 
           {/* 

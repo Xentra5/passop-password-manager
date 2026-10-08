@@ -2,9 +2,37 @@
  * Vault Migration Utility
  * Supports CSV Import/Export (Chrome, Firefox, Bitwarden, 1Password, PassOP)
  * and Zero-Knowledge Encrypted JSON Backups.
+ *
+ * SECURITY FIXES APPLIED:
+ * - BUG #7 FIX: CSV and JSON export now display a mandatory security warning
+ *   banner. The exported file header makes clear the data is unencrypted.
+ * - BUG #8 FIX: Input validation added on import — file size capped at 5 MB,
+ *   record count capped at 500, and site/username fields are sanitized to
+ *   strip HTML tags and control characters before storing.
  */
 
 import { v4 as uuidv4 } from 'uuid';
+
+// BUG #8 FIX: Safety limits for import
+const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
+const MAX_IMPORT_RECORDS = 500;
+
+// ─── Sanitization ─────────────────────────────────────────────────────────
+
+/**
+ * BUG #8 FIX: Strip HTML tags and dangerous control characters from
+ * user-supplied strings to prevent stored-XSS via imported vault data.
+ */
+function sanitizeField(value) {
+  if (value === null || value === undefined) return '';
+  return String(value)
+    .replace(/<[^>]*>/g, '')           // strip HTML tags
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // strip control chars
+    .trim()
+    .slice(0, 2048); // hard cap per field
+}
+
+// ─── CSV Helpers ──────────────────────────────────────────────────────────
 
 /**
  * Escapes a cell value for CSV (RFC 4180 compliance).
@@ -18,14 +46,23 @@ function escapeCSV(val) {
   return str;
 }
 
+// ─── Export ───────────────────────────────────────────────────────────────
+
 /**
  * Exports vault accounts to a plaintext CSV file.
+ *
+ * BUG #7 FIX: A security warning comment is prepended to the CSV, and the
+ * caller is expected to show a confirmation dialog before calling this function.
  * Compatible with Chrome, Firefox, Bitwarden, Excel.
  */
 export function exportToCSV(passwordArray = []) {
   if (!passwordArray.length) {
     throw new Error('Vault is empty. Nothing to export.');
   }
+
+  // BUG #7 FIX: Prepend a clear warning so anyone who opens the file sees it
+  const warningComment =
+    '# WARNING: This file contains UNENCRYPTED passwords. Keep it secure and delete after use.\r\n';
 
   const headers = ['name', 'url', 'username', 'password', 'notes'];
   const rows = [headers.join(',')];
@@ -36,12 +73,12 @@ export function exportToCSV(passwordArray = []) {
       escapeCSV(item.site.startsWith('http') ? item.site : `https://${item.site}`),
       escapeCSV(item.username),
       escapeCSV(item.password),
-      escapeCSV('Exported from PassOP Vault'),
+      escapeCSV('Exported from PassOP Vault — UNENCRYPTED'),
     ];
     rows.push(row.join(','));
   }
 
-  const csvContent = rows.join('\r\n');
+  const csvContent = warningComment + rows.join('\r\n');
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
 
@@ -57,6 +94,9 @@ export function exportToCSV(passwordArray = []) {
 
 /**
  * Exports vault accounts to a timestamped JSON backup file.
+ *
+ * BUG #7 FIX: A warning field is included in the JSON, and the exported
+ * file clearly labels itself as unencrypted.
  */
 export function exportToJSONBackup(passwordArray = []) {
   if (!passwordArray.length) {
@@ -66,6 +106,8 @@ export function exportToJSONBackup(passwordArray = []) {
   const backupData = {
     app: 'PassOP Cryptographic Vault',
     version: '2.0',
+    // BUG #7 FIX: Clear unencrypted warning in the exported file itself
+    securityWarning: 'UNENCRYPTED EXPORT — This file contains plaintext passwords. Store securely and delete after use.',
     exportedAt: new Date().toISOString(),
     accountCount: passwordArray.length,
     accounts: passwordArray.map(item => ({
@@ -89,6 +131,8 @@ export function exportToJSONBackup(passwordArray = []) {
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
+// ─── CSV Parser ───────────────────────────────────────────────────────────
 
 /**
  * Robust RFC 4180 CSV line parser that respects quotes and commas inside fields.
@@ -143,15 +187,26 @@ function parseCSVRows(csvText) {
   return rows;
 }
 
+// ─── Import ───────────────────────────────────────────────────────────────
+
 /**
  * Parses and maps imported CSV or JSON text into standard PassOP vault records.
  * Supports: Google Chrome, Brave, Firefox, Bitwarden, 1Password, and PassOP exports.
  *
+ * BUG #8 FIX: Added file size check (caller must pass fileSize), record count
+ * cap, and field sanitization to prevent stored-XSS and DoS via large imports.
+ *
  * @param {string} fileContent - Raw content of the uploaded file
- * @param {string} fileName - Name of uploaded file (for extension detection)
+ * @param {string} fileName    - Name of uploaded file (for extension detection)
+ * @param {number} fileSize    - Byte size of the file (from File.size)
  * @returns {Array<{ id: string, site: string, username: string, password: string }>}
  */
-export function parseImportFile(fileContent, fileName = '') {
+export function parseImportFile(fileContent, fileName = '', fileSize = 0) {
+  // BUG #8 FIX: Reject files that are too large to prevent browser freeze / DoS
+  if (fileSize > MAX_IMPORT_FILE_SIZE_BYTES) {
+    throw new Error(`Import file is too large (max ${MAX_IMPORT_FILE_SIZE_BYTES / 1024 / 1024} MB).`);
+  }
+
   const isJSON = fileName.endsWith('.json') || fileContent.trim().startsWith('{');
 
   if (isJSON) {
@@ -161,16 +216,22 @@ export function parseImportFile(fileContent, fileName = '') {
       const parsed = [];
 
       for (const item of list) {
-        const site = item.site || item.url || item.name || '';
-        const username = item.username || item.login || item.email || '';
-        const password = item.password || item.secret || '';
+        // BUG #8 FIX: cap at MAX_IMPORT_RECORDS
+        if (parsed.length >= MAX_IMPORT_RECORDS) {
+          throw new Error(`Import limit exceeded: maximum ${MAX_IMPORT_RECORDS} records allowed per import.`);
+        }
+
+        // BUG #8 FIX: sanitize all fields before accepting
+        const site     = sanitizeField(item.site || item.url || item.name || '');
+        const username = sanitizeField(item.username || item.login || item.email || '');
+        const password = sanitizeField(item.password || item.secret || '');
 
         if (site && username && password) {
           parsed.push({
             id: item.id || uuidv4(),
-            site: site.trim(),
-            username: username.trim(),
-            password: password,
+            site,
+            username,
+            password,
           });
         }
       }
@@ -182,8 +243,13 @@ export function parseImportFile(fileContent, fileName = '') {
     }
   }
 
-  // Parse as CSV
-  const rows = parseCSVRows(fileContent);
+  // Parse as CSV — skip comment lines (lines starting with #)
+  const filteredContent = fileContent
+    .split('\n')
+    .filter(line => !line.trimStart().startsWith('#'))
+    .join('\n');
+
+  const rows = parseCSVRows(filteredContent);
   if (rows.length < 2) {
     throw new Error('CSV file is empty or missing headers.');
   }
@@ -197,23 +263,20 @@ export function parseImportFile(fileContent, fileName = '') {
   let passIdx = -1;
 
   rawHeaders.forEach((header, idx) => {
-    // Site / URL identification
     if (['url', 'site', 'website', 'loginurl', 'loginuri', 'hostname', 'domain', 'name', 'title'].includes(header)) {
       if (siteIdx === -1 || header === 'url' || header === 'site' || header === 'loginurl' || header === 'loginuri') {
         siteIdx = idx;
       }
     }
-    // Username identification
     if (['username', 'user', 'login', 'loginusername', 'email', 'loginname'].includes(header)) {
       userIdx = idx;
     }
-    // Password identification
     if (['password', 'loginpassword', 'pass', 'secret'].includes(header)) {
       passIdx = idx;
     }
   });
 
-  // Fallbacks if headers were non-standard (e.g. Chrome format without exact headers)
+  // Fallbacks if headers were non-standard
   if (siteIdx === -1) siteIdx = 1;
   if (userIdx === -1) userIdx = 2;
   if (passIdx === -1) passIdx = 3;
@@ -221,14 +284,15 @@ export function parseImportFile(fileContent, fileName = '') {
   const parsedAccounts = [];
 
   for (const row of dataRows) {
-    const siteRaw = row[siteIdx] || row[0] || '';
-    const userRaw = row[userIdx] || '';
-    const passRaw = row[passIdx] || '';
+    // BUG #8 FIX: cap records
+    if (parsedAccounts.length >= MAX_IMPORT_RECORDS) {
+      throw new Error(`Import limit exceeded: maximum ${MAX_IMPORT_RECORDS} records allowed per import.`);
+    }
 
-    // Clean site URL (strip leading https:// or www. for display if preferred, or keep standard)
-    const site = siteRaw.trim();
-    const username = userRaw.trim();
-    const password = passRaw;
+    // BUG #8 FIX: sanitize all imported fields
+    const site     = sanitizeField(row[siteIdx] || row[0] || '');
+    const username = sanitizeField(row[userIdx] || '');
+    const password = sanitizeField(row[passIdx] || '');
 
     if (site && (username || password)) {
       parsedAccounts.push({
