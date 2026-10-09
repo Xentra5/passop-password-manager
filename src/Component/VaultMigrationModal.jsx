@@ -31,7 +31,7 @@ export default function VaultMigrationModal({
       try {
         const content = event.target?.result;
         if (typeof content !== 'string') return;
-        const parsed = parseImportFile(content, file.name);
+        const parsed = parseImportFile(content, file.name, file.size);
         setParsedPreview(parsed);
         toast.success(`Found ${parsed.length} accounts in ${file.name}`, {
           theme: 'dark',

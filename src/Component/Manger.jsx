@@ -48,10 +48,8 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
     const loadPasswords = async () => {
       try {
         const req = await fetch(API_BASE_URL, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
+          credentials: 'include', // Send HttpOnly cookie automatically
+          headers: authHeaders(),
         })
         if (!req.ok) {
           if (req.status === 401) onUnauthorized()
@@ -150,6 +148,7 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
     if (backendOnline) {
       const response = await fetch(`${API_BASE_URL}/bulk`, {
         method: "POST",
+        credentials: "include",
         headers: authHeaders(),
         body: JSON.stringify({ passwords: encryptedRecords }),
       });
@@ -255,6 +254,7 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
             isEditing ? `${API_BASE_URL}/${generatedId}` : API_BASE_URL,
             {
               method: isEditing ? "PUT" : "POST",
+              credentials: "include",
               headers: authHeaders(),
               body: JSON.stringify(passwordToSave),
             }
@@ -316,6 +316,7 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
       if (backendOnline) {
         await fetch(`${API_BASE_URL}/${accountId}`, {
           method: 'PUT',
+          credentials: 'include',
           headers: authHeaders(),
           body: JSON.stringify({
             id: account.id,
@@ -343,6 +344,7 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
         if (backendOnline) {
           const response = await fetch(`${API_BASE_URL}/${id}`, {
             method: "DELETE",
+            credentials: "include",
             headers: authHeaders(),
           })
           if (response.status === 401) onUnauthorized()

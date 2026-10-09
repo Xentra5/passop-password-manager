@@ -5,6 +5,7 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
+const cookieParser = require('cookie-parser');
 
 dotenv.config();
 
@@ -22,9 +23,11 @@ const app = express();
 const client = new MongoClient(MONGO_URL);
 
 app.use(express.json());
+app.use(cookieParser());
 app.use(
   cors({
     origin: FRONTEND_ORIGIN,
+    credentials: true, // Required for sending/receiving HttpOnly cookies across origins
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   })
 );
@@ -92,11 +95,28 @@ const createToken = (user) => jwt.sign(
   { expiresIn: '7d' }
 );
 
+// Professional Enterprise Cookie Configuration
+const isProduction = process.env.NODE_ENV === 'production';
+const COOKIE_NAME = 'passvault_token';
+const COOKIE_OPTIONS = {
+  httpOnly: true, // Prevents client-side JavaScript / XSS theft
+  secure: isProduction, // HTTPS only in production; permits HTTP in localhost dev
+  sameSite: isProduction ? 'strict' : 'lax', // CSRF defense (lax permits local cross-port dev)
+  maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days in milliseconds
+  path: '/',
+};
+
 const authenticateToken = (req, res, next) => {
-  const authorization = req.headers.authorization || '';
-  const token = authorization.startsWith('Bearer ')
-    ? authorization.slice(7)
-    : null;
+  // Check HttpOnly cookie FIRST (primary secure transport)
+  let token = req.cookies?.[COOKIE_NAME] || null;
+
+  // Fallback to Bearer token header if cookie is absent (e.g. CLI tools / external integrations)
+  if (!token) {
+    const authorization = req.headers.authorization || '';
+    if (authorization.startsWith('Bearer ')) {
+      token = authorization.slice(7);
+    }
+  }
 
   if (!token) {
     return res.status(401).json({ success: false, message: 'Authentication required' });
@@ -106,12 +126,25 @@ const authenticateToken = (req, res, next) => {
     req.user = jwt.verify(token, JWT_SECRET);
     next();
   } catch {
-    return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+    return res.status(401).json({ success: false, message: 'Invalid or expired session' });
   }
 };
 
 app.get('/health', (_req, res) => {
   res.json({ ok: true });
+});
+
+// GET /api/auth/me: Validates active HttpOnly session cookie on page load/refresh
+app.get('/api/auth/me', authenticateToken, async (req, res) => {
+  try {
+    res.json({
+      success: true,
+      user: { email: req.user.email },
+    });
+  } catch (error) {
+    console.error('Failed to get current user:', error);
+    res.status(500).json({ success: false, message: 'Failed to verify session' });
+  }
 });
 
 app.post('/api/auth/register', async (req, res) => {
@@ -127,10 +160,11 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
-    if (!email.includes('@') || password.length < 8) {
+    // Require at least 12 characters for master password (matches client-side security standard)
+    if (!email.includes('@') || password.length < 12) {
       return res.status(400).json({
         success: false,
-        message: 'Use a valid email and a password of at least 8 characters',
+        message: 'Use a valid email and a master password of at least 12 characters',
       });
     }
 
@@ -144,7 +178,16 @@ app.post('/api/auth/register', async (req, res) => {
     const result = await users.insertOne(user);
     user._id = result.insertedId;
 
-    res.status(201).json({ success: true, token: createToken(user), user: { email } });
+    const token = createToken(user);
+
+    // Set secure HttpOnly cookie
+    res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
+
+    res.status(201).json({
+      success: true,
+      token, // provided for fallback in RAM
+      user: { email },
+    });
   } catch (error) {
     console.error('Failed to register user:', error);
     res.status(500).json({ success: false, message: 'Failed to create account' });
@@ -161,11 +204,26 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
-    res.json({ success: true, token: createToken(user), user: { email: user.email } });
+    const token = createToken(user);
+
+    // Set secure HttpOnly cookie
+    res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
+
+    res.json({
+      success: true,
+      token, // provided for fallback in RAM
+      user: { email: user.email },
+    });
   } catch (error) {
     console.error('Failed to log in user:', error);
     res.status(500).json({ success: false, message: 'Failed to log in' });
   }
+});
+
+// POST /api/auth/logout: Clears the HttpOnly cookie
+app.post('/api/auth/logout', (req, res) => {
+  res.clearCookie(COOKIE_NAME, COOKIE_OPTIONS);
+  res.json({ success: true, message: 'Logged out successfully' });
 });
 
 const extractDomain = (urlOrSite) => {

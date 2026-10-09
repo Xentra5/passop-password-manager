@@ -109,6 +109,7 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
       //    - http://localhost:3000/api/auth/login    (when isRegistering is false)
       const response = await fetch(`${AUTH_API_URL}/${isRegistering ? "register" : "login"}`, {
         method: "POST",
+        credentials: "include", // Enables browser to store and transmit HttpOnly cookies
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload), // Convert the JS object into a JSON string
       })

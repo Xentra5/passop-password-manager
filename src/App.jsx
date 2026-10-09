@@ -1,16 +1,15 @@
 // ============================================================================
-// APP.JSX - ROOT COMPONENT WITH SECURITY HARDENING
+// APP.JSX - ROOT COMPONENT WITH PROFESSIONAL HTTPONLY COOKIE AUTH
 //
-// SECURITY FIXES APPLIED:
-// - BUG #2 FIX: JWT token is no longer stored in localStorage.
-//   It is kept only in React state (RAM). On page refresh the user must
-//   log in again. This eliminates the XSS-readable persistent token.
-//   The user profile (non-sensitive display data) still uses localStorage.
-// - BUG #13 FIX: onUnlockWithMasterPassword callback is now properly
-//   created and passed to LockScreenModal so master password unlock
-//   actually verifies the password before unlocking the vault.
-// - BUG #1 downstream: getCachedVaultKey is now a no-op (returns null),
-//   so the page always asks for master password after refresh.
+// SECURITY & SESSION ARCHITECTURE:
+// - Professional HttpOnly Cookie: Auth token is stored securely in an HttpOnly,
+//   SameSite, Secure cookie by the browser. It cannot be stolen by XSS!
+// - Zero-Knowledge Decryption: The 256-bit AES master vaultKey lives ONLY
+//   in React state (RAM). The backend never sees the master password or key.
+// - Session Persistence: On initial mount, verifies active session with
+//   GET /api/auth/me (using credentials: 'include').
+// - Secure Logout: POST /api/auth/logout instructs the server to clear the
+//   cookie header while clearing client state.
 // ============================================================================
 
 import { useCallback, useState, useEffect } from "react"
@@ -26,89 +25,119 @@ import { useSmoothScroll } from "./hooks/useSmoothScroll"
 import { deriveVaultKey, clearCachedVaultKey } from "./utils/cryptoVault"
 import { useAutoLock } from "./hooks/useAutoLock"
 
+const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL ?? "http://localhost:3000/api/auth";
+
 function App() {
   useSmoothScroll();
 
   // --------------------------------------------------------------------------
   // SESSION STATE
-  // BUG #2 FIX: token lives ONLY in React state (RAM), not localStorage.
-  // The user profile (email for display) is stored in localStorage since
-  // it contains no secret material.
+  // token: fallback in RAM for non-cookie environments
+  // user: verified user profile
   // --------------------------------------------------------------------------
   const [session, setSession] = useState(() => ({
-    token: null,                                                             // BUG #2 FIX: never persisted to disk
-    user: JSON.parse(localStorage.getItem("passvault_user") || "null"),     // non-sensitive display data only
+    token: null,
+    user: JSON.parse(localStorage.getItem("passvault_user") || "null"),
   }))
 
   const [vaultKey, setVaultKey] = useState(null)
-
-  // On load: if user profile exists but token is null, show landing page (not vault)
-  // BUG #2 FIX: token is never read from localStorage — intentional
-  const [activeView, setActiveView] = useState("landing")
-
+  const [activeView, setActiveView] = useState(() => (session.user ? "vault" : "landing"))
   const [authModalOpen, setAuthModalOpen] = useState(false)
   const [authModalMode, setAuthModalMode] = useState("login")
   const [isPasswordRevealed, setIsPasswordRevealed] = useState(false)
 
   // --------------------------------------------------------------------------
-  // AUTO-LOCK
+  // AUTO-LOCK SYSTEM
+  // Inactivity tracking when authenticated and in the vault
   // --------------------------------------------------------------------------
-  const { isLocked, lockVault, unlockVault } = useAutoLock(Boolean(session.token && activeView === "vault"))
+  const { isLocked, lockVault, unlockVault } = useAutoLock(Boolean(session.user && activeView === "vault"))
 
   // --------------------------------------------------------------------------
-  // BUG #1 downstream: getCachedVaultKey now always returns null.
-  // No key is ever restored from sessionStorage — this effect is a no-op
-  // but kept for structural clarity if the policy is ever revisited.
+  // VALIDATE ACTIVE HTTPONLY SESSION COOKIE ON MOUNT
   // --------------------------------------------------------------------------
   useEffect(() => {
-    // Intentional no-op: key no longer cached in sessionStorage (BUG #1 fix).
-    // The vault key only lives in React state from the moment of login.
+    let isMounted = true;
+
+    const verifySession = async () => {
+      try {
+        const response = await fetch(`${AUTH_API_URL}/me`, {
+          credentials: 'include', // Automatically sends the HttpOnly cookie
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (isMounted && data.user) {
+            setSession(prev => ({ ...prev, user: data.user }));
+            localStorage.setItem("passvault_user", JSON.stringify(data.user));
+            setActiveView("vault");
+          }
+        } else if (response.status === 401) {
+          // Cookie expired or absent
+          if (isMounted) {
+            setSession({ token: null, user: null });
+            localStorage.removeItem("passvault_user");
+            setActiveView("landing");
+          }
+        }
+      } catch {
+        // Backend offline or unreachable - retain offline session state
+      }
+    };
+
+    void verifySession();
+
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   // --------------------------------------------------------------------------
   // HANDLERS
   // --------------------------------------------------------------------------
 
-  // A. Login / register success
+  // A. Login / Registration Success
   const handleAuthenticated = useCallback((data) => {
-    // BUG #2 FIX: token stored ONLY in React state, never in localStorage
-    localStorage.setItem("passvault_user", JSON.stringify(data.user))      // non-secret display data
-    setSession({ token: data.token, user: data.user })
+    localStorage.setItem("passvault_user", JSON.stringify(data.user));
+    setSession({ token: data.token || null, user: data.user });
     if (data.vaultKey) {
-      setVaultKey(data.vaultKey)
+      setVaultKey(data.vaultKey);
     }
-    setAuthModalOpen(false)
-    setActiveView("vault")
-  }, [])
+    setAuthModalOpen(false);
+    setActiveView("vault");
+  }, []);
 
-  // B. Logout
-  const handleLogout = useCallback(() => {
-    localStorage.removeItem("passvault_user")                              // BUG #2 FIX: no token to remove
-    clearCachedVaultKey()                                                  // no-op after BUG #1 fix, kept for safety
-    setVaultKey(null)
-    setSession({ token: null, user: null })
-    setActiveView("landing")
-  }, [])
+  // B. Logout (Clears HttpOnly Cookie on Server + Clears RAM)
+  const handleLogout = useCallback(async () => {
+    try {
+      await fetch(`${AUTH_API_URL}/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch {
+      // Ignore network errors on logout
+    }
+    localStorage.removeItem("passvault_user");
+    clearCachedVaultKey();
+    setVaultKey(null);
+    setSession({ token: null, user: null });
+    setActiveView("landing");
+  }, []);
 
-  // C. Open auth modal
+  // C. Open Auth Modal
   const handleOpenAuth = useCallback((mode = "login") => {
-    setAuthModalMode(mode)
-    setAuthModalOpen(true)
-  }, [])
+    setAuthModalMode(mode);
+    setAuthModalOpen(true);
+  }, []);
 
-  // D. BUG #13 FIX: Master password re-derivation for lock screen unlock.
-  //    This callback re-derives the vault key from the master password,
-  //    effectively verifying it (wrong password → different key → decrypt fails).
+  // D. Master Password Unlock for Lock Screen / Refresh
   const handleUnlockWithMasterPassword = useCallback(async (masterPassword) => {
     if (!session.user?.email) {
-      throw new Error('Cannot derive vault key: user email not found. Please log out and log in again.');
+      throw new Error('User email not found. Please log in again.');
     }
     try {
       const newVaultKey = await deriveVaultKey(masterPassword, session.user.email);
       setVaultKey(newVaultKey);
-      // If the password was wrong, decryption of stored data will fail silently —
-      // which is the expected zero-knowledge behavior. No server-side check needed.
-    } catch (err) {
+    } catch {
       throw new Error('Failed to derive vault key. Please check your master password.');
     }
   }, [session.user?.email]);
@@ -118,7 +147,6 @@ function App() {
   // --------------------------------------------------------------------------
   return (
     <div className="composition-shell flex min-h-screen flex-col bg-[#f4f1ec] text-[#1f2933] antialiased">
-
       {/* Ambient background decorative effects */}
       <div className="vault-grid" aria-hidden="true"></div>
       <div className="ambient-orbit ambient-orbit-one" aria-hidden="true"></div>
@@ -138,7 +166,7 @@ function App() {
 
       {/* Main content area */}
       <div className="relative z-10 flex-1">
-        {session.token && activeView === "vault" ? (
+        {session.user && activeView === "vault" ? (
           <Manager
             token={session.token}
             vaultKey={vaultKey}
@@ -166,9 +194,8 @@ function App() {
       )}
 
       {/* Inactivity Auto-Lock PIN Screen */}
-      {/* BUG #13 FIX: onUnlockWithMasterPassword now correctly passed */}
       <LockScreenModal
-        isOpen={isLocked && Boolean(session.token)}
+        isOpen={(isLocked || (!vaultKey && activeView === "vault")) && Boolean(session.user)}
         user={session.user}
         onUnlock={unlockVault}
         onLogout={handleLogout}
