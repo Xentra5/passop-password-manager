@@ -1,8 +1,9 @@
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { ToastContainer, toast, Bounce } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
 import PassVaultLogo from "./PassVaultLogo"
 import { deriveVaultKey } from "../utils/cryptoVault"
+import { secureFetch, setCsrfToken, getCsrfToken } from "../utils/csrf"
 
 // BUG #6 FIX: Use env variable so production deploys use HTTPS.
 // Set VITE_AUTH_API_URL=https://your-domain.com/api/auth in .env
@@ -58,6 +59,11 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
     setForm({ email: "", password: "", confirmPassword: "" })
   }
 
+  // Warm up the CSRF token on mount so it's ready for login/registration
+  useEffect(() => {
+    void getCsrfToken();
+  }, []);
+
   // ==========================================================================
   // FUNCTION: handleChange
   // Triggered every time the user types a character in ANY input box.
@@ -103,13 +109,9 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
         ? { email: form.email, password: form.password, confirmPassword: form.confirmPassword }
         : { email: form.email, password: form.password }
 
-      // 4. Send HTTP POST request to the backend:
-      //    URL becomes either:
-      //    - http://localhost:3000/api/auth/register (when isRegistering is true)
-      //    - http://localhost:3000/api/auth/login    (when isRegistering is false)
-      const response = await fetch(`${AUTH_API_URL}/${isRegistering ? "register" : "login"}`, {
+      // 4. Send HTTP POST request via secureFetch with Anti-CSRF protection & HttpOnly cookie:
+      const response = await secureFetch(`${AUTH_API_URL}/${isRegistering ? "register" : "login"}`, {
         method: "POST",
-        credentials: "include", // Enables browser to store and transmit HttpOnly cookies
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload), // Convert the JS object into a JSON string
       })
@@ -118,6 +120,11 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
       // 5. If server responded with an error (e.g. wrong password, email already exists):
       if (!response.ok) {
         throw new Error(data.message || "Authentication failed")
+      }
+
+      // Update CSRF token from login/register response
+      if (data.csrfToken) {
+        setCsrfToken(data.csrfToken);
       }
 
       // 6. Zero-Knowledge: Derive 256-bit AES vault key in the browser from master password & email

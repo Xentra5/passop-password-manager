@@ -9,6 +9,7 @@ import { checkPasswordBreach, auditVaultSecurity } from '../utils/breachCheck';
 import PasswordGeneratorModal from './PasswordGeneratorModal';
 import VaultMigrationModal from './VaultMigrationModal';
 import PasswordHistoryModal from './PasswordHistoryModal';
+import { secureFetch } from '../utils/csrf';
 
 // BUG #6 FIX: Use env variable so production deploys use HTTPS.
 // Set VITE_API_BASE_URL=https://your-domain.com/api/passwords in .env
@@ -47,8 +48,7 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
     let isCancelled = false;
     const loadPasswords = async () => {
       try {
-        const req = await fetch(API_BASE_URL, {
-          credentials: 'include', // Send HttpOnly cookie automatically
+        const req = await secureFetch(API_BASE_URL, {
           headers: authHeaders(),
         })
         if (!req.ok) {
@@ -146,9 +146,8 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
 
     // 2. Persist in bulk to backend database
     if (backendOnline) {
-      const response = await fetch(`${API_BASE_URL}/bulk`, {
+      const response = await secureFetch(`${API_BASE_URL}/bulk`, {
         method: "POST",
-        credentials: "include",
         headers: authHeaders(),
         body: JSON.stringify({ passwords: encryptedRecords }),
       });
@@ -250,11 +249,10 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
 
       try {
         if (backendOnline) {
-          const response = await fetch(
+          const response = await secureFetch(
             isEditing ? `${API_BASE_URL}/${generatedId}` : API_BASE_URL,
             {
               method: isEditing ? "PUT" : "POST",
-              credentials: "include",
               headers: authHeaders(),
               body: JSON.stringify(passwordToSave),
             }
@@ -314,9 +312,8 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
       const updatedAccount = { ...account, history: [] };
 
       if (backendOnline) {
-        await fetch(`${API_BASE_URL}/${accountId}`, {
+        await secureFetch(`${API_BASE_URL}/${accountId}`, {
           method: 'PUT',
-          credentials: 'include',
           headers: authHeaders(),
           body: JSON.stringify({
             id: account.id,
@@ -342,9 +339,8 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
     if (confirmed) {
       try {
         if (backendOnline) {
-          const response = await fetch(`${API_BASE_URL}/${id}`, {
+          const response = await secureFetch(`${API_BASE_URL}/${id}`, {
             method: "DELETE",
-            credentials: "include",
             headers: authHeaders(),
           })
           if (response.status === 401) onUnauthorized()

@@ -24,6 +24,7 @@ import LockScreenModal from "./Component/LockScreenModal"
 import { useSmoothScroll } from "./hooks/useSmoothScroll"
 import { deriveVaultKey, clearCachedVaultKey } from "./utils/cryptoVault"
 import { useAutoLock } from "./hooks/useAutoLock"
+import { secureFetch, setCsrfToken } from "./utils/csrf"
 
 const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL ?? "http://localhost:3000/api/auth";
 
@@ -60,12 +61,13 @@ function App() {
 
     const verifySession = async () => {
       try {
-        const response = await fetch(`${AUTH_API_URL}/me`, {
-          credentials: 'include', // Automatically sends the HttpOnly cookie
-        });
+        const response = await secureFetch(`${AUTH_API_URL}/me`);
 
         if (response.ok) {
           const data = await response.json();
+          if (data.csrfToken) {
+            setCsrfToken(data.csrfToken);
+          }
           if (isMounted && data.user) {
             setSession(prev => ({ ...prev, user: data.user }));
             localStorage.setItem("passvault_user", JSON.stringify(data.user));
@@ -97,6 +99,9 @@ function App() {
 
   // A. Login / Registration Success
   const handleAuthenticated = useCallback((data) => {
+    if (data.csrfToken) {
+      setCsrfToken(data.csrfToken);
+    }
     localStorage.setItem("passvault_user", JSON.stringify(data.user));
     setSession({ token: data.token || null, user: data.user });
     if (data.vaultKey) {
@@ -106,12 +111,11 @@ function App() {
     setActiveView("vault");
   }, []);
 
-  // B. Logout (Clears HttpOnly Cookie on Server + Clears RAM)
+  // B. Logout (Clears HttpOnly Cookie & CSRF Cookie on Server + Clears RAM)
   const handleLogout = useCallback(async () => {
     try {
-      await fetch(`${AUTH_API_URL}/logout`, {
+      await secureFetch(`${AUTH_API_URL}/logout`, {
         method: "POST",
-        credentials: "include",
       });
     } catch {
       // Ignore network errors on logout

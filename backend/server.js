@@ -29,6 +29,7 @@ app.use(
     origin: FRONTEND_ORIGIN,
     credentials: true, // Required for sending/receiving HttpOnly cookies across origins
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-XSRF-Token'],
   })
 );
 
@@ -106,6 +107,74 @@ const COOKIE_OPTIONS = {
   path: '/',
 };
 
+// ─── Double-Submit Anti-CSRF Cookie Configuration ────────────────────────────
+const CSRF_COOKIE_NAME = 'XSRF-TOKEN';
+const CSRF_COOKIE_OPTIONS = {
+  httpOnly: false, // Standard Double-Submit pattern: client JavaScript must be able to read this cookie
+  secure: isProduction,
+  sameSite: isProduction ? 'strict' : 'lax',
+  maxAge: 7 * 24 * 60 * 60 * 1000,
+  path: '/',
+};
+
+const generateCsrfToken = () => crypto.randomBytes(32).toString('hex');
+
+const setCsrfCookie = (res, token = generateCsrfToken()) => {
+  res.cookie(CSRF_COOKIE_NAME, token, CSRF_COOKIE_OPTIONS);
+  return token;
+};
+
+/**
+ * Double-Submit Anti-CSRF Protection Middleware
+ *
+ * HOW IT WORKS:
+ * 1. Safe HTTP methods (GET, HEAD, OPTIONS) are read-only and skipped.
+ * 2. State-modifying requests (POST, PUT, DELETE, PATCH) MUST include:
+ *    - An X-CSRF-Token (or X-XSRF-TOKEN) header.
+ *    - The matching XSRF-TOKEN cookie.
+ * 3. An attacker from an external origin (evil.com) cannot read the victim's
+ *    cookies due to the browser's Same-Origin Policy, so they cannot forge
+ *    the matching header value.
+ * 4. Comparison uses crypto.timingSafeEqual to prevent timing side-channel attacks.
+ */
+const verifyCsrfToken = (req, res, next) => {
+  // Safe idempotent methods do not alter state
+  if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
+    return next();
+  }
+
+  const headerToken = req.headers['x-csrf-token'] || req.headers['x-xsrf-token'];
+  const cookieToken = req.cookies?.[CSRF_COOKIE_NAME];
+
+  if (!headerToken || !cookieToken || typeof headerToken !== 'string' || typeof cookieToken !== 'string') {
+    return res.status(403).json({
+      success: false,
+      code: 'CSRF_MISSING',
+      message: 'Anti-CSRF protection: CSRF token is missing from headers or cookies.',
+    });
+  }
+
+  try {
+    const headerBuf = Buffer.from(headerToken, 'utf8');
+    const cookieBuf = Buffer.from(cookieToken, 'utf8');
+
+    if (headerBuf.length === cookieBuf.length && crypto.timingSafeEqual(headerBuf, cookieBuf)) {
+      return next();
+    }
+  } catch (err) {
+    console.error('CSRF verification error:', err.message);
+  }
+
+  return res.status(403).json({
+    success: false,
+    code: 'CSRF_INVALID',
+    message: 'Anti-CSRF protection: Invalid CSRF token. Request blocked for security.',
+  });
+};
+
+// Apply Anti-CSRF protection across all state-modifying endpoints
+app.use(verifyCsrfToken);
+
 const authenticateToken = (req, res, next) => {
   // Check HttpOnly cookie FIRST (primary secure transport)
   let token = req.cookies?.[COOKIE_NAME] || null;
@@ -134,11 +203,27 @@ app.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
 
+// GET /api/csrf-token: Issues or refreshes a valid CSRF token
+app.get('/api/csrf-token', (req, res) => {
+  const existingToken = req.cookies?.[CSRF_COOKIE_NAME];
+  const token = existingToken || generateCsrfToken();
+  setCsrfCookie(res, token);
+  res.json({
+    success: true,
+    csrfToken: token,
+  });
+});
+
 // GET /api/auth/me: Validates active HttpOnly session cookie on page load/refresh
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
   try {
+    // Refresh or ensure CSRF cookie is present
+    const existingToken = req.cookies?.[CSRF_COOKIE_NAME];
+    const csrfToken = existingToken || setCsrfCookie(res);
+
     res.json({
       success: true,
+      csrfToken,
       user: { email: req.user.email },
     });
   } catch (error) {
@@ -180,12 +265,14 @@ app.post('/api/auth/register', async (req, res) => {
 
     const token = createToken(user);
 
-    // Set secure HttpOnly cookie
+    // Set secure HttpOnly cookie & fresh Double-Submit CSRF cookie
     res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
+    const csrfToken = setCsrfCookie(res);
 
     res.status(201).json({
       success: true,
       token, // provided for fallback in RAM
+      csrfToken,
       user: { email },
     });
   } catch (error) {
@@ -206,12 +293,14 @@ app.post('/api/auth/login', async (req, res) => {
 
     const token = createToken(user);
 
-    // Set secure HttpOnly cookie
+    // Set secure HttpOnly cookie & fresh Double-Submit CSRF cookie
     res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
+    const csrfToken = setCsrfCookie(res);
 
     res.json({
       success: true,
       token, // provided for fallback in RAM
+      csrfToken,
       user: { email: user.email },
     });
   } catch (error) {
@@ -220,9 +309,10 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// POST /api/auth/logout: Clears the HttpOnly cookie
+// POST /api/auth/logout: Clears both the HttpOnly session and CSRF cookies
 app.post('/api/auth/logout', (req, res) => {
   res.clearCookie(COOKIE_NAME, COOKIE_OPTIONS);
+  res.clearCookie(CSRF_COOKIE_NAME, CSRF_COOKIE_OPTIONS);
   res.json({ success: true, message: 'Logged out successfully' });
 });
 
