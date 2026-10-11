@@ -406,6 +406,7 @@ app.get('/api/passwords', authenticateToken, async (req, res) => {
     const decryptedPasswords = passwords.map((item) => ({
       ...item,
       password: decryptVaultPassword(item.password),
+      customFields: Array.isArray(item.customFields) ? item.customFields : [],
       history: Array.isArray(item.history)
         ? item.history.map(h => ({
             ...h,
@@ -436,6 +437,7 @@ app.post('/api/passwords', authenticateToken, async (req, res) => {
       site: password.site.trim(),
       username: password.username.trim(),
       password: encryptVaultPassword(password.password),
+      customFields: Array.isArray(password.customFields) ? password.customFields : [],
       userId: req.user.userId,
       createdAt: new Date(),
     };
@@ -449,6 +451,7 @@ app.post('/api/passwords', authenticateToken, async (req, res) => {
         site: recordToInsert.site,
         username: recordToInsert.username,
         password: recordToInsert.password,
+        customFields: recordToInsert.customFields,
       },
     });
   } catch (error) {
@@ -474,6 +477,7 @@ app.post('/api/passwords/bulk', authenticateToken, async (req, res) => {
           site: item.site.trim(),
           username: item.username.trim(),
           password: encryptVaultPassword(item.password),
+          customFields: Array.isArray(item.customFields) ? item.customFields : [],
           userId: req.user.userId,
           createdAt: now,
         });
@@ -519,6 +523,10 @@ app.put('/api/passwords/:id', authenticateToken, async (req, res) => {
       password: encryptVaultPassword(password.password),
       updatedAt: new Date(),
     };
+
+    if (Array.isArray(password.customFields)) {
+      updateFields.customFields = password.customFields;
+    }
 
     if (Array.isArray(password.history)) {
       updateFields.history = password.history.slice(0, 5).map(h => ({

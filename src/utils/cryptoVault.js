@@ -200,3 +200,54 @@ export async function decryptCredential(storedValue, vaultKey) {
     return '[Decryption Failed]';
   }
 }
+
+/**
+ * Encrypts an array of custom fields in the browser with AES-256-GCM.
+ * Only values flagged as isSecret (or non-empty) are encrypted.
+ *
+ * @param {Array<{id: string, label: string, value: string, isSecret: boolean}>} fields
+ * @param {CryptoKey} vaultKey
+ * @returns {Promise<Array<{id: string, label: string, value: string, isSecret: boolean}>>}
+ */
+export async function encryptCustomFields(fields, vaultKey) {
+  if (!Array.isArray(fields) || fields.length === 0) return [];
+  return Promise.all(
+    fields.map(async (field) => {
+      const encryptedVal = field.value
+        ? await encryptCredential(field.value, vaultKey)
+        : '';
+      return {
+        id: field.id || Math.random().toString(36).slice(2, 10),
+        label: (field.label || '').trim(),
+        value: encryptedVal,
+        isSecret: Boolean(field.isSecret),
+      };
+    })
+  );
+}
+
+/**
+ * Decrypts an array of custom fields in the browser with AES-256-GCM.
+ *
+ * @param {Array<{id: string, label: string, value: string, isSecret: boolean}>} fields
+ * @param {CryptoKey} vaultKey
+ * @returns {Promise<Array<{id: string, label: string, value: string, isSecret: boolean}>>}
+ */
+export async function decryptCustomFields(fields, vaultKey) {
+  if (!Array.isArray(fields) || fields.length === 0) return [];
+  return Promise.all(
+    fields.map(async (field) => {
+      let decryptedVal = field.value;
+      if (typeof field.value === 'string' && field.value.startsWith(ENCRYPTION_PREFIX)) {
+        decryptedVal = await decryptCredential(field.value, vaultKey);
+      }
+      return {
+        id: field.id || Math.random().toString(36).slice(2, 10),
+        label: field.label || '',
+        value: decryptedVal,
+        isSecret: Boolean(field.isSecret),
+      };
+    })
+  );
+}
+

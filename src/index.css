@@ -1082,3 +1082,130 @@ h1 span {
     display: none;
   }
 }
+
+/* ==========================================================================
+   OBSIDIAN / CYBERPUNK DARK MODE THEME SYSTEM
+   ========================================================================== */
+
+html.dark,
+body.dark {
+  background-color: #0c1017 !important;
+  color: #e6edf3 !important;
+  color-scheme: dark;
+}
+
+.dark .composition-shell {
+  background-color: #0c1017 !important;
+  color: #e6edf3 !important;
+}
+
+.dark .site-nav {
+  background-color: rgba(12, 16, 23, 0.88) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05) !important;
+}
+
+.dark .vault-grid {
+  background-image: linear-gradient(rgba(38, 166, 154, 0.09) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(38, 166, 154, 0.09) 1px, transparent 1px) !important;
+  opacity: 0.6 !important;
+}
+
+.dark .vault-panel,
+.dark section.vault-panel,
+.dark .credential-section .overflow-hidden,
+.dark section.overflow-hidden {
+  background-color: #151b23 !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.45) !important;
+}
+
+.dark .vault-panel .border-b,
+.dark [class*="border-[#ebe7e1]"],
+.dark [class*="divide-[#ebe7e1]"] > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.dark input[type="text"],
+.dark input[type="password"],
+.dark input[type="email"],
+.dark select,
+.dark textarea {
+  background-color: #0d1117 !important;
+  border-color: #30363d !important;
+  color: #e6edf3 !important;
+}
+
+.dark input::placeholder {
+  color: #6e7681 !important;
+}
+
+.dark input:focus {
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.3) !important;
+}
+
+.dark thead {
+  background-color: #10151c !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: #8b949e !important;
+}
+
+.dark tbody tr {
+  border-color: rgba(255, 255, 255, 0.06) !important;
+}
+
+.dark tbody tr:hover {
+  background-color: #19222e !important;
+}
+
+.dark .bg-white {
+  background-color: #161c24 !important;
+  color: #e6edf3;
+}
+
+.dark [class*="bg-[#faf9f7]"] {
+  background-color: #10151d !important;
+}
+
+.dark [class*="bg-[#f4f1ec]"] {
+  background-color: #0c1017 !important;
+}
+
+.dark [class*="text-[#1f2933]"] {
+  color: #e6edf3 !important;
+}
+
+.dark [class*="text-[#4b5563]"],
+.dark [class*="text-[#6f6a63]"],
+.dark [class*="text-[#7b746b]"] {
+  color: #8b949e !important;
+}
+
+.dark [class*="border-[#ddd8d0]"],
+.dark [class*="border-[#d5d0c8]"] {
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.dark .theme-toggle-btn {
+  background-color: #161b22 !important;
+  border-color: #30363d !important;
+}
+
+.dark .site-footer {
+  background-color: #0b0f17 !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.dark .hero-full-bleed {
+  background:
+    radial-gradient(ellipse 110% 55% at 18% 25%, rgba(23, 107, 135, 0.22) 0%, transparent 60%),
+    radial-gradient(ellipse 75% 65% at 82% 75%, rgba(38, 150, 138, 0.18) 0%, transparent 55%),
+    radial-gradient(ellipse 55% 45% at 50% -5%, rgba(23, 107, 135, 0.15) 0%, transparent 50%),
+    radial-gradient(ellipse 60% 40% at 5% 80%, rgba(38, 150, 138, 0.12) 0%, transparent 45%),
+    linear-gradient(170deg, #090d14 0%, #0d121c 40%, #0c1017 100%) !important;
+}
+
+.dark .section-flow-gradient {
+  background: linear-gradient(to bottom, transparent, #0c1017) !important;
+}

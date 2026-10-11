@@ -48,6 +48,31 @@ function App() {
   const [isPasswordRevealed, setIsPasswordRevealed] = useState(false)
 
   // --------------------------------------------------------------------------
+  // THEME SYSTEM (Obsidian Cyberpunk Dark / Warm Cream Light)
+  // --------------------------------------------------------------------------
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem("passvault_theme");
+    if (saved === "dark" || saved === "light") return saved;
+    return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light";
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme === "dark") {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+    localStorage.setItem("passvault_theme", theme);
+  }, [theme]);
+
+  const toggleTheme = useCallback(() => {
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+  }, []);
+
+  // --------------------------------------------------------------------------
   // AUTO-LOCK SYSTEM
   // Inactivity tracking when authenticated and in the vault
   // --------------------------------------------------------------------------
@@ -150,7 +175,7 @@ function App() {
   // RENDER
   // --------------------------------------------------------------------------
   return (
-    <div className="composition-shell flex min-h-screen flex-col bg-[#f4f1ec] text-[#1f2933] antialiased">
+    <div className={`composition-shell flex min-h-screen flex-col ${theme === "dark" ? "bg-[#0b0f17] text-[#e6edf3]" : "bg-[#f4f1ec] text-[#1f2933]"} antialiased transition-colors duration-300`}>
       {/* Ambient background decorative effects */}
       <div className="vault-grid" aria-hidden="true"></div>
       <div className="ambient-orbit ambient-orbit-one" aria-hidden="true"></div>
@@ -166,6 +191,8 @@ function App() {
         activeView={activeView}
         setActiveView={setActiveView}
         isPasswordRevealed={isPasswordRevealed}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
       {/* Main content area */}
@@ -176,6 +203,7 @@ function App() {
             vaultKey={vaultKey}
             onUnauthorized={handleLogout}
             onPasswordRevealChange={setIsPasswordRevealed}
+            theme={theme}
           />
         ) : (
           <LandingPage
@@ -207,7 +235,7 @@ function App() {
       />
 
       {/* Footer */}
-      <Footer />
+      <Footer theme={theme} />
     </div>
   )
 }

@@ -1,9 +1,9 @@
-import { useState, useEffect, useId, useMemo } from 'react'
+import { useState, useEffect, useId, useMemo, useRef, Fragment } from 'react'
 import { ToastContainer, toast, Bounce } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { v4 as uuidv4 } from "uuid";
 import SiteLogo, { extractDomain, getFamousBrand, POPULAR_SERVICES } from './SiteLogo';
-import { encryptCredential, decryptCredential } from '../utils/cryptoVault';
+import { encryptCredential, decryptCredential, encryptCustomFields, decryptCustomFields } from '../utils/cryptoVault';
 import VaultSecurityAudit from './VaultSecurityAudit';
 import { checkPasswordBreach, auditVaultSecurity } from '../utils/breachCheck';
 import PasswordGeneratorModal from './PasswordGeneratorModal';
@@ -16,13 +16,15 @@ import { secureFetch } from '../utils/csrf';
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api/passwords"
 
 
-const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) => {
-  const [form, setForm] = useState({ site: "", username: "", password: "" })
+const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange, theme = "light" }) => {
+  const [form, setForm] = useState({ site: "", username: "", password: "", customFields: [] })
   const [passwordArray, setPasswordArray] = useState([])
   const [showPassword, setShowPassword] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [copiedKey, setCopiedKey] = useState(null)
   const [revealedIds, setRevealedIds] = useState({})
+  const [revealedCustomFieldIds, setRevealedCustomFieldIds] = useState({})
+  const [expandedCustomFieldAccounts, setExpandedCustomFieldAccounts] = useState({})
   const [backendOnline, setBackendOnline] = useState(true)
   const [breachResults, setBreachResults] = useState(() => new Map())
   const [isScanningBreaches, setIsScanningBreaches] = useState(false)
@@ -31,6 +33,7 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
   const [isMigrationOpen, setIsMigrationOpen] = useState(false)
   const [selectedHistoryAccount, setSelectedHistoryAccount] = useState(null)
 
+  const searchInputRef = useRef(null)
   const siteInputId = useId()
   const usernameInputId = useId()
   const passwordInputId = useId()
@@ -43,6 +46,26 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value })
   }
+
+  // Keyboard shortcut listener: Ctrl+K or Cmd+K focuses vault search, Esc clears it
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+          searchInputRef.current.select();
+        }
+      } else if (e.key === 'Escape') {
+        if (document.activeElement === searchInputRef.current) {
+          setSearchQuery("");
+          searchInputRef.current.blur();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   useEffect(() => {
     let isCancelled = false;
@@ -59,6 +82,9 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
         const decryptedList = await Promise.all(
           passwords.map(async (item) => {
             const decryptedPass = await decryptCredential(item.password, vaultKey);
+            const decryptedFields = Array.isArray(item.customFields)
+              ? await decryptCustomFields(item.customFields, vaultKey)
+              : [];
             const decryptedHistory = Array.isArray(item.history)
               ? await Promise.all(
                   item.history.map(async (h) => ({
@@ -70,6 +96,7 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
             return {
               ...item,
               password: decryptedPass,
+              customFields: decryptedFields,
               history: decryptedHistory,
             };
           })
@@ -230,12 +257,14 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
       // Zero-Knowledge Client-Side Encryption:
       // The secret is encrypted inside the browser with AES-256-GCM before transmission.
       const encryptedPassword = await encryptCredential(form.password, vaultKey)
+      const encryptedCustomFields = await encryptCustomFields(form.customFields, vaultKey)
       const passwordToSave = {
         site: form.site.trim(),
         username: form.username.trim(),
         password: encryptedPassword,
         id: generatedId,
         history: updatedHistoryEncrypted,
+        customFields: encryptedCustomFields,
       }
 
       // Local state retains plaintext for instantaneous user display & copy
@@ -245,6 +274,7 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
         password: form.password,
         id: generatedId,
         history: updatedHistoryPlain,
+        customFields: form.customFields || [],
       }
 
       try {
@@ -273,7 +303,7 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
           transition: Bounce,
           autoClose: 2000,
         })
-        setForm({ site: "", username: "", password: "" })
+        setForm({ site: "", username: "", password: "", customFields: [] })
       } catch (error) {
         console.error("Error saving password:", error)
         toast.error("Could not sync with backend", { theme: "dark" })
@@ -370,10 +400,55 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
         username: passwordToEdit.username,
         password: passwordToEdit.password,
         id: passwordToEdit.id,
+        customFields: Array.isArray(passwordToEdit.customFields)
+          ? passwordToEdit.customFields.map(f => ({ ...f }))
+          : [],
       })
       window.scrollTo({ top: 0, behavior: 'smooth' })
     }
   }
+
+  const cancelEditing = () => {
+    setForm({ site: "", username: "", password: "", customFields: [] })
+    setShowPassword(false)
+  }
+
+  const addCustomField = (presetLabel = "", isSecret = false) => {
+    const newField = {
+      id: uuidv4().slice(0, 8),
+      label: presetLabel || "",
+      value: "",
+      isSecret: Boolean(isSecret),
+    };
+    setForm(prev => ({
+      ...prev,
+      customFields: [...(prev.customFields || []), newField],
+    }));
+  };
+
+  const updateCustomField = (id, key, val) => {
+    setForm(prev => ({
+      ...prev,
+      customFields: (prev.customFields || []).map(f =>
+        f.id === id ? { ...f, [key]: val } : f
+      ),
+    }));
+  };
+
+  const removeCustomField = (id) => {
+    setForm(prev => ({
+      ...prev,
+      customFields: (prev.customFields || []).filter(f => f.id !== id),
+    }));
+  };
+
+  const toggleCustomFieldReveal = (fieldId) => {
+    setRevealedCustomFieldIds(prev => ({ ...prev, [fieldId]: !prev[fieldId] }));
+  };
+
+  const toggleAccountCustomFields = (accountId) => {
+    setExpandedCustomFieldAccounts(prev => ({ ...prev, [accountId]: !prev[accountId] }));
+  };
 
   const auditData = useMemo(() => {
     return auditVaultSecurity(passwordArray, breachResults);
@@ -441,12 +516,18 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
     const brandLower = brand ? brand.name.toLowerCase() : '';
     const categoryLower = brand && brand.category ? brand.category.toLowerCase() : '';
 
+    const matchesCustomFields = Array.isArray(item.customFields) && item.customFields.some(f =>
+      (f.label && f.label.toLowerCase().includes(q)) ||
+      (!f.isSecret && f.value && f.value.toLowerCase().includes(q))
+    );
+
     return (
       siteLower.includes(q) ||
       userLower.includes(q) ||
       domainLower.includes(q) ||
       brandLower.includes(q) ||
-      categoryLower.includes(q)
+      categoryLower.includes(q) ||
+      matchesCustomFields
     );
   });
 
@@ -762,6 +843,119 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
               </div>
             </div>
 
+            {/* Custom Fields & Dynamic Secrets Section */}
+            <div className="border-t border-[#ebe7e1] pt-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-[#6f6a63]">
+                    Custom Fields & Additional Secrets (Optional)
+                  </h3>
+                  <p className="text-[11px] text-[#8c857b]">
+                    Store PINs, security questions, recovery codes, or API keys — zero-knowledge encrypted.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => addCustomField("PIN", true)}
+                    className="inline-flex items-center gap-1 rounded-md border border-[#d5d0c8] bg-white px-2 py-1 text-[11px] font-medium text-[#4b5563] transition hover:border-[#176b87] hover:bg-[#f0f8fa] hover:text-[#176b87]"
+                  >
+                    <span>+ PIN</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => addCustomField("Security Question", false)}
+                    className="inline-flex items-center gap-1 rounded-md border border-[#d5d0c8] bg-white px-2 py-1 text-[11px] font-medium text-[#4b5563] transition hover:border-[#176b87] hover:bg-[#f0f8fa] hover:text-[#176b87]"
+                  >
+                    <span>+ Security Q</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => addCustomField("Recovery Code", true)}
+                    className="inline-flex items-center gap-1 rounded-md border border-[#d5d0c8] bg-white px-2 py-1 text-[11px] font-medium text-[#4b5563] transition hover:border-[#176b87] hover:bg-[#f0f8fa] hover:text-[#176b87]"
+                  >
+                    <span>+ Recovery Code</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => addCustomField("", false)}
+                    className="inline-flex items-center gap-1 rounded-md border border-[#176b87]/40 bg-[#f0f8fa] px-2 py-1 text-[11px] font-semibold text-[#176b87] transition hover:bg-[#176b87] hover:text-white"
+                  >
+                    <span>+ Custom Field</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Custom Fields List */}
+              {form.customFields && form.customFields.length > 0 && (
+                <div className="space-y-2.5 rounded-lg border border-[#e8e4de] bg-[#faf9f7] p-3">
+                  {form.customFields.map((field, idx) => (
+                    <div
+                      key={field.id || idx}
+                      className="flex flex-col gap-2 rounded-md border border-[#ebe7e1] bg-white p-2.5 sm:flex-row sm:items-center"
+                    >
+                      {/* Label input */}
+                      <div className="w-full sm:w-1/3">
+                        <input
+                          type="text"
+                          value={field.label}
+                          onChange={(e) => updateCustomField(field.id, "label", e.target.value)}
+                          placeholder="Field name (e.g. PIN, Question)"
+                          className="w-full rounded border border-[#d5d0c8] bg-[#faf9f7] px-2.5 py-1.5 text-xs text-[#1f2933] placeholder:text-[#aaa39a] focus:border-[#176b87] focus:outline-none"
+                        />
+                      </div>
+
+                      {/* Value input */}
+                      <div className="relative w-full sm:flex-1">
+                        <input
+                          type={field.isSecret && !revealedCustomFieldIds[`form-${field.id}`] ? "password" : "text"}
+                          value={field.value}
+                          onChange={(e) => updateCustomField(field.id, "value", e.target.value)}
+                          placeholder="Value or secret answer"
+                          className="w-full rounded border border-[#d5d0c8] bg-[#faf9f7] px-2.5 py-1.5 pr-8 text-xs text-[#1f2933] placeholder:text-[#aaa39a] focus:border-[#176b87] focus:outline-none"
+                        />
+                        {field.isSecret && (
+                          <button
+                            type="button"
+                            onClick={() => toggleCustomFieldReveal(`form-${field.id}`)}
+                            className="absolute inset-y-0 right-1 my-auto flex h-6 w-6 items-center justify-center text-[#aaa39a] hover:text-[#176b87]"
+                            title="Toggle reveal"
+                          >
+                            {revealedCustomFieldIds[`form-${field.id}`] ? "🙈" : "👁️"}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Toggle Secret & Delete */}
+                      <div className="flex items-center justify-between sm:justify-end gap-2">
+                        <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-[#6f6a63]">
+                          <input
+                            type="checkbox"
+                            checked={field.isSecret}
+                            onChange={(e) => updateCustomField(field.id, "isSecret", e.target.checked)}
+                            className="rounded border-[#d5d0c8] text-[#176b87] focus:ring-0"
+                          />
+                          <span>Mask secret</span>
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={() => removeCustomField(field.id)}
+                          className="rounded p-1 text-[#aaa39a] hover:bg-rose-50 hover:text-rose-600 transition"
+                          title="Remove field"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Action Buttons Bar */}
             <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
               <div className="flex flex-wrap items-center gap-2">
@@ -856,21 +1050,27 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
                 <span>Import / Export</span>
               </button>
 
-              {/* Search Input Filter */}
+              {/* Search Input Filter with Ctrl+K shortcut badge */}
               {passwordArray.length > 0 && (
-                <div className="relative w-full sm:w-64">
+                <div className="relative w-full sm:w-72">
                   <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
                     <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                     </svg>
                   </span>
                   <input
+                    ref={searchInputRef}
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Filter by site or username..."
-                    className="w-full rounded-md border border-[#d5d0c8] bg-white py-2 pl-9 pr-4 text-xs text-[#1f2933] placeholder:text-[#aaa39a] transition-all focus:border-[#176b87] focus:outline-none focus:ring-1 focus:ring-[#176b87]/30"
+                    placeholder="Search site, user, or field..."
+                    className="w-full rounded-md border border-[#d5d0c8] bg-white py-2 pl-9 pr-16 text-xs text-[#1f2933] placeholder:text-[#aaa39a] transition-all focus:border-[#176b87] focus:outline-none focus:ring-1 focus:ring-[#176b87]/30"
                   />
+                  <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
+                    <kbd className="rounded border border-[#ddd8d0] bg-[#faf9f7] px-1.5 py-0.5 text-[10px] font-mono font-semibold text-[#8c857b]">
+                      Ctrl K
+                    </kbd>
+                  </div>
                 </div>
               )}
             </div>
@@ -920,216 +1120,288 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange }) =>
                       const isCopiedPass = copiedKey === `${item.id}-pass`
 
                       return (
-                        <tr
-                          key={item.id}
-                          className="row-enter transition-colors hover:bg-[#faf9f7]"
-                          style={{ animationDelay: `${filteredPasswords.indexOf(item) * 45}ms` }}
-                        >
-                          {/* Domain Column */}
-                          <td className="px-5 py-4">
-                            <div className="flex items-center gap-3">
-                              <SiteLogo site={item.site} size="md" />
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  {(() => {
-                                    const brand = getFamousBrand(item.site);
-                                    const domain = extractDomain(item.site);
-                                    return (
-                                      <>
-                                        {brand ? (
-                                          <div className="flex items-center gap-1.5">
-                                            <span className="font-semibold text-[#1f2933] text-xs">
-                                              {brand.name}
-                                            </span>
-                                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                              Official
-                                            </span>
-                                            {brand.category && (
-                                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
-                                                {brand.category}
+                        <Fragment key={item.id}>
+                          <tr
+                            className="row-enter transition-colors hover:bg-[#faf9f7]"
+                            style={{ animationDelay: `${filteredPasswords.indexOf(item) * 45}ms` }}
+                          >
+                            {/* Domain Column */}
+                            <td className="px-5 py-4">
+                              <div className="flex items-center gap-3">
+                                <SiteLogo site={item.site} size="md" />
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    {(() => {
+                                      const brand = getFamousBrand(item.site);
+                                      const domain = extractDomain(item.site);
+                                      return (
+                                        <>
+                                          {brand ? (
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="font-semibold text-[#1f2933] text-xs">
+                                                {brand.name}
                                               </span>
-                                            )}
-                                          </div>
-                                        ) : (
-                                          <span className="font-semibold text-[#1f2933] text-xs">
-                                            {domain || item.site}
-                                          </span>
-                                        )}
-                                      </>
-                                    );
-                                  })()}
-                                  {/* Security Status Badges */}
-                                  {auditData.breachedIds.has(item.id) && (
-                                    <span
-                                      className="inline-flex items-center gap-1 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 border border-rose-200"
-                                      title="Alert: This password has leaked in public data breaches!"
-                                    >
-                                      🚨 Leaked
-                                    </span>
-                                  )}
-                                  {auditData.reusedIds.has(item.id) && (
-                                    <span
-                                      className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 border border-amber-200"
-                                      title="Notice: Password is used on multiple accounts"
-                                    >
-                                      🔁 Reused
-                                    </span>
-                                  )}
-                                  {auditData.weakIds.has(item.id) && (
-                                    <span
-                                      className="inline-flex items-center gap-1 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-800 border border-orange-200"
-                                      title="Notice: Password length is under 10 or lacks character diversity"
-                                    >
-                                      ⚠️ Weak
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-1 mt-0.5">
-                                  <a
-                                    href={item.site.startsWith('http') ? item.site : `https://${item.site}`}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    title={item.site}
-                                    className="max-w-60 truncate text-[11px] text-[#7b746b] hover:text-[#176b87] hover:underline"
-                                  >
-                                    {item.site}
-                                  </a>
-                                  <button
-                                    type="button"
-                                    onClick={() => copyToClipboard(item.site, `${item.id}-site`, "Website")}
-                                    title="Copy URL"
-                                    className="rounded p-0.5 text-[#aaa39a] transition-colors hover:bg-[#ebe7e1] hover:text-[#176b87]"
-                                  >
-                                    {isCopiedSite ? (
-                                      <span className="text-[10px] font-bold text-emerald-500">✓</span>
-                                    ) : (
-                                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                      </svg>
+                                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                Official
+                                              </span>
+                                              {brand.category && (
+                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                                  {brand.category}
+                                                </span>
+                                              )}
+                                            </div>
+                                          ) : (
+                                            <span className="font-semibold text-[#1f2933] text-xs">
+                                              {domain || item.site}
+                                            </span>
+                                          )}
+                                        </>
+                                      );
+                                    })()}
+                                    {/* Security Status Badges */}
+                                    {auditData.breachedIds.has(item.id) && (
+                                      <span
+                                        className="inline-flex items-center gap-1 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 border border-rose-200"
+                                        title="Alert: This password has leaked in public data breaches!"
+                                      >
+                                        🚨 Leaked
+                                      </span>
                                     )}
-                                  </button>
+                                    {auditData.reusedIds.has(item.id) && (
+                                      <span
+                                        className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 border border-amber-200"
+                                        title="Notice: Password is used on multiple accounts"
+                                      >
+                                        🔁 Reused
+                                      </span>
+                                    )}
+                                    {auditData.weakIds.has(item.id) && (
+                                      <span
+                                        className="inline-flex items-center gap-1 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-800 border border-orange-200"
+                                        title="Notice: Password length is under 10 or lacks character diversity"
+                                      >
+                                        ⚠️ Weak
+                                      </span>
+                                    )}
+
+                                    {/* Custom Fields Indicator Pill */}
+                                    {item.customFields && item.customFields.length > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleAccountCustomFields(item.id)}
+                                        className="inline-flex items-center gap-1 rounded border border-[#bfe7df] bg-[#e8f6f3] px-1.5 py-0.5 text-[10px] font-semibold text-[#0d7369] transition hover:bg-[#d4f0eb]"
+                                        title="Toggle custom fields display"
+                                      >
+                                        <span>{item.customFields.length} extra field{item.customFields.length > 1 ? 's' : ''}</span>
+                                        <span>{expandedCustomFieldAccounts[item.id] ? '▴' : '▾'}</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <a
+                                      href={item.site.startsWith('http') ? item.site : `https://${item.site}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      title={item.site}
+                                      className="max-w-60 truncate text-[11px] text-[#7b746b] hover:text-[#176b87] hover:underline"
+                                    >
+                                      {item.site}
+                                    </a>
+                                    <button
+                                      type="button"
+                                      onClick={() => copyToClipboard(item.site, `${item.id}-site`, "Website")}
+                                      title="Copy URL"
+                                      className="rounded p-0.5 text-[#aaa39a] transition-colors hover:bg-[#ebe7e1] hover:text-[#176b87]"
+                                    >
+                                      {isCopiedSite ? (
+                                        <span className="text-[10px] font-bold text-emerald-500">✓</span>
+                                      ) : (
+                                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                      )}
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          </td>
+                            </td>
 
-                          {/* Username Column */}
-                          <td className="px-5 py-4 text-slate-300">
-                            <div className="flex items-center gap-1.5 text-[#4b5563]">
-                              <span className="max-w-45 truncate">{item.username}</span>
-                              <button
-                                type="button"
-                                onClick={() => copyToClipboard(item.username, `${item.id}-user`, "Username")}
-                                title="Copy username"
-                                className="rounded p-1 text-[#aaa39a] transition-colors hover:bg-[#ebe7e1] hover:text-[#176b87]"
-                              >
-                                {isCopiedUser ? (
-                                  <span className="text-[10px] font-bold text-emerald-400">✓</span>
-                                ) : (
-                                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                  </svg>
-                                )}
-                              </button>
-                            </div>
-                          </td>
+                            {/* Username Column */}
+                            <td className="px-5 py-4 text-slate-300">
+                              <div className="flex items-center gap-1.5 text-[#4b5563]">
+                                <span className="max-w-45 truncate">{item.username}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => copyToClipboard(item.username, `${item.id}-user`, "Username")}
+                                  title="Copy username"
+                                  className="rounded p-1 text-[#aaa39a] transition-colors hover:bg-[#ebe7e1] hover:text-[#176b87]"
+                                >
+                                  {isCopiedUser ? (
+                                    <span className="text-[10px] font-bold text-emerald-400">✓</span>
+                                  ) : (
+                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                    </svg>
+                                  )}
+                                </button>
+                              </div>
+                            </td>
 
-                          {/* Password Column */}
-                          <td className="px-5 py-4">
-                            <div className="flex items-center gap-2">
-                              {/* Plaintext or masked password display */}
-                              <div className="flex items-center gap-1.5">
-                                <span
-                                  className={`text-xs font-mono transition-all ${
+                            {/* Password Column */}
+                            <td className="px-5 py-4">
+                              <div className="flex items-center gap-2">
+                                {/* Plaintext or masked password display */}
+                                <div className="flex items-center gap-1.5">
+                                  <span
+                                    className={`text-xs font-mono transition-all ${
+                                      isRevealed
+                                        ? "font-semibold text-emerald-900 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200"
+                                        : "text-[#4b5563] tracking-widest"
+                                    }`}
+                                  >
+                                    {isRevealed ? item.password : "••••••••••••"}
+                                  </span>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => togglePasswordReveal(item.id)}
+                                  title={isRevealed ? "Hide password" : "Reveal password"}
+                                  className={`rounded p-1.5 transition-all ${
                                     isRevealed
-                                      ? "font-semibold text-emerald-900 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200"
-                                      : "text-[#4b5563] tracking-widest"
+                                      ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-300"
+                                      : "text-[#aaa39a] hover:bg-[#ebe7e1] hover:text-[#176b87]"
                                   }`}
                                 >
-                                  {isRevealed ? item.password : "••••••••••••"}
-                                </span>
+                                  {isRevealed ? (
+                                    /* Eye-slash icon when revealed */
+                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                                    </svg>
+                                  ) : (
+                                    /* Eye icon when hidden */
+                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => copyToClipboard(item.password, `${item.id}-pass`, "Password")}
+                                  title="Copy password"
+                                  className="rounded p-1 text-[#aaa39a] transition-colors hover:bg-[#ebe7e1] hover:text-[#176b87]"
+                                >
+                                  {isCopiedPass ? (
+                                    <span className="text-[10px] font-bold text-emerald-400">✓</span>
+                                  ) : (
+                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                    </svg>
+                                  )}
+                                </button>
                               </div>
+                            </td>
 
-                              <button
-                                type="button"
-                                onClick={() => togglePasswordReveal(item.id)}
-                                title={isRevealed ? "Hide password" : "Reveal password"}
-                                className={`rounded p-1.5 transition-all ${
-                                  isRevealed
-                                    ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-300"
-                                    : "text-[#aaa39a] hover:bg-[#ebe7e1] hover:text-[#176b87]"
-                                }`}
-                              >
-                                {isRevealed ? (
-                                  /* Eye-slash icon when revealed */
+                            {/* Operations Column */}
+                            <td className="px-5 py-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedHistoryAccount(item)}
+                                  title={item.history && item.history.length > 0 ? `View ${item.history.length} previous version${item.history.length > 1 ? 's' : ''}` : "View password history"}
+                                  className={`rounded-md border p-1.5 transition-all active:scale-95 ${
+                                    item.history && item.history.length > 0
+                                      ? "border-[#176b87]/40 bg-[#f0f8fa] text-[#176b87] hover:bg-[#176b87] hover:text-white"
+                                      : "border-[#d5d0c8] bg-white text-[#aaa39a] hover:border-[#9ec8d2] hover:text-[#176b87]"
+                                  }`}
+                                >
                                   <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                   </svg>
-                                ) : (
-                                  /* Eye icon when hidden */
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => EditPassword(item.id)}
+                                  title="Edit credential"
+                                  className="rounded-md border border-[#d5d0c8] bg-white p-1.5 text-[#7b746b] transition-all hover:border-[#9ec8d2] hover:bg-[#f5fbfc] hover:text-[#176b87] active:scale-95"
+                                >
                                   <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                   </svg>
-                                )}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => copyToClipboard(item.password, `${item.id}-pass`, "Password")}
-                                title="Copy password"
-                                className="rounded p-1 text-[#aaa39a] transition-colors hover:bg-[#ebe7e1] hover:text-[#176b87]"
-                              >
-                                {isCopiedPass ? (
-                                  <span className="text-[10px] font-bold text-emerald-400">✓</span>
-                                ) : (
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => DeletePassword(item.id)}
+                                  title="Delete credential"
+                                  className="rounded-md border border-[#ead2ce] bg-[#fff8f6] p-1.5 text-[#b85c50] transition-all hover:border-[#d99d95] hover:bg-[#fff1ee] hover:text-[#963f35] active:scale-95"
+                                >
                                   <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                   </svg>
-                                )}
-                              </button>
-                            </div>
-                          </td>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
 
-                          {/* Operations Column */}
-                          <td className="px-5 py-4 text-right">
-                            <div className="flex items-center justify-end gap-2">
-                              <button
-                                type="button"
-                                onClick={() => setSelectedHistoryAccount(item)}
-                                title={item.history && item.history.length > 0 ? `View ${item.history.length} previous version${item.history.length > 1 ? 's' : ''}` : "View password history"}
-                                className={`rounded-md border p-1.5 transition-all active:scale-95 ${
-                                  item.history && item.history.length > 0
-                                    ? "border-[#176b87]/40 bg-[#f0f8fa] text-[#176b87] hover:bg-[#176b87] hover:text-white"
-                                    : "border-[#d5d0c8] bg-white text-[#aaa39a] hover:border-[#9ec8d2] hover:text-[#176b87]"
-                                }`}
-                              >
-                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                </svg>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => EditPassword(item.id)}
-                                title="Edit credential"
-                                className="rounded-md border border-[#d5d0c8] bg-white p-1.5 text-[#7b746b] transition-all hover:border-[#9ec8d2] hover:bg-[#f5fbfc] hover:text-[#176b87] active:scale-95"
-                              >
-                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                                </svg>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => DeletePassword(item.id)}
-                                title="Delete credential"
-                                className="rounded-md border border-[#ead2ce] bg-[#fff8f6] p-1.5 text-[#b85c50] transition-all hover:border-[#d99d95] hover:bg-[#fff1ee] hover:text-[#963f35] active:scale-95"
-                              >
-                                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
+                          {/* Expandable Custom Fields Subrow */}
+                          {expandedCustomFieldAccounts[item.id] && item.customFields && item.customFields.length > 0 && (
+                            <tr className="bg-[#faf9f7]/80 transition-colors">
+                              <td colSpan={4} className="border-t border-dashed border-[#ebe7e1] px-5 py-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#8c857b] mr-1">
+                                    Extra Secrets:
+                                  </span>
+                                  {item.customFields.map((field) => {
+                                    const fieldKey = `${item.id}-${field.id}`;
+                                    const isSecretRevealed = Boolean(revealedCustomFieldIds[fieldKey]);
+                                    const isCopied = copiedKey === fieldKey;
+
+                                    return (
+                                      <div
+                                        key={field.id}
+                                        className="inline-flex items-center gap-2 rounded-md border border-[#d5d0c8] bg-white px-2.5 py-1 text-xs shadow-2xs"
+                                      >
+                                        <span className="font-semibold text-[#6f6a63]">
+                                          {field.label}:
+                                        </span>
+                                        <span className="font-mono text-[#1f2933]">
+                                          {field.isSecret && !isSecretRevealed ? "••••••••" : field.value}
+                                        </span>
+
+                                        {field.isSecret && (
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleCustomFieldReveal(fieldKey)}
+                                            className="text-xs text-[#8c857b] hover:text-[#176b87]"
+                                            title={isSecretRevealed ? "Hide secret" : "Reveal secret"}
+                                          >
+                                            {isSecretRevealed ? "🙈" : "👁️"}
+                                          </button>
+                                        )}
+
+                                        <button
+                                          type="button"
+                                          onClick={() => copyToClipboard(field.value, fieldKey, field.label)}
+                                          className="rounded p-0.5 text-[#aaa39a] hover:text-[#176b87]"
+                                          title={`Copy ${field.label}`}
+                                        >
+                                          {isCopied ? (
+                                            <span className="text-[10px] font-bold text-emerald-500">✓</span>
+                                          ) : (
+                                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                            </svg>
+                                          )}
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
                       )
                     })}
                   </tbody>

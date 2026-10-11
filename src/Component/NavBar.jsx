@@ -1,7 +1,17 @@
 import githubIcon from "../assets/github-icon-1-logo.svg";
 import PassVaultLogo from "./PassVaultLogo";
 
-const NavBar = ({ user, onLogout, onOpenAuth, onLockVault, activeView, setActiveView, isPasswordRevealed = false }) => {
+const NavBar = ({
+  user,
+  onLogout,
+  onOpenAuth,
+  onLockVault,
+  activeView,
+  setActiveView,
+  isPasswordRevealed = false,
+  theme = "light",
+  onToggleTheme,
+}) => {
   return (
     <header className="site-nav nav-reveal sticky top-0 z-30 w-full border-b border-[#ddd8d0]/80 bg-[#f4f1ec]/85 backdrop-blur-md transition-all">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
@@ -106,6 +116,25 @@ const NavBar = ({ user, onLogout, onOpenAuth, onLockVault, activeView, setActive
               </button>
             </>
           )}
+
+          {/* Theme Toggle Button */}
+          <button
+            type="button"
+            onClick={onToggleTheme}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#d5d0c8] bg-white text-[#4b5563] shadow-xs transition-all hover:border-[#176b87] hover:text-[#176b87] active:scale-95"
+            title={theme === "dark" ? "Switch to Warm Light mode" : "Switch to Cyberpunk Dark mode"}
+            aria-label="Toggle color theme"
+          >
+            {theme === "dark" ? (
+              <svg className="h-4 w-4 text-amber-400 transition-transform duration-300 hover:rotate-45" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+              </svg>
+            ) : (
+              <svg className="h-4 w-4 text-[#176b87] transition-transform duration-300 hover:-rotate-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+              </svg>
+            )}
+          </button>
 
           <a
             href="https://github.com"
