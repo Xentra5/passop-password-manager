@@ -406,6 +406,8 @@ app.get('/api/passwords', authenticateToken, async (req, res) => {
     const decryptedPasswords = passwords.map((item) => ({
       ...item,
       password: decryptVaultPassword(item.password),
+      favorite: Boolean(item.favorite),
+      tag: typeof item.tag === 'string' ? item.tag : 'Personal',
       customFields: Array.isArray(item.customFields) ? item.customFields : [],
       history: Array.isArray(item.history)
         ? item.history.map(h => ({
@@ -437,6 +439,8 @@ app.post('/api/passwords', authenticateToken, async (req, res) => {
       site: password.site.trim(),
       username: password.username.trim(),
       password: encryptVaultPassword(password.password),
+      favorite: Boolean(password.favorite),
+      tag: typeof password.tag === 'string' && password.tag.trim() ? password.tag.trim() : 'Personal',
       customFields: Array.isArray(password.customFields) ? password.customFields : [],
       userId: req.user.userId,
       createdAt: new Date(),
@@ -451,6 +455,8 @@ app.post('/api/passwords', authenticateToken, async (req, res) => {
         site: recordToInsert.site,
         username: recordToInsert.username,
         password: recordToInsert.password,
+        favorite: recordToInsert.favorite,
+        tag: recordToInsert.tag,
         customFields: recordToInsert.customFields,
       },
     });
@@ -477,6 +483,8 @@ app.post('/api/passwords/bulk', authenticateToken, async (req, res) => {
           site: item.site.trim(),
           username: item.username.trim(),
           password: encryptVaultPassword(item.password),
+          favorite: Boolean(item.favorite),
+          tag: typeof item.tag === 'string' && item.tag.trim() ? item.tag.trim() : 'Personal',
           customFields: Array.isArray(item.customFields) ? item.customFields : [],
           userId: req.user.userId,
           createdAt: now,
@@ -523,6 +531,14 @@ app.put('/api/passwords/:id', authenticateToken, async (req, res) => {
       password: encryptVaultPassword(password.password),
       updatedAt: new Date(),
     };
+
+    if (password.favorite !== undefined) {
+      updateFields.favorite = Boolean(password.favorite);
+    }
+
+    if (password.tag !== undefined) {
+      updateFields.tag = typeof password.tag === 'string' ? password.tag.trim() : 'Personal';
+    }
 
     if (Array.isArray(password.customFields)) {
       updateFields.customFields = password.customFields;

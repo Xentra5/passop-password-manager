@@ -15,9 +15,35 @@ import { secureFetch } from '../utils/csrf';
 // Set VITE_API_BASE_URL=https://your-domain.com/api/passwords in .env
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api/passwords"
 
+export const PRESET_TAGS = ['Personal', 'Work', 'Finance', 'Development', 'Social'];
+
+export const getTagBadgeStyle = (tag) => {
+  switch ((tag || '').toLowerCase()) {
+    case 'finance':
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50';
+    case 'work':
+      return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800/50';
+    case 'development':
+      return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-400 dark:border-purple-800/50';
+    case 'social':
+      return 'bg-pink-50 text-pink-700 border-pink-200 dark:bg-pink-950/40 dark:text-pink-400 dark:border-pink-800/50';
+    case 'personal':
+    default:
+      return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800/50';
+  }
+};
+
 
 const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange, theme = "light" }) => {
-  const [form, setForm] = useState({ site: "", username: "", password: "", customFields: [] })
+  const [form, setForm] = useState({
+    site: "",
+    username: "",
+    password: "",
+    favorite: false,
+    tag: "Personal",
+    customFields: [],
+  })
+  const [selectedTag, setSelectedTag] = useState("All")
   const [passwordArray, setPasswordArray] = useState([])
   const [showPassword, setShowPassword] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
@@ -96,6 +122,8 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange, them
             return {
               ...item,
               password: decryptedPass,
+              favorite: Boolean(item.favorite),
+              tag: item.tag || 'Personal',
               customFields: decryptedFields,
               history: decryptedHistory,
             };
@@ -262,6 +290,8 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange, them
         site: form.site.trim(),
         username: form.username.trim(),
         password: encryptedPassword,
+        favorite: Boolean(form.favorite),
+        tag: form.tag || "Personal",
         id: generatedId,
         history: updatedHistoryEncrypted,
         customFields: encryptedCustomFields,
@@ -272,6 +302,8 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange, them
         site: form.site.trim(),
         username: form.username.trim(),
         password: form.password,
+        favorite: Boolean(form.favorite),
+        tag: form.tag || "Personal",
         id: generatedId,
         history: updatedHistoryPlain,
         customFields: form.customFields || [],
@@ -303,7 +335,7 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange, them
           transition: Bounce,
           autoClose: 2000,
         })
-        setForm({ site: "", username: "", password: "", customFields: [] })
+        setForm({ site: "", username: "", password: "", favorite: false, tag: "Personal", customFields: [] })
       } catch (error) {
         console.error("Error saving password:", error)
         toast.error("Could not sync with backend", { theme: "dark" })
@@ -399,6 +431,8 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange, them
         site: passwordToEdit.site,
         username: passwordToEdit.username,
         password: passwordToEdit.password,
+        favorite: Boolean(passwordToEdit.favorite),
+        tag: passwordToEdit.tag || "Personal",
         id: passwordToEdit.id,
         customFields: Array.isArray(passwordToEdit.customFields)
           ? passwordToEdit.customFields.map(f => ({ ...f }))
@@ -409,9 +443,43 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange, them
   }
 
   const cancelEditing = () => {
-    setForm({ site: "", username: "", password: "", customFields: [] })
+    setForm({ site: "", username: "", password: "", favorite: false, tag: "Personal", customFields: [] })
     setShowPassword(false)
   }
+
+  const toggleFavorite = async (id, e) => {
+    if (e) e.stopPropagation();
+    const account = passwordArray.find(item => item.id === id);
+    if (!account) return;
+
+    const newFavStatus = !account.favorite;
+    // Optimistic local state update
+    setPasswordArray(prev =>
+      prev.map(item => (item.id === id ? { ...item, favorite: newFavStatus } : item))
+    );
+
+    toast.success(newFavStatus ? `Pinned ${account.site} to Favorites ⭐` : `Removed ${account.site} from Favorites`, {
+      theme: "dark",
+      autoClose: 1800,
+    });
+
+    if (backendOnline) {
+      try {
+        await secureFetch(`${API_BASE_URL}/${id}`, {
+          method: "PUT",
+          headers: authHeaders(),
+          body: JSON.stringify({
+            ...account,
+            password: await encryptCredential(account.password, vaultKey),
+            customFields: await encryptCustomFields(account.customFields, vaultKey),
+            favorite: newFavStatus,
+          }),
+        });
+      } catch (err) {
+        console.warn("Failed to sync favorite status to backend:", err);
+      }
+    }
+  };
 
   const addCustomField = (presetLabel = "", isSecret = false) => {
     const newField = {
@@ -500,36 +568,63 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange, them
     }
   };
 
-  const filteredPasswords = passwordArray.filter(item => {
-    // 1. Audit status filter
-    if (auditFilter === 'breached' && !auditData.breachedIds.has(item.id)) return false;
-    if (auditFilter === 'reused' && !auditData.reusedIds.has(item.id)) return false;
-    if (auditFilter === 'weak' && !auditData.weakIds.has(item.id)) return false;
+  const tagCounts = useMemo(() => {
+    const counts = {
+      All: passwordArray.length,
+      Favorites: passwordArray.filter(p => p.favorite).length,
+    };
+    PRESET_TAGS.forEach(t => {
+      counts[t] = passwordArray.filter(p => (p.tag || 'Personal').toLowerCase() === t.toLowerCase()).length;
+    });
+    return counts;
+  }, [passwordArray]);
 
-    // 2. Text search query
-    const q = searchQuery.toLowerCase().trim();
-    if (!q) return true;
-    const siteLower = (item.site || '').toLowerCase();
-    const userLower = (item.username || '').toLowerCase();
-    const domainLower = extractDomain(item.site).toLowerCase();
-    const brand = getFamousBrand(item.site);
-    const brandLower = brand ? brand.name.toLowerCase() : '';
-    const categoryLower = brand && brand.category ? brand.category.toLowerCase() : '';
+  const filteredPasswords = useMemo(() => {
+    return passwordArray.filter(item => {
+      // 1. Audit status filter
+      if (auditFilter === 'breached' && !auditData.breachedIds.has(item.id)) return false;
+      if (auditFilter === 'reused' && !auditData.reusedIds.has(item.id)) return false;
+      if (auditFilter === 'weak' && !auditData.weakIds.has(item.id)) return false;
 
-    const matchesCustomFields = Array.isArray(item.customFields) && item.customFields.some(f =>
-      (f.label && f.label.toLowerCase().includes(q)) ||
-      (!f.isSecret && f.value && f.value.toLowerCase().includes(q))
-    );
+      // 2. Tag / Favorites filter
+      if (selectedTag === 'Favorites') {
+        if (!item.favorite) return false;
+      } else if (selectedTag !== 'All') {
+        if ((item.tag || 'Personal').toLowerCase() !== selectedTag.toLowerCase()) return false;
+      }
 
-    return (
-      siteLower.includes(q) ||
-      userLower.includes(q) ||
-      domainLower.includes(q) ||
-      brandLower.includes(q) ||
-      categoryLower.includes(q) ||
-      matchesCustomFields
-    );
-  });
+      // 3. Text search query
+      const q = searchQuery.toLowerCase().trim();
+      if (!q) return true;
+      const siteLower = (item.site || '').toLowerCase();
+      const userLower = (item.username || '').toLowerCase();
+      const domainLower = extractDomain(item.site).toLowerCase();
+      const brand = getFamousBrand(item.site);
+      const brandLower = brand ? brand.name.toLowerCase() : '';
+      const categoryLower = brand && brand.category ? brand.category.toLowerCase() : '';
+      const tagLower = (item.tag || '').toLowerCase();
+
+      const matchesCustomFields = Array.isArray(item.customFields) && item.customFields.some(f =>
+        (f.label && f.label.toLowerCase().includes(q)) ||
+        (!f.isSecret && f.value && f.value.toLowerCase().includes(q))
+      );
+
+      return (
+        siteLower.includes(q) ||
+        userLower.includes(q) ||
+        domainLower.includes(q) ||
+        brandLower.includes(q) ||
+        categoryLower.includes(q) ||
+        tagLower.includes(q) ||
+        matchesCustomFields
+      );
+    }).sort((a, b) => {
+      // Pinned favorites come first!
+      if (a.favorite && !b.favorite) return -1;
+      if (!a.favorite && b.favorite) return 1;
+      return 0;
+    });
+  }, [passwordArray, auditFilter, auditData, selectedTag, searchQuery]);
 
   const strength = getPasswordStrength(form.password)
   const isAnyRevealed = Boolean(showPassword || Object.values(revealedIds).some(Boolean))
@@ -680,15 +775,31 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange, them
               </h2>
             </div>
 
-            {form.id && (
+            <div className="flex items-center gap-2">
+              {/* Favorite Toggle Button in Form */}
               <button
                 type="button"
-                onClick={cancelEditing}
-                className="rounded-md border border-[#d5d0c8] bg-white px-3 py-1.5 text-xs font-medium text-[#6f6a63] transition-all hover:bg-[#f4f1ec] hover:text-[#1f2933]"
+                onClick={() => setForm(prev => ({ ...prev, favorite: !prev.favorite }))}
+                className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold transition-all active:scale-95 ${
+                  form.favorite
+                    ? "border-amber-300 bg-amber-50 text-amber-800 shadow-2xs"
+                    : "border-[#d5d0c8] bg-white text-[#6f6a63] hover:border-amber-300 hover:text-amber-700"
+                }`}
+                title={form.favorite ? "Favorited (Pinned to top)" : "Click to mark as favorite"}
               >
-                Cancel Editing
+                <span>{form.favorite ? "⭐ Favorited" : "☆ Add to Favorites"}</span>
               </button>
-            )}
+
+              {form.id && (
+                <button
+                  type="button"
+                  onClick={cancelEditing}
+                  className="rounded-md border border-[#d5d0c8] bg-white px-3 py-1.5 text-xs font-medium text-[#6f6a63] transition-all hover:bg-[#f4f1ec] hover:text-[#1f2933]"
+                >
+                  Cancel Editing
+                </button>
+              )}
+            </div>
           </div>
 
           <form onSubmit={(e) => { e.preventDefault(); void savePassword(); }} className="space-y-5">
@@ -737,6 +848,51 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange, them
                     <span>{srv.name}</span>
                   </button>
                 ))}
+              </div>
+            </div>
+
+            {/* Category / Folder Selection */}
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label className="text-xs font-semibold uppercase tracking-wider text-[#6f6a63]">
+                  Category / Folder
+                </label>
+                <span className="text-[11px] text-[#8c857b]">
+                  Selected: <strong className="text-[#176b87]">{form.tag || "Personal"}</strong>
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {PRESET_TAGS.map((tagOption) => {
+                  const isSelected = (form.tag || "Personal").toLowerCase() === tagOption.toLowerCase();
+                  return (
+                    <button
+                      key={tagOption}
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, tag: tagOption }))}
+                      className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all ${
+                        isSelected
+                          ? "bg-[#176b87] text-white shadow-xs"
+                          : "border border-[#d5d0c8] bg-white text-[#6f6a63] hover:border-[#176b87] hover:bg-[#f0f8fa] hover:text-[#176b87]"
+                      }`}
+                    >
+                      <span>
+                        {tagOption === 'Personal' ? '👤' : tagOption === 'Work' ? '💼' : tagOption === 'Finance' ? '💳' : tagOption === 'Development' ? '💻' : '🌐'}
+                      </span>
+                      <span>{tagOption}</span>
+                    </button>
+                  );
+                })}
+
+                {/* Custom Tag input */}
+                <div className="relative inline-flex items-center">
+                  <input
+                    type="text"
+                    placeholder="+ Custom folder"
+                    value={!PRESET_TAGS.some(t => t.toLowerCase() === (form.tag || "").toLowerCase()) ? form.tag || "" : ""}
+                    onChange={(e) => setForm(prev => ({ ...prev, tag: e.target.value }))}
+                    className="h-7 w-28 rounded-md border border-[#d5d0c8] bg-[#faf9f7] px-2 text-xs text-[#1f2933] placeholder:text-[#aaa39a] focus:border-[#176b87] focus:outline-none"
+                  />
+                </div>
               </div>
             </div>
 
@@ -1076,6 +1232,75 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange, them
             </div>
           </div>
 
+          {/* Folder & Favorites Filter Pills Bar */}
+          {passwordArray.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 border-b border-[#ebe7e1] pb-3">
+              {/* All filter pill */}
+              <button
+                type="button"
+                onClick={() => setSelectedTag("All")}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all ${
+                  selectedTag === "All"
+                    ? "bg-[#176b87] text-white shadow-xs"
+                    : "border border-[#d5d0c8] bg-white text-[#6f6a63] hover:border-[#176b87] hover:bg-[#f0f8fa] hover:text-[#176b87]"
+                }`}
+              >
+                <span>All</span>
+                <span className={`rounded-full px-1.5 py-0.2 text-[10px] ${
+                  selectedTag === "All" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                }`}>
+                  {tagCounts.All}
+                </span>
+              </button>
+
+              {/* Favorites filter pill */}
+              <button
+                type="button"
+                onClick={() => setSelectedTag("Favorites")}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all ${
+                  selectedTag === "Favorites"
+                    ? "bg-amber-500 text-white shadow-xs"
+                    : "border border-[#d5d0c8] bg-white text-amber-700 hover:border-amber-400 hover:bg-amber-50"
+                }`}
+              >
+                <span>⭐ Favorites</span>
+                <span className={`rounded-full px-1.5 py-0.2 text-[10px] ${
+                  selectedTag === "Favorites" ? "bg-white/20 text-white" : "bg-amber-100 text-amber-800"
+                }`}>
+                  {tagCounts.Favorites}
+                </span>
+              </button>
+
+              <div className="h-4 w-px bg-[#d5d0c8] mx-1"></div>
+
+              {/* Preset tags pills */}
+              {PRESET_TAGS.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => setSelectedTag(tag)}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all ${
+                    selectedTag === tag
+                      ? "bg-[#176b87] text-white shadow-xs"
+                      : "border border-[#d5d0c8] bg-white text-[#6f6a63] hover:border-[#176b87] hover:bg-[#f0f8fa] hover:text-[#176b87]"
+                  }`}
+                >
+                  <span>
+                    {tag === 'Personal' ? '👤' : tag === 'Work' ? '💼' : tag === 'Finance' ? '💳' : tag === 'Development' ? '💻' : '🌐'}
+                  </span>
+                  <span>{tag}</span>
+                  {tagCounts[tag] > 0 && (
+                    <span className={`rounded-full px-1.5 py-0.2 text-[10px] ${
+                      selectedTag === tag ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                    }`}>
+                      {tagCounts[tag]}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Credentials Display List / Table */}
           {passwordArray.length === 0 ? (
             <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-[#d5d0c8] bg-white py-16 text-center">
@@ -1091,13 +1316,15 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange, them
             </div>
           ) : filteredPasswords.length === 0 ? (
             <div className="rounded-lg border border-[#ddd8d0] bg-white py-10 text-center">
-              <p className="text-sm text-[#6f6a63]">No accounts match &quot;{searchQuery}&quot;</p>
+              <p className="text-sm text-[#6f6a63]">
+                {selectedTag !== 'All' ? `No accounts in folder "${selectedTag}"` : `No accounts match "${searchQuery}"`}
+              </p>
               <button
                 type="button"
-                onClick={() => setSearchQuery("")}
+                onClick={() => { setSearchQuery(""); setSelectedTag("All"); }}
                 className="mt-2 text-xs font-semibold text-[#176b87] hover:underline"
               >
-                Clear filter
+                Clear all filters
               </button>
             </div>
           ) : (
@@ -1122,12 +1349,28 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange, them
                       return (
                         <Fragment key={item.id}>
                           <tr
-                            className="row-enter transition-colors hover:bg-[#faf9f7]"
+                            className={`row-enter transition-colors hover:bg-[#faf9f7] ${
+                              item.favorite ? "bg-amber-50/20" : ""
+                            }`}
                             style={{ animationDelay: `${filteredPasswords.indexOf(item) * 45}ms` }}
                           >
                             {/* Domain Column */}
                             <td className="px-5 py-4">
-                              <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-2.5">
+                                {/* 1-Click Star / Favorite Button */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => toggleFavorite(item.id, e)}
+                                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-all active:scale-90 ${
+                                    item.favorite
+                                      ? "border border-amber-300 bg-amber-50 text-amber-500 shadow-2xs hover:bg-amber-100"
+                                      : "text-[#c2bab0] hover:border hover:border-[#d5d0c8] hover:bg-white hover:text-amber-500"
+                                  }`}
+                                  title={item.favorite ? "Favorited (Pinned to top). Click to unstar." : "Click to pin to Favorites ⭐"}
+                                >
+                                  <span className="text-sm leading-none">{item.favorite ? "⭐" : "☆"}</span>
+                                </button>
+
                                 <SiteLogo site={item.site} size="md" />
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -1158,6 +1401,14 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange, them
                                         </>
                                       );
                                     })()}
+
+                                    {/* Category / Folder Badge */}
+                                    <span
+                                      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${getTagBadgeStyle(item.tag || 'Personal')}`}
+                                      title={`Folder: ${item.tag || 'Personal'}`}
+                                    >
+                                      {item.tag || 'Personal'}
+                                    </span>
                                     {/* Security Status Badges */}
                                     {auditData.breachedIds.has(item.id) && (
                                       <span
