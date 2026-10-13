@@ -48,6 +48,7 @@ const isValidPasswordPayload = (payload) => {
 
 const getPasswordsCollection = () => client.db(DB_NAME).collection('passwords');
 const getUsersCollection = () => client.db(DB_NAME).collection('users');
+const getVaultSendsCollection = () => client.db(DB_NAME).collection('vault_sends');
 
 const VAULT_ENCRYPTION_KEY = process.env.VAULT_ENCRYPTION_KEY || JWT_SECRET;
 const VAULT_CIPHER_KEY = crypto.createHash('sha256').update(VAULT_ENCRYPTION_KEY).digest();
@@ -596,6 +597,223 @@ app.delete('/api/passwords/:id', authenticateToken, async (req, res) => {
   }
 });
 
+// ============================================================================
+// PASSVAULT SEND - ENCRYPTED ONE-TIME SECRET SHARING ENDPOINTS
+// ============================================================================
+
+// POST /api/sends - Create a new encrypted send item
+app.post('/api/sends', async (req, res) => {
+  try {
+    const {
+      ciphertext,
+      iv,
+      title = 'Encrypted Secret',
+      type = 'text',
+      maxViews = 1,
+      expiresInMinutes = 1440, // default 24h
+      passphraseHash = null,
+      passphraseSalt = null,
+    } = req.body || {};
+
+    if (!ciphertext || typeof ciphertext !== 'string' || !iv || typeof iv !== 'string') {
+      return res.status(400).json({ success: false, message: 'Invalid payload: ciphertext and iv are required' });
+    }
+
+    // Optional user identification if logged in
+    let creatorUserId = null;
+    const cookieToken = req.cookies?.[COOKIE_NAME] || null;
+    const authHeader = req.headers.authorization || '';
+    const rawToken = cookieToken || (authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null);
+    if (rawToken) {
+      try {
+        const decoded = jwt.verify(rawToken, JWT_SECRET);
+        creatorUserId = decoded.userId;
+      } catch {
+        // Guest/unauthenticated sender is allowed
+      }
+    }
+
+    const sendId = crypto.randomBytes(16).toString('hex');
+    const now = new Date();
+    const durationMin = Math.max(1, Math.min(Number(expiresInMinutes) || 1440, 10080)); // 1 min to 7 days
+    const expiresAt = new Date(now.getTime() + durationMin * 60 * 1000);
+    const safeMaxViews = Math.max(1, Math.min(Number(maxViews) || 1, 100));
+
+    const newSend = {
+      sendId,
+      ciphertext,
+      iv,
+      title: (typeof title === 'string' ? title.slice(0, 100) : 'Encrypted Secret').trim() || 'Encrypted Secret',
+      type: ['text', 'password', 'note'].includes(type) ? type : 'text',
+      maxViews: safeMaxViews,
+      viewsCount: 0,
+      createdAt: now,
+      expiresAt,
+      creatorUserId,
+      hasPassphrase: Boolean(passphraseHash && passphraseSalt),
+      passphraseHash: typeof passphraseHash === 'string' ? passphraseHash : null,
+      passphraseSalt: typeof passphraseSalt === 'string' ? passphraseSalt : null,
+      isBurned: false,
+    };
+
+    await getVaultSendsCollection().insertOne(newSend);
+
+    res.status(201).json({
+      success: true,
+      sendId,
+      expiresAt,
+      maxViews: safeMaxViews,
+    });
+  } catch (error) {
+    console.error('Failed to create vault send:', error);
+    res.status(500).json({ success: false, message: 'Failed to create vault send' });
+  }
+});
+
+// GET /api/sends/meta/:id - Peek metadata (e.g. check existence, passphrase requirement, remaining views) without consuming a view
+app.get('/api/sends/meta/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id || typeof id !== 'string') {
+      return res.status(400).json({ success: false, message: 'Invalid Send ID' });
+    }
+
+    const doc = await getVaultSendsCollection().findOne({ sendId: id });
+    if (!doc) {
+      return res.status(404).json({ success: false, message: 'This secret does not exist or has already been burned.' });
+    }
+
+    const now = new Date();
+    if (doc.isBurned || doc.viewsCount >= doc.maxViews || now > doc.expiresAt) {
+      // Auto-cleanup expired/burned doc
+      await getVaultSendsCollection().deleteOne({ sendId: id });
+      return res.status(410).json({ success: false, message: 'This secret has expired or has already been burned.' });
+    }
+
+    res.json({
+      success: true,
+      sendId: doc.sendId,
+      title: doc.title,
+      type: doc.type,
+      maxViews: doc.maxViews,
+      viewsLeft: Math.max(0, doc.maxViews - doc.viewsCount),
+      expiresAt: doc.expiresAt,
+      hasPassphrase: doc.hasPassphrase,
+      passphraseSalt: doc.passphraseSalt || null,
+      createdAt: doc.createdAt,
+    });
+  } catch (error) {
+    console.error('Failed to fetch vault send meta:', error);
+    res.status(500).json({ success: false, message: 'Failed to check vault send' });
+  }
+});
+
+// POST /api/sends/reveal/:id - Reveal the secret, verifying optional passphrase hash, and atomically incrementing view count or burning
+app.post('/api/sends/reveal/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { passphraseHash = null } = req.body || {};
+
+    if (!id || typeof id !== 'string') {
+      return res.status(400).json({ success: false, message: 'Invalid Send ID' });
+    }
+
+    const doc = await getVaultSendsCollection().findOne({ sendId: id });
+    if (!doc) {
+      return res.status(404).json({ success: false, message: 'This secret does not exist or has already been burned.' });
+    }
+
+    const now = new Date();
+    if (doc.isBurned || doc.viewsCount >= doc.maxViews || now > doc.expiresAt) {
+      await getVaultSendsCollection().deleteOne({ sendId: id });
+      return res.status(410).json({ success: false, message: 'This secret has expired or has already been burned.' });
+    }
+
+    // Verify passphrase if protected
+    if (doc.hasPassphrase) {
+      if (!passphraseHash || typeof passphraseHash !== 'string' || passphraseHash !== doc.passphraseHash) {
+        return res.status(401).json({ success: false, message: 'Incorrect passphrase. Secret cannot be accessed.' });
+      }
+    }
+
+    // Atomically increment viewsCount
+    const updated = await getVaultSendsCollection().findOneAndUpdate(
+      { sendId: id, viewsCount: { $lt: doc.maxViews }, isBurned: false, expiresAt: { $gt: now } },
+      { $inc: { viewsCount: 1 } },
+      { returnDocument: 'after' }
+    );
+
+    const updatedDoc = updated?.value || updated; // MongoDB driver compat
+    const finalViews = updatedDoc ? updatedDoc.viewsCount : doc.viewsCount + 1;
+    const viewsLeft = Math.max(0, doc.maxViews - finalViews);
+
+    // If maxViews reached, burn/delete immediately from DB
+    if (finalViews >= doc.maxViews) {
+      await getVaultSendsCollection().deleteOne({ sendId: id });
+    }
+
+    res.json({
+      success: true,
+      ciphertext: doc.ciphertext,
+      iv: doc.iv,
+      title: doc.title,
+      type: doc.type,
+      maxViews: doc.maxViews,
+      viewsLeft,
+      burnedNow: finalViews >= doc.maxViews,
+    });
+  } catch (error) {
+    console.error('Failed to reveal vault send:', error);
+    res.status(500).json({ success: false, message: 'Failed to reveal secret' });
+  }
+});
+
+// GET /api/sends/my - List active sends created by the authenticated user
+app.get('/api/sends/my', authenticateToken, async (req, res) => {
+  try {
+    const sends = await getVaultSendsCollection()
+      .find({ creatorUserId: req.user.userId, expiresAt: { $gt: new Date() } })
+      .project({ ciphertext: 0, iv: 0, passphraseHash: 0 })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    res.json({
+      success: true,
+      sends: sends.map(s => ({
+        sendId: s.sendId,
+        title: s.title,
+        type: s.type,
+        maxViews: s.maxViews,
+        viewsCount: s.viewsCount,
+        viewsLeft: Math.max(0, s.maxViews - s.viewsCount),
+        expiresAt: s.expiresAt,
+        hasPassphrase: s.hasPassphrase,
+        createdAt: s.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error('Failed to fetch user sends:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch user sends' });
+  }
+});
+
+// DELETE /api/sends/:id - Sender manually burns the link early
+app.delete('/api/sends/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await getVaultSendsCollection().deleteOne({ sendId: id, creatorUserId: req.user.userId });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ success: false, message: 'Send item not found or unauthorized' });
+    }
+
+    res.json({ success: true, message: 'Secret permanently deleted.' });
+  } catch (error) {
+    console.error('Failed to delete vault send:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete send' });
+  }
+});
+
 async function startServer() {
   try {
     await client.connect();
@@ -606,6 +824,10 @@ async function startServer() {
     await db.collection('users').createIndex({ email: 1 }, { unique: true });
     await db.collection('passwords').createIndex({ userId: 1, id: 1 }, { unique: true });
     await db.collection('passwords').createIndex({ userId: 1, site: 1 });
+    // Vault Send TTL index for auto-cleanup and fast ID lookups
+    await db.collection('vault_sends').createIndex({ sendId: 1 }, { unique: true });
+    await db.collection('vault_sends').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+    await db.collection('vault_sends').createIndex({ creatorUserId: 1 });
 
     app.listen(PORT, () => {
       console.log(`Backend listening on port ${PORT}`);

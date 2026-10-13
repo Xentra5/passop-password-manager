@@ -6,6 +6,7 @@ const NavBar = ({
   onLogout,
   onOpenAuth,
   onLockVault,
+  onOpenSend,
   activeView,
   setActiveView,
   isPasswordRevealed = false,
@@ -116,6 +117,19 @@ const NavBar = ({
               </button>
             </>
           )}
+
+          {/* PassVault Send (Encrypted Secret Sharing) Quick Trigger */}
+          <button
+            type="button"
+            onClick={onOpenSend}
+            className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-50/80 px-2.5 py-1.5 text-xs font-semibold text-emerald-700 shadow-xs transition-all hover:bg-emerald-100 hover:border-emerald-500 active:scale-95 dark:border-emerald-500/40 dark:bg-emerald-950/40 dark:text-emerald-400 dark:hover:bg-emerald-900/50"
+            title="PassVault Send: Share an encrypted self-destructing secret"
+          >
+            <svg className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+            </svg>
+            <span className="hidden sm:inline">Send Secret</span>
+          </button>
 
           {/* Theme Toggle Button */}
           <button

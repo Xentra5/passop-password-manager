@@ -20,6 +20,8 @@ import Footer from "./Component/Footer"
 import Auth from "./Component/Auth"
 import LandingPage from "./Component/LandingPage"
 import LockScreenModal from "./Component/LockScreenModal"
+import VaultSendModal from "./Component/VaultSendModal"
+import VaultSendViewer from "./Component/VaultSendViewer"
 
 import { useSmoothScroll } from "./hooks/useSmoothScroll"
 import { deriveVaultKey, clearCachedVaultKey } from "./utils/cryptoVault"
@@ -46,6 +48,54 @@ function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false)
   const [authModalMode, setAuthModalMode] = useState("login")
   const [isPasswordRevealed, setIsPasswordRevealed] = useState(false)
+
+  // --------------------------------------------------------------------------
+  // PASSVAULT SEND STATES
+  // --------------------------------------------------------------------------
+  const [sendModalOpen, setSendModalOpen] = useState(false)
+  const [sendInitialData, setSendInitialData] = useState(null)
+  const [activeSendShare, setActiveSendShare] = useState(() => {
+    // Detect if page was opened via a Send secret link: #sendId=...&key=...
+    if (typeof window !== "undefined" && window.location.hash) {
+      const hash = window.location.hash.substring(1);
+      const params = new URLSearchParams(hash);
+      const sendId = params.get("sendId");
+      const key = params.get("key");
+      if (sendId && key) {
+        return { sendId, key };
+      }
+    }
+    return null;
+  })
+
+  // Hash listener for when user navigates or clicks a Send link while app is already open
+  useEffect(() => {
+    const handleHashChange = () => {
+      if (window.location.hash) {
+        const hash = window.location.hash.substring(1);
+        const params = new URLSearchParams(hash);
+        const sendId = params.get("sendId");
+        const key = params.get("key");
+        if (sendId && key) {
+          setActiveSendShare({ sendId, key });
+        }
+      }
+    };
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
+
+  const handleOpenSend = useCallback((data = null) => {
+    setSendInitialData(data);
+    setSendModalOpen(true);
+  }, []);
+
+  const handleDismissSendViewer = useCallback(() => {
+    setActiveSendShare(null);
+    if (window.location.hash.includes("sendId")) {
+      window.history.replaceState(null, "", window.location.pathname + window.location.search);
+    }
+  }, []);
 
   // --------------------------------------------------------------------------
   // THEME SYSTEM (Obsidian Cyberpunk Dark / Warm Cream Light)
@@ -188,6 +238,7 @@ function App() {
         onLogout={handleLogout}
         onOpenAuth={handleOpenAuth}
         onLockVault={lockVault}
+        onOpenSend={handleOpenSend}
         activeView={activeView}
         setActiveView={setActiveView}
         isPasswordRevealed={isPasswordRevealed}
@@ -203,6 +254,7 @@ function App() {
             vaultKey={vaultKey}
             onUnauthorized={handleLogout}
             onPasswordRevealChange={setIsPasswordRevealed}
+            onOpenSend={handleOpenSend}
             theme={theme}
           />
         ) : (
@@ -211,6 +263,25 @@ function App() {
           />
         )}
       </div>
+
+      {/* PassVault Send Modal (Creation & Management) */}
+      <VaultSendModal
+        isOpen={sendModalOpen}
+        onClose={() => setSendModalOpen(false)}
+        initialData={sendInitialData}
+        token={session.token}
+        theme={theme}
+      />
+
+      {/* PassVault Send Decryption & Reveal Modal (Link Viewer) */}
+      {activeSendShare && (
+        <VaultSendViewer
+          sendId={activeSendShare.sendId}
+          keyHex={activeSendShare.key}
+          onDismiss={handleDismissSendViewer}
+          theme={theme}
+        />
+      )}
 
       {/* Authentication Modal */}
       {authModalOpen && (

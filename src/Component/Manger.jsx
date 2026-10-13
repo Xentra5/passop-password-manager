@@ -34,7 +34,14 @@ export const getTagBadgeStyle = (tag) => {
 };
 
 
-const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange, theme = "light" }) => {
+const Manager = ({
+  token,
+  vaultKey,
+  onUnauthorized,
+  onPasswordRevealChange,
+  onOpenSend,
+  theme = "light",
+}) => {
   const [form, setForm] = useState({
     site: "",
     username: "",
@@ -1193,6 +1200,21 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange, them
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
+              {/* PassVault Send Button */}
+              {onOpenSend && (
+                <button
+                  type="button"
+                  onClick={() => onOpenSend()}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-50/70 px-3 py-2 text-xs font-semibold text-emerald-700 transition-all hover:bg-emerald-100 hover:border-emerald-500 active:scale-95 dark:border-emerald-500/40 dark:bg-emerald-950/40 dark:text-emerald-400 dark:hover:bg-emerald-900/50"
+                  title="PassVault Send: Share an encrypted one-time secret link"
+                >
+                  <svg className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                  <span>PassVault Send</span>
+                </button>
+              )}
+
               {/* Import & Export Migration Button */}
               <button
                 type="button"
@@ -1557,6 +1579,22 @@ const Manager = ({ token, vaultKey, onUnauthorized, onPasswordRevealChange, them
                             {/* Operations Column */}
                             <td className="px-5 py-4 text-right">
                               <div className="flex items-center justify-end gap-2">
+                                {onOpenSend && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onOpenSend({
+                                      title: `${item.site} (${item.username})`,
+                                      text: item.password,
+                                      type: "password",
+                                    })}
+                                    title="Send this password securely via one-time encrypted link"
+                                    className="rounded-md border border-emerald-500/30 bg-emerald-50/50 p-1.5 text-emerald-700 transition-all hover:bg-emerald-100 hover:border-emerald-500 active:scale-95 dark:border-emerald-500/40 dark:bg-emerald-950/40 dark:text-emerald-400"
+                                  >
+                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                    </svg>
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   onClick={() => setSelectedHistoryAccount(item)}

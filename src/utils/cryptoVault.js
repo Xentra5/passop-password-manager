@@ -27,12 +27,12 @@ const SALT_STORAGE_KEY = 'passvault_kdf_salt'; // stores per-user random salt he
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
-function bufferToHex(buffer) {
+export function bufferToHex(buffer) {
   const byteArray = new Uint8Array(buffer);
   return Array.from(byteArray, byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function hexToBuffer(hexString) {
+export function hexToBuffer(hexString) {
   if (typeof hexString !== 'string' || hexString.length % 2 !== 0) {
     throw new Error('Invalid hex string format');
   }
@@ -250,4 +250,102 @@ export async function decryptCustomFields(fields, vaultKey) {
     })
   );
 }
+
+// ─── PassVault Send (Zero-Knowledge Ephemeral Secret Sharing) ───────────────
+
+/**
+ * Generates an ephemeral 256-bit AES-GCM key and returns both the CryptoKey and
+ * its hex-encoded key string suitable for embedding into the URL hash fragment (#key=...).
+ */
+export async function generateSendSecretKey() {
+  const rawKeyBytes = window.crypto.getRandomValues(new Uint8Array(32));
+  const keyHex = bufferToHex(rawKeyBytes);
+
+  const cryptoKey = await window.crypto.subtle.importKey(
+    'raw',
+    rawKeyBytes,
+    { name: 'AES-GCM' },
+    false,
+    ['encrypt', 'decrypt']
+  );
+
+  return { cryptoKey, keyHex };
+}
+
+/**
+ * Encrypts a secret string using an ephemeral AES-256-GCM CryptoKey.
+ * Returns { ciphertextHex, ivHex }.
+ */
+export async function encryptSendPayload(plainText, cryptoKey) {
+  if (typeof plainText !== 'string' || !plainText) {
+    throw new Error('Secret content cannot be empty');
+  }
+
+  const enc = new TextEncoder();
+  const iv = window.crypto.getRandomValues(new Uint8Array(12));
+
+  const encryptedBuffer = await window.crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    cryptoKey,
+    enc.encode(plainText)
+  );
+
+  return {
+    ciphertextHex: bufferToHex(encryptedBuffer),
+    ivHex: bufferToHex(iv),
+  };
+}
+
+/**
+ * Decrypts ciphertext using an ephemeral key hex and IV hex from the URL fragment.
+ */
+export async function decryptSendPayload(ciphertextHex, ivHex, keyHex) {
+  const rawKeyBytes = hexToBuffer(keyHex);
+  const iv = hexToBuffer(ivHex);
+  const cipherData = hexToBuffer(ciphertextHex);
+
+  const cryptoKey = await window.crypto.subtle.importKey(
+    'raw',
+    rawKeyBytes,
+    { name: 'AES-GCM' },
+    false,
+    ['decrypt']
+  );
+
+  const decryptedBuffer = await window.crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv },
+    cryptoKey,
+    cipherData
+  );
+
+  const dec = new TextDecoder();
+  return dec.decode(decryptedBuffer);
+}
+
+/**
+ * Computes a SHA-256 hash of a passphrase combined with a random salt.
+ * Used for optional password-protection verification without sending the password.
+ */
+export async function hashPassphrase(passphrase, saltHex) {
+  const enc = new TextEncoder();
+  const salt = hexToBuffer(saltHex);
+  const passBytes = enc.encode(passphrase);
+
+  // Combine salt + passBytes
+  const combined = new Uint8Array(salt.length + passBytes.length);
+  combined.set(salt, 0);
+  combined.set(passBytes, salt.length);
+
+  const hashBuffer = await window.crypto.subtle.digest('SHA-256', combined);
+  return bufferToHex(hashBuffer);
+}
+
+/**
+ * Generates a random 16-byte hex salt for passphrase protection.
+ */
+export function generatePassphraseSalt() {
+  const saltBytes = window.crypto.getRandomValues(new Uint8Array(16));
+  return bufferToHex(saltBytes);
+}
+
 
