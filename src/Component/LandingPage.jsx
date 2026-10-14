@@ -35,19 +35,14 @@
 // ============================================================================
 
 import { useState, useMemo } from "react";
-import securityCoreImg from "../assets/security-core.jpg";
 import {
   ShieldCheck,
-  Key,
   LockKey,
-  Cpu,
-  ArrowsClockwise,
   Eye,
   EyeSlash,
   CheckCircle,
   Copy,
   Terminal,
-  Fingerprint,
   Sparkle,
   Check,
   ArrowRight,
@@ -57,6 +52,7 @@ import {
 } from "@phosphor-icons/react";
 import { useSpotlight, useTilt, useScrollReveal, useMagnetic } from "../hooks/useMotion";
 import CryptographicNetworkGlobe from "./CryptographicNetworkGlobe";
+import VaultDefenseExperience from "./VaultDefenseExperience";
 
 // Sample test passwords for the interactive Entropy Analyzer
 const SAMPLE_SEEDS = [
@@ -219,7 +215,7 @@ const LandingPage = ({ onOpenAuth }) => {
   // RENDERED PAGE SECTIONS
   // ==========================================================================
   return (
-    <div className="w-full">
+    <div className="landing-page w-full">
       {/* =====================================================================
           SECTION 1: HERO (Gradient mesh, headline, CTAs, 3D Canvas Globe)
           ===================================================================== */}
@@ -236,28 +232,28 @@ const LandingPage = ({ onOpenAuth }) => {
             <div className="lg:col-span-7">
               <ScrollRevealSection delayClass="stagger-1">
                 {/* Security badge pill */}
-                <div className="inline-flex items-center gap-2 rounded-full border border-[#26968a]/30 bg-white/70 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.15em] text-[#176b87] shadow-sm backdrop-blur-sm">
+                <div className="inline-flex items-center gap-2 rounded-full border border-[#26968a]/30 bg-white/80 dark:bg-emerald-950/40 dark:border-emerald-500/30 px-4 py-1.5 text-[11px] font-bold uppercase tracking-[0.15em] text-[#176b87] dark:text-emerald-300 shadow-sm backdrop-blur-sm">
                   <span className="beacon-dot h-1.5 w-1.5 rounded-full bg-[#26968a]" />
                   Cryptographic Key Vault · AES-256-GCM
                 </div>
               </ScrollRevealSection>
 
               <ScrollRevealSection delayClass="stagger-2">
-                <h1 className="hero-headline mt-6 text-5xl font-bold text-[#0f1923] sm:text-6xl lg:text-7xl">
+                <h1 className="hero-headline mt-6 text-4xl sm:text-6xl lg:text-7xl font-bold text-[#0f1923] dark:text-white">
                   Defend your
-                  <br />
+                  <br className="hidden sm:inline" />{" "}
                   digital identity
-                  <br />
+                  <br className="hidden sm:inline" />{" "}
                   <span className="hero-gradient-text">
                     with sovereign
-                    <br />
+                    <br className="hidden sm:inline" />{" "}
                     cryptography.
                   </span>
                 </h1>
               </ScrollRevealSection>
 
               <ScrollRevealSection delayClass="stagger-3">
-                <p className="mt-6 max-w-[48ch] text-[17px] leading-[1.65] text-[#4a5568]">
+                <p className="mt-6 max-w-[48ch] text-[17px] leading-[1.65] text-[#4a5568] dark:text-slate-300">
                   Zero-knowledge credential vaulting with client-side 256-bit envelope encryption.
                   Your master key is derived strictly in memory and never leaves this device.
                 </p>
@@ -281,21 +277,21 @@ const LandingPage = ({ onOpenAuth }) => {
                   {/* Secondary CTA: Scrolls down to live interactive cipher sandbox */}
                   <a
                     href="#cipher-sandbox"
-                    className="hero-cta-secondary group inline-flex items-center gap-2.5 rounded-xl border border-[#c8c3bb] bg-white/80 px-6 py-4 text-sm font-semibold text-[#1f2933] backdrop-blur-sm transition-all hover:border-[#176b87]/40 hover:bg-white hover:shadow-md"
+                    className="hero-cta-secondary group inline-flex items-center gap-2.5 rounded-xl border border-[#c8c3bb] bg-white/80 px-6 py-4 text-sm font-semibold text-[#1f2933] backdrop-blur-sm transition-all hover:border-[#176b87]/40 hover:bg-white hover:shadow-md dark:border-slate-700 dark:bg-[#161f2e] dark:text-slate-200 dark:hover:bg-[#1c273a] dark:hover:border-slate-600"
                   >
-                    <Terminal size={18} weight="bold" className="text-[#176b87] transition-transform group-hover:-rotate-3" />
+                    <Terminal size={18} weight="bold" className="text-[#176b87] dark:text-cyan-400 transition-transform group-hover:-rotate-3" />
                     <span>Simulate Cipher</span>
                   </a>
                 </div>
 
                 {/* 3 Core Trust Badges */}
-                <div className="mt-9 flex flex-wrap items-center gap-6 text-xs font-medium text-[#6b6560]">
+                <div className="mt-9 flex flex-wrap items-center gap-6 text-xs font-medium text-[#6b6560] dark:text-slate-400">
                   <div className="flex items-center gap-1.5">
                     <ShieldCheck size={15} className="text-[#26968a]" weight="fill" />
                     <span>Client-Side AES-GCM</span>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <Lightning size={15} className="text-[#176b87]" weight="fill" />
+                    <Lightning size={15} className="text-[#176b87] dark:text-cyan-400" weight="fill" />
                     <span>Zero Plaintext Logs</span>
                   </div>
                   <div className="flex items-center gap-1.5">
@@ -346,14 +342,14 @@ const LandingPage = ({ onOpenAuth }) => {
       {/* =====================================================================
           SECTION 2: CRYPTOGRAPHIC STANDARDS & TECHNOLOGY LOGOS STRIP
           ===================================================================== */}
-      <section className="border-y border-[#ddd8d0]/80 bg-[#eae6df]/45 py-9">
+      <section className="border-y border-[#ddd8d0]/80 bg-[#eae6df]/45 py-9 dark:border-white/10 dark:bg-[#0a0e16]/60">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
-          <p className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-[#857e75]">
+          <p className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-[#857e75] dark:text-[#94a3b8]">
             Engineered on Open Cryptographic Standards
           </p>
           <div className="mt-6 flex flex-wrap items-center justify-center gap-8 sm:gap-14">
             {/* MongoDB */}
-            <div className="group flex cursor-default items-center gap-2 text-sm font-semibold text-[#5b564e] opacity-75 transition-all duration-200 hover:opacity-100 hover:text-[#13aa52] hover:-translate-y-0.5">
+            <div className="group flex cursor-default items-center gap-2 text-sm font-semibold text-[#5b564e] dark:text-slate-300 opacity-75 transition-all duration-200 hover:opacity-100 hover:text-[#13aa52] hover:-translate-y-0.5">
               <svg className="h-6 w-6 transition-colors group-hover:text-[#13aa52]" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M17.193 9.555c-1.264-5.58-4.252-7.414-4.573-8.12-.28-.395-.56-.948-.56-.948s-.246.513-.526.908c-.32.707-3.309 2.54-4.574 8.12-1.424 6.273 1.347 11.233 4.708 13.998.14.116.31.282.452.395.14-.113.311-.28.451-.395 3.361-2.765 6.132-7.725 4.708-13.998l-.086.04z" />
               </svg>
@@ -361,7 +357,7 @@ const LandingPage = ({ onOpenAuth }) => {
             </div>
 
             {/* Node.js Crypto */}
-            <div className="group flex cursor-default items-center gap-2 text-sm font-semibold text-[#5b564e] opacity-75 transition-all duration-200 hover:opacity-100 hover:text-[#539e43] hover:-translate-y-0.5">
+            <div className="group flex cursor-default items-center gap-2 text-sm font-semibold text-[#5b564e] dark:text-slate-300 opacity-75 transition-all duration-200 hover:opacity-100 hover:text-[#539e43] hover:-translate-y-0.5">
               <svg className="h-6 w-6 transition-colors group-hover:text-[#539e43]" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 1.25L2 7v10l10 5.75L22 17V7L12 1.25zM12 3.5l7.5 4.3v8.6L12 20.7l-7.5-4.3V7.8L12 3.5z" />
               </svg>
@@ -369,7 +365,7 @@ const LandingPage = ({ onOpenAuth }) => {
             </div>
 
             {/* React 19 */}
-            <div className="group flex cursor-default items-center gap-2 text-sm font-semibold text-[#5b564e] opacity-75 transition-all duration-200 hover:opacity-100 hover:text-[#00b4d8] hover:-translate-y-0.5">
+            <div className="group flex cursor-default items-center gap-2 text-sm font-semibold text-[#5b564e] dark:text-slate-300 opacity-75 transition-all duration-200 hover:opacity-100 hover:text-[#00b4d8] hover:-translate-y-0.5">
               <svg className="h-6 w-6 transition-colors group-hover:text-[#00b4d8]" viewBox="0 0 24 24" fill="currentColor">
                 <circle cx="12" cy="12" r="2.2" />
                 <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm0 18c-4.4 0-8-3.6-8-8s3.6-8 8-8 8 3.6 8 8-3.6 8-8 8z" opacity="0.3" />
@@ -381,16 +377,16 @@ const LandingPage = ({ onOpenAuth }) => {
             </div>
 
             {/* POSIX Crypto */}
-            <div className="group flex cursor-default items-center gap-2 text-sm font-semibold text-[#5b564e] opacity-75 transition-all duration-200 hover:opacity-100 hover:text-[#1f2933] hover:-translate-y-0.5">
-              <svg className="h-6 w-6 transition-colors group-hover:text-[#1f2933]" viewBox="0 0 24 24" fill="currentColor">
+            <div className="group flex cursor-default items-center gap-2 text-sm font-semibold text-[#5b564e] dark:text-slate-300 opacity-75 transition-all duration-200 hover:opacity-100 hover:text-[#1f2933] dark:hover:text-white hover:-translate-y-0.5">
+              <svg className="h-6 w-6 transition-colors group-hover:text-[#1f2933] dark:group-hover:text-white" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12.002 0c-4.5 0-6.75 3.375-6.75 7.875 0 2.25.75 4.5 1.5 5.625-.75 1.5-2.25 3-2.25 4.5 0 3 3.375 6 7.5 6s7.5-3 7.5-6c0-1.5-1.5-3-2.25-4.5.75-1.125 1.5-3.375 1.5-5.625 0-4.5-2.25-7.875-6.75-7.875z" />
               </svg>
               <span>POSIX Crypto</span>
             </div>
 
             {/* Auditable Source */}
-            <div className="group flex cursor-default items-center gap-2 text-sm font-semibold text-[#5b564e] opacity-75 transition-all duration-200 hover:opacity-100 hover:text-[#24292f] hover:-translate-y-0.5">
-              <svg className="h-6 w-6 transition-colors group-hover:text-[#24292f]" viewBox="0 0 24 24" fill="currentColor">
+            <div className="group flex cursor-default items-center gap-2 text-sm font-semibold text-[#5b564e] dark:text-slate-300 opacity-75 transition-all duration-200 hover:opacity-100 hover:text-[#24292f] dark:hover:text-white hover:-translate-y-0.5">
+              <svg className="h-6 w-6 transition-colors group-hover:text-[#24292f] dark:group-hover:text-white" viewBox="0 0 24 24" fill="currentColor">
                 <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
               </svg>
               <span>Auditable Source</span>
@@ -399,282 +395,67 @@ const LandingPage = ({ onOpenAuth }) => {
         </div>
       </section>
 
-      {/* =====================================================================
-          SECTION 3: ASYMMETRIC BENTO GRID (Spotlight cards & features)
-          ===================================================================== */}
-      <section id="features" className="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
-        <ScrollRevealSection>
-          <div className="mb-14 max-w-2xl">
-            <span className="inline-block text-[11px] font-semibold uppercase tracking-[0.18em] text-[#176b87]">
-              Architecture & Defense
-            </span>
-            <h2 className="mt-2 font-['Space_Grotesk'] text-3xl font-bold tracking-tight text-[#1f2933] sm:text-4xl">
-              Engineered from ground truth. No plaintext ingestion.
-            </h2>
-            <p className="mt-3 text-base text-[#6f6a63]">
-              Every stored credential is keyed locally with salted PBKDF2 iterations before any network transport occurs.
-            </p>
-          </div>
-        </ScrollRevealSection>
-
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-12">
-          {/* Card 1: Envelope Encryption with silicon core image (7 Cols) */}
-          <div className="md:col-span-7">
-            <ScrollRevealSection delayClass="stagger-1" className="h-full">
-              <SpotlightCard className="p-7">
-                <div className="flex h-full flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#e6f2ef] text-[#176b87] shadow-xs">
-                        <Cpu size={24} weight="bold" />
-                      </div>
-                      <span className="cipher-pill rounded-full border border-[#d5d0c8] bg-[#faf9f7] px-3 py-1 text-[11px] font-semibold text-[#6f6a63]">
-                        Zero-Knowledge Primitive
-                      </span>
-                    </div>
-
-                    <h3 className="mt-5 font-['Space_Grotesk'] text-2xl font-bold text-[#1f2933]">
-                      Hardware-Grade Envelope Encryption
-                    </h3>
-                    <p className="mt-2 text-sm leading-relaxed text-[#5b564e]">
-                      Data records are sealed with AES-GCM authenticated ciphers. Decryption keys are strictly derived inside client memory and discarded upon session termination.
-                    </p>
-                  </div>
-
-                  <div className="group relative mt-7 overflow-hidden rounded-2xl border border-[#ddd8d0]/90 bg-[#1f2933]">
-                    <img
-                      src={securityCoreImg}
-                      alt="Cryptographic silicon core"
-                      className="h-52 w-full object-cover opacity-90 transition-transform duration-700 ease-out group-hover:scale-105"
-                    />
-                    <div className="cipher-stream-scan opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-                    <div className="absolute bottom-3 left-4 flex items-center gap-2 text-xs font-mono text-emerald-400">
-                      <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
-                      <span>Silicon cryptographic bus: SECURE</span>
-                    </div>
-                  </div>
-                </div>
-              </SpotlightCard>
-            </ScrollRevealSection>
-          </div>
-
-          {/* Card 2: Interactive Password Strength & Entropy Simulator (5 Cols) */}
-          <div className="md:col-span-5">
-            <ScrollRevealSection delayClass="stagger-2" className="h-full">
-              <SpotlightCard className="p-7">
-                <div className="flex h-full flex-col justify-between">
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#e6f2ef] text-[#176b87] shadow-xs">
-                        <Key size={24} weight="bold" />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={randomizeSimPassword}
-                        className="tactile-btn flex items-center gap-1.5 rounded-lg border border-[#b8d9d4] bg-[#e6f2ef]/80 px-2.5 py-1 text-xs font-semibold text-[#176b87] hover:bg-[#d6eae5]"
-                        aria-label="Generate random test seed"
-                      >
-                        <Sparkle
-                          size={15}
-                          weight="fill"
-                          className={`transition-transform duration-500 ${
-                            randomizeSpin ? "rotate-180" : ""
-                          }`}
-                        />
-                        <span>Randomize</span>
-                      </button>
-                    </div>
-
-                    <h3 className="mt-5 font-['Space_Grotesk'] text-2xl font-bold text-[#1f2933]">
-                      Entropy Analyzer
-                    </h3>
-                    <p className="mt-1 text-sm text-[#5b564e]">
-                      Test key combinations to observe mathematically verifiable bit resistance against cluster attacks.
-                    </p>
-
-                    {/* Interactive Input with Show/Hide toggle */}
-                    <div className="mt-6">
-                      <div className="relative">
-                        <input
-                          type={showSimPassword ? "text" : "password"}
-                          value={simPassword}
-                          onChange={(e) => setSimPassword(e.target.value)}
-                          className="w-full rounded-xl border border-[#d5d0c8] bg-[#faf9f7] px-4 py-2.5 pr-11 font-mono text-sm text-[#1f2933] outline-none transition-all focus:border-[#176b87] focus:ring-2 focus:ring-[#176b87]/20"
-                          placeholder="Enter password..."
-                          aria-label="Interactive Password Entropy Input"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowSimPassword((v) => !v)}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7b746b] transition-colors hover:text-[#1f2933]"
-                          aria-label={showSimPassword ? "Hide password" : "Show password"}
-                        >
-                          {showSimPassword ? <EyeSlash size={18} /> : <Eye size={18} />}
-                        </button>
-                      </div>
-
-                      {/* Dynamic Entropy Progress Bar */}
-                      <div className="mt-5">
-                        <div className="flex items-center justify-between text-xs font-medium">
-                          <span className="text-[#6f6a63]">Calculated Entropy</span>
-                          <span className="font-mono font-bold text-[#176b87]">
-                            {entropyStats.bits} bits ({entropyStats.label})
-                          </span>
-                        </div>
-                        <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-[#eae6df]">
-                          <div
-                            className={`h-full transition-all duration-500 ease-out ${
-                              entropyStats.rating === "poor"
-                                ? "bg-rose-500"
-                                : entropyStats.rating === "weak"
-                                ? "bg-amber-500"
-                                : entropyStats.rating === "moderate"
-                                ? "bg-blue-500"
-                                : entropyStats.rating === "strong"
-                                ? "bg-[#26968a]"
-                                : "bg-gradient-to-r from-[#176b87] to-emerald-500"
-                            }`}
-                            style={{ width: `${entropyStats.percentage}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="mt-6 rounded-xl border border-[#e2ddd5] bg-[#faf9f7] p-3.5 text-xs text-[#6f6a63] transition-colors">
-                    <span className="font-semibold text-[#1f2933]">Resistance Metric: </span>
-                    {entropyStats.bits > 75
-                      ? "Resistant to distributed GPU hashcat dictionary clusters."
-                      : "Vulnerable to multi-threaded rainbow table lookups."}
-                  </div>
-                </div>
-              </SpotlightCard>
-            </ScrollRevealSection>
-          </div>
-
-          {/* Card 3: Zero Plaintext Ingestion (5 Cols) */}
-          <div className="md:col-span-5">
-            <ScrollRevealSection delayClass="stagger-3" className="h-full">
-              <SpotlightCard className="p-7">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#e6f2ef] text-[#176b87] shadow-xs">
-                  <Fingerprint size={24} weight="bold" />
-                </div>
-                <h3 className="mt-5 font-['Space_Grotesk'] text-2xl font-bold text-[#1f2933]">
-                  Zero Plaintext Ingestion
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-[#5b564e]">
-                  Database records store cipher payloads exclusively. Even in an absolute infrastructure breach, attackers harvest only cryptographic noise.
-                </p>
-                <div className="mt-6 space-y-2 rounded-xl border border-[#e8e4dc] bg-[#f9f8f5] p-3.5 font-mono text-[11px] text-[#4b5563]">
-                  <div className="flex items-center gap-2 text-emerald-700">
-                    <Check size={14} weight="bold" />
-                    <span>Payload: Ingestion as Ciphertext only</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-emerald-700">
-                    <Check size={14} weight="bold" />
-                    <span>Master Auth: Bcrypt salted key hashes</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-[#7c756c]">
-                    <span className="text-rose-500 font-bold">✕</span>
-                    <span>Plaintext transport / logs: 0 stored</span>
-                  </div>
-                </div>
-              </SpotlightCard>
-            </ScrollRevealSection>
-          </div>
-
-          {/* Card 4: MongoDB Realtime State Replication (7 Cols) */}
-          <div className="md:col-span-7">
-            <ScrollRevealSection delayClass="stagger-4" className="h-full">
-              <SpotlightCard className="p-7">
-                <div className="flex items-center justify-between">
-                  <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#e6f2ef] text-[#176b87] shadow-xs">
-                    <ArrowsClockwise size={24} weight="bold" />
-                  </div>
-                  <span className="flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-[#26968a]">
-                    <CheckCircle size={14} weight="fill" />
-                    MongoDB Realtime Sync
-                  </span>
-                </div>
-
-                <h3 className="mt-5 font-['Space_Grotesk'] text-2xl font-bold text-[#1f2933]">
-                  Seamless Encrypted State Replication
-                </h3>
-                <p className="mt-2 text-sm leading-relaxed text-[#5b564e]">
-                  Your vault synchronizes with high-availability document storage. Local offline changes automatically reconcile with cryptographic integrity verification.
-                </p>
-
-                <div className="mt-6 flex flex-wrap items-center gap-3">
-                  <span className="rounded-lg border border-[#d5d0c8] bg-[#faf9f7] px-3.5 py-1.5 font-mono text-xs font-medium text-[#1f2933] shadow-xs transition-transform hover:-translate-y-0.5">
-                    JWT Session Guard
-                  </span>
-                  <span className="rounded-lg border border-[#d5d0c8] bg-[#faf9f7] px-3.5 py-1.5 font-mono text-xs font-medium text-[#1f2933] shadow-xs transition-transform hover:-translate-y-0.5">
-                    UUIDv4 Key Space
-                  </span>
-                  <span className="rounded-lg border border-[#d5d0c8] bg-[#faf9f7] px-3.5 py-1.5 font-mono text-xs font-medium text-[#1f2933] shadow-xs transition-transform hover:-translate-y-0.5">
-                    Atomic Writes
-                  </span>
-                  <span className="rounded-lg border border-[#d5d0c8] bg-[#faf9f7] px-3.5 py-1.5 font-mono text-xs font-medium text-[#1f2933] shadow-xs transition-transform hover:-translate-y-0.5">
-                    Zero Data Leakage
-                  </span>
-                </div>
-              </SpotlightCard>
-            </ScrollRevealSection>
-          </div>
-        </div>
-      </section>
+      <VaultDefenseExperience onOpenAuth={onOpenAuth} />
 
       {/* =====================================================================
           SECTION 4: INTERACTIVE LIVE CIPHER SANDBOX (Type & Scramble)
           ===================================================================== */}
-      <section id="cipher-sandbox" className="border-y border-[#ddd8d0] bg-[#ebe7e0]/45 py-20 md:py-28">
+      <section id="cipher-sandbox" className="cipher-lab-section border-y border-[#ddd8d0] bg-[#ebe7e0]/45 dark:border-white/10 dark:bg-[#0a0e16]/60 py-20 md:py-28">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <ScrollRevealSection>
-            <div className="mx-auto max-w-2xl text-center">
-              <span className="inline-block text-[11px] font-semibold uppercase tracking-[0.18em] text-[#176b87]">
-                Live Terminal Sandbox
-              </span>
-              <h2 className="mt-2 font-['Space_Grotesk'] text-3xl font-bold tracking-tight text-[#1f2933] sm:text-4xl">
-                Live Cryptographic Scrambler
+            <div className="cipher-lab-heading">
+              <div className="cipher-lab-kicker">
+                <span className="cipher-lab-kicker-dot" />
+                Live cryptographic instrument
+              </div>
+              <h2 className="mt-3 font-['Space_Grotesk'] text-3xl font-bold tracking-tight text-[#1f2933] dark:text-white sm:text-4xl">
+                Watch plaintext become <em>unreadable.</em>
               </h2>
-              <p className="mt-3 text-base text-[#6f6a63]">
-                Type any plain text below to witness instant client-side cipher transformation.
+              <p className="mt-4 max-w-xl text-base text-[#6f6a63] dark:text-slate-300">
+                A small, live view of the same client-side boundary that protects every credential in your vault.
               </p>
             </div>
           </ScrollRevealSection>
 
           <ScrollRevealSection delayClass="stagger-2">
-            <div className="mx-auto mt-10 max-w-3xl rounded-3xl border border-[#ddd8d0] bg-white p-6 shadow-xl sm:p-9">
-              <div className="space-y-6">
+            <div className="cipher-lab-shell mx-auto mt-10 max-w-5xl">
+              <div className="cipher-lab-rail" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </div>
+              <div className="cipher-lab-panel">
+                <div className="cipher-lab-panel-intro">
+                  <span className="cipher-lab-index">Cipher preview</span>
+                  <span className="cipher-lab-mode">Runs in your browser</span>
+                </div>
+                <div className="cipher-lab-workspace">
                 {/* Input Field */}
-                <div>
-                  <div className="flex items-center justify-between mb-2">
+                <div className="cipher-lab-input">
+                  <div className="cipher-lab-label-row">
                     <label
                       htmlFor="sandbox-input"
-                      className="block text-xs font-bold uppercase tracking-wider text-[#6f6a63]"
+                      className="block text-xs font-bold uppercase tracking-wider text-[#6f6a63] dark:text-slate-300"
                     >
-                      Input Plaintext Payload
+                      Source payload
                     </label>
-                    <span className="text-xs font-mono text-[#857e75]">
-                      {inputText.length} bytes in buffer
-                    </span>
+                    <span className="cipher-lab-counter">{String(inputText.length).padStart(2, "0")} bytes</span>
                   </div>
 
-                  <div className="flex flex-col gap-3 sm:flex-row">
+                  <div className="cipher-lab-input-row">
                     <input
                       id="sandbox-input"
                       type="text"
                       value={inputText}
                       onChange={(e) => setInputText(e.target.value)}
-                      className="flex-1 rounded-xl border border-[#d5d0c8] bg-[#faf9f7] px-4 py-3 font-mono text-sm text-[#1f2933] outline-none transition-all focus:border-[#176b87] focus:ring-2 focus:ring-[#176b87]/20"
+                      className="cipher-lab-input-field flex-1 rounded-xl border border-[#d5d0c8] bg-[#faf9f7] dark:border-slate-700 dark:bg-[#0d1117] dark:text-white px-4 py-3 font-mono text-sm text-[#1f2933] outline-none transition-all focus:border-[#176b87] focus:ring-2 focus:ring-[#176b87]/20"
                       placeholder="Type a sensitive string..."
                     />
                     <button
                       type="button"
                       onClick={handleScrambleTrigger}
                       disabled={isScrambling}
-                      className="tactile-btn inline-flex items-center justify-center gap-2 rounded-xl bg-[#176b87] px-5 py-3 text-xs font-bold text-white shadow-sm hover:bg-[#145d74] disabled:opacity-60"
+                      className="cipher-lab-trigger tactile-btn inline-flex items-center justify-center gap-2 rounded-xl bg-[#176b87] px-5 py-3 text-xs font-bold text-white shadow-sm hover:bg-[#145d74] disabled:opacity-60"
                     >
                       <Lightning
                         size={15}
@@ -687,13 +468,13 @@ const LandingPage = ({ onOpenAuth }) => {
                 </div>
 
                 {/* Encrypted Hex Output Terminal Box */}
-                <div className="relative overflow-hidden rounded-2xl border border-slate-700/80 bg-[#161d26] p-5 text-white shadow-inner">
+                <div className="cipher-lab-output relative overflow-hidden rounded-2xl border border-slate-700/80 bg-[#161d26] p-5 text-white shadow-inner">
                   <div className="cipher-stream-scan" />
 
-                  <div className="flex items-center justify-between border-b border-slate-700/80 pb-3">
+                  <div className="cipher-lab-output-head flex items-center justify-between border-b border-slate-700/80 pb-3">
                     <div className="flex items-center gap-2.5 text-xs text-slate-300">
-                      <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
-                      <span className="font-mono font-medium">AES-256-GCM Output Stream</span>
+                      <span className="cipher-lab-live-dot h-2 w-2 rounded-full bg-emerald-400"></span>
+                      <span className="font-mono font-medium">Simulated output</span>
                     </div>
 
                     <button
@@ -716,26 +497,22 @@ const LandingPage = ({ onOpenAuth }) => {
                     </button>
                   </div>
 
-                  <div className="mt-4 overflow-x-auto font-mono text-sm tracking-wide text-emerald-400 transition-all">
+                  <div className="cipher-lab-hash mt-4 overflow-x-auto font-mono text-sm tracking-wide text-emerald-400 transition-all">
                     <span className={isScrambling ? "text-cyan-300 font-bold" : ""}>
                       {cipherHex}
                     </span>
                   </div>
 
-                  <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80 pt-3 text-[11px] text-slate-400">
+                  <div className="cipher-lab-meta mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80 pt-3 text-[11px] text-slate-400">
                     <div className="flex items-center gap-1.5">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                      <span>96-bit Initialization Vector: Active</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="h-1.5 w-1.5 rounded-full bg-cyan-400"></span>
-                      <span>128-bit Authentication Tag: Verified</span>
+                      <span>Illustrative preview · not production encryption</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs text-[#6f6a63]">
-                  <span>Tested against RFC 5116 standard specifications.</span>
+                <div className="cipher-lab-footer flex flex-wrap items-center justify-between gap-2 pt-1 text-xs text-[#6f6a63]">
+                  <span><span className="cipher-lab-footer-mark">↗</span> Visual preview only</span>
                   <button
                     type="button"
                     onClick={() => onOpenAuth("register")}
@@ -744,6 +521,7 @@ const LandingPage = ({ onOpenAuth }) => {
                     Store credentials in your secure vault →
                   </button>
                 </div>
+              </div>
               </div>
             </div>
           </ScrollRevealSection>
@@ -756,13 +534,13 @@ const LandingPage = ({ onOpenAuth }) => {
       <section id="architecture" className="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28">
         <ScrollRevealSection>
           <div className="mb-14 max-w-2xl">
-            <span className="inline-block text-[11px] font-semibold uppercase tracking-[0.18em] text-[#176b87]">
+            <span className="inline-block text-[11px] font-semibold uppercase tracking-[0.18em] text-[#176b87] dark:text-cyan-400">
               Execution Pipeline
             </span>
-            <h2 className="mt-2 font-['Space_Grotesk'] text-3xl font-bold tracking-tight text-[#1f2933] sm:text-4xl">
+            <h2 className="mt-2 font-['Space_Grotesk'] text-3xl font-bold tracking-tight text-[#1f2933] dark:text-white sm:text-4xl">
               Cryptographic Protocol Pipeline
             </h2>
-            <p className="mt-3 text-base text-[#6f6a63]">
+            <p className="mt-3 text-base text-[#6f6a63] dark:text-slate-300">
               How PassVault isolates your credentials between your device and MongoDB persistence.
             </p>
           </div>
@@ -776,20 +554,20 @@ const LandingPage = ({ onOpenAuth }) => {
               onMouseLeave={() => setHoveredStage(null)}
               className={`group relative h-full rounded-2xl border p-7 transition-all duration-300 ${
                 hoveredStage === 1
-                  ? "border-[#176b87] bg-white shadow-lg -translate-y-1"
-                  : "border-[#ddd8d0] bg-white shadow-sm hover:border-[#176b87]/50"
+                  ? "border-[#176b87] bg-white dark:bg-[#151b23] dark:border-cyan-500 shadow-lg -translate-y-1"
+                  : "border-[#ddd8d0] bg-white dark:border-white/10 dark:bg-[#151b23] shadow-sm hover:border-[#176b87]/50"
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="font-mono text-xs font-bold text-[#176b87]">STAGE 01</span>
-                <span className="rounded-full bg-[#e6f2ef] px-2.5 py-0.5 text-[10px] font-bold text-[#176b87]">
+                <span className="font-mono text-xs font-bold text-[#176b87] dark:text-cyan-400">STAGE 01</span>
+                <span className="rounded-full bg-[#e6f2ef] dark:bg-cyan-950/40 dark:text-cyan-300 px-2.5 py-0.5 text-[10px] font-bold text-[#176b87]">
                   CLIENT
                 </span>
               </div>
-              <h3 className="mt-4 font-['Space_Grotesk'] text-xl font-bold text-[#1f2933]">
+              <h3 className="mt-4 font-['Space_Grotesk'] text-xl font-bold text-[#1f2933] dark:text-white">
                 Local Key Derivation
               </h3>
-              <p className="mt-3 text-sm leading-relaxed text-[#5b564e]">
+              <p className="mt-3 text-sm leading-relaxed text-[#5b564e] dark:text-slate-300">
                 Your master password passes through client-side PBKDF2 stretching with salted HMAC-SHA-256 iterations to generate unique symmetric keys.
               </p>
             </div>
@@ -802,20 +580,20 @@ const LandingPage = ({ onOpenAuth }) => {
               onMouseLeave={() => setHoveredStage(null)}
               className={`group relative h-full rounded-2xl border p-7 transition-all duration-300 ${
                 hoveredStage === 2
-                  ? "border-[#176b87] bg-white shadow-lg -translate-y-1"
-                  : "border-[#ddd8d0] bg-white shadow-sm hover:border-[#176b87]/50"
+                  ? "border-[#176b87] bg-white dark:bg-[#151b23] dark:border-cyan-500 shadow-lg -translate-y-1"
+                  : "border-[#ddd8d0] bg-white dark:border-white/10 dark:bg-[#151b23] shadow-sm hover:border-[#176b87]/50"
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="font-mono text-xs font-bold text-[#176b87]">STAGE 02</span>
-                <span className="rounded-full bg-[#e6f2ef] px-2.5 py-0.5 text-[10px] font-bold text-[#176b87]">
+                <span className="font-mono text-xs font-bold text-[#176b87] dark:text-cyan-400">STAGE 02</span>
+                <span className="rounded-full bg-[#e6f2ef] dark:bg-cyan-950/40 dark:text-cyan-300 px-2.5 py-0.5 text-[10px] font-bold text-[#176b87]">
                   ENVELOPE
                 </span>
               </div>
-              <h3 className="mt-4 font-['Space_Grotesk'] text-xl font-bold text-[#1f2933]">
+              <h3 className="mt-4 font-['Space_Grotesk'] text-xl font-bold text-[#1f2933] dark:text-white">
                 Envelope Encryption
               </h3>
-              <p className="mt-3 text-sm leading-relaxed text-[#5b564e]">
+              <p className="mt-3 text-sm leading-relaxed text-[#5b564e] dark:text-slate-300">
                 Each site credential is sealed inside an individual authenticated envelope with a freshly computed initialization vector.
               </p>
             </div>
@@ -828,20 +606,20 @@ const LandingPage = ({ onOpenAuth }) => {
               onMouseLeave={() => setHoveredStage(null)}
               className={`group relative h-full rounded-2xl border p-7 transition-all duration-300 ${
                 hoveredStage === 3
-                  ? "border-[#176b87] bg-white shadow-lg -translate-y-1"
-                  : "border-[#ddd8d0] bg-white shadow-sm hover:border-[#176b87]/50"
+                  ? "border-[#176b87] bg-white dark:bg-[#151b23] dark:border-cyan-500 shadow-lg -translate-y-1"
+                  : "border-[#ddd8d0] bg-white dark:border-white/10 dark:bg-[#151b23] shadow-sm hover:border-[#176b87]/50"
               }`}
             >
               <div className="flex items-center justify-between">
-                <span className="font-mono text-xs font-bold text-[#176b87]">STAGE 03</span>
-                <span className="rounded-full bg-[#e6f2ef] px-2.5 py-0.5 text-[10px] font-bold text-[#176b87]">
+                <span className="font-mono text-xs font-bold text-[#176b87] dark:text-cyan-400">STAGE 03</span>
+                <span className="rounded-full bg-[#e6f2ef] dark:bg-cyan-950/40 dark:text-cyan-300 px-2.5 py-0.5 text-[10px] font-bold text-[#176b87]">
                   STORAGE
                 </span>
               </div>
-              <h3 className="mt-4 font-['Space_Grotesk'] text-xl font-bold text-[#1f2933]">
+              <h3 className="mt-4 font-['Space_Grotesk'] text-xl font-bold text-[#1f2933] dark:text-white">
                 Blind Document Storage
               </h3>
-              <p className="mt-3 text-sm leading-relaxed text-[#5b564e]">
+              <p className="mt-3 text-sm leading-relaxed text-[#5b564e] dark:text-slate-300">
                 MongoDB receives and indexes only the encrypted payload and metadata. Decryption is mathematically impossible on the server.
               </p>
             </div>
@@ -852,14 +630,14 @@ const LandingPage = ({ onOpenAuth }) => {
       {/* =====================================================================
           SECTION 6: VERIFIED PRACTITIONER TESTIMONIALS
           ===================================================================== */}
-      <section className="border-t border-[#ddd8d0] bg-[#eae6df]/35 py-20">
+      <section className="border-t border-[#ddd8d0] bg-[#eae6df]/35 dark:border-white/10 dark:bg-[#0a0e16]/40 py-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <ScrollRevealSection>
             <div className="text-center">
-              <span className="inline-block text-[11px] font-semibold uppercase tracking-[0.18em] text-[#176b87]">
+              <span className="inline-block text-[11px] font-semibold uppercase tracking-[0.18em] text-[#176b87] dark:text-cyan-400">
                 Trusted Endorsements
               </span>
-              <h2 className="mt-2 font-['Space_Grotesk'] text-2xl font-bold text-[#1f2933] sm:text-3xl">
+              <h2 className="mt-2 font-['Space_Grotesk'] text-2xl font-bold text-[#1f2933] dark:text-white sm:text-3xl">
                 Verified by Security Practitioners
               </h2>
             </div>
@@ -868,13 +646,13 @@ const LandingPage = ({ onOpenAuth }) => {
           <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-2">
             <ScrollRevealSection delayClass="stagger-1">
               <SpotlightCard className="p-7">
-                <p className="text-sm leading-relaxed text-[#4b5563]">
+                <p className="text-sm leading-relaxed text-[#4b5563] dark:text-slate-300">
                   "PassVault implements client-side encryption cleanly. Storing encrypted envelopes rather than raw credentials makes external audit compliance straightforward."
                 </p>
-                <div className="mt-5 flex items-center justify-between border-t border-[#f0ede6] pt-4">
+                <div className="mt-5 flex items-center justify-between border-t border-[#f0ede6] dark:border-slate-800 pt-4">
                   <div>
-                    <div className="font-semibold text-sm text-[#1f2933]">Elena Vance</div>
-                    <div className="text-xs text-[#7b746b]">Security Architect, Distributed Labs</div>
+                    <div className="font-semibold text-sm text-[#1f2933] dark:text-white">Elena Vance</div>
+                    <div className="text-xs text-[#7b746b] dark:text-slate-400">Security Architect, Distributed Labs</div>
                   </div>
                   <ShieldCheck size={22} className="text-[#26968a]" weight="bold" />
                 </div>
@@ -883,13 +661,13 @@ const LandingPage = ({ onOpenAuth }) => {
 
             <ScrollRevealSection delayClass="stagger-2">
               <SpotlightCard className="p-7">
-                <p className="text-sm leading-relaxed text-[#4b5563]">
+                <p className="text-sm leading-relaxed text-[#4b5563] dark:text-slate-300">
                   "The fast interface and zero-knowledge model give our engineering team peace of mind. Credentials stay completely private without overhead."
                 </p>
-                <div className="mt-5 flex items-center justify-between border-t border-[#f0ede6] pt-4">
+                <div className="mt-5 flex items-center justify-between border-t border-[#f0ede6] dark:border-slate-800 pt-4">
                   <div>
-                    <div className="font-semibold text-sm text-[#1f2933]">Marcus Thorne</div>
-                    <div className="text-xs text-[#7b746b]">Lead Systems Engineer, CloudStack</div>
+                    <div className="font-semibold text-sm text-[#1f2933] dark:text-white">Marcus Thorne</div>
+                    <div className="text-xs text-[#7b746b] dark:text-slate-400">Lead Systems Engineer, CloudStack</div>
                   </div>
                   <ShieldCheck size={22} className="text-[#26968a]" weight="bold" />
                 </div>
@@ -904,22 +682,22 @@ const LandingPage = ({ onOpenAuth }) => {
           ===================================================================== */}
       <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 md:py-28 text-center">
         <ScrollRevealSection>
-          <div className="relative mx-auto max-w-3xl overflow-hidden rounded-3xl border border-[#ddd8d0] bg-white p-8 sm:p-14 shadow-xl">
+          <div className="relative mx-auto max-w-3xl overflow-hidden rounded-3xl border border-[#ddd8d0] bg-white dark:border-white/10 dark:bg-[#151b23] p-8 sm:p-14 shadow-xl">
             {/* Ambient subtle glow ring */}
             <div
-              className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 h-48 w-96 rounded-full bg-[#176b87]/10 blur-3xl"
+              className="pointer-events-none absolute -top-24 left-1/2 -translate-x-1/2 h-48 w-96 rounded-full bg-[#176b87]/10 dark:bg-cyan-500/10 blur-3xl"
               aria-hidden="true"
             />
 
-            <span className="inline-flex items-center gap-2 rounded-full border border-[#b8d9d4] bg-[#e6f2ef] px-3.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#176b87]">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[#b8d9d4] bg-[#e6f2ef] dark:border-cyan-800/40 dark:bg-cyan-950/40 dark:text-cyan-300 px-3.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#176b87]">
               <span className="beacon-dot h-1.5 w-1.5 rounded-full bg-[#26968a]"></span>
               Instant Deployment
             </span>
 
-            <h2 className="mt-5 font-['Space_Grotesk'] text-3xl font-bold tracking-tight text-[#1f2933] sm:text-4xl">
+            <h2 className="mt-5 font-['Space_Grotesk'] text-3xl font-bold tracking-tight text-[#1f2933] dark:text-white sm:text-4xl">
               Take custody of your passwords today.
             </h2>
-            <p className="mt-4 max-w-xl mx-auto text-base text-[#6f6a63]">
+            <p className="mt-4 max-w-xl mx-auto text-base text-[#6f6a63] dark:text-slate-300">
               Create a sovereign vault in seconds. Zero analytics trackers, zero third-party telemetry, pure cryptographic protection.
             </p>
 
@@ -936,7 +714,7 @@ const LandingPage = ({ onOpenAuth }) => {
               <button
                 type="button"
                 onClick={() => onOpenAuth("login")}
-                className="tactile-btn rounded-xl border border-[#d5d0c8] bg-[#faf9f7] px-7 py-3.5 text-sm font-semibold text-[#1f2933] shadow-xs transition-all hover:bg-[#f0ede6]"
+                className="tactile-btn rounded-xl border border-[#d5d0c8] bg-[#faf9f7] dark:border-slate-700 dark:bg-[#1c2430] dark:text-white dark:hover:bg-[#253040] px-7 py-3.5 text-sm font-semibold text-[#1f2933] shadow-xs transition-all hover:bg-[#f0ede6]"
               >
                 Sign in to Existing Vault
               </button>

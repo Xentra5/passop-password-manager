@@ -289,20 +289,35 @@ export default function CryptographicNetworkGlobe({ className = "", style = {} }
       const cx = W / 2, cy = H / 2;
       ctx.clearRect(0, 0, W, H);
 
+      const isDark = document.documentElement.classList.contains("dark");
+
       // ── Outer atmosphere aura ─────────────────────────────────────────────
       const aura = ctx.createRadialGradient(cx, cy, R * 0.88, cx, cy, R * 1.28);
-      aura.addColorStop(0,   "rgba(23,107,135,0.16)");
-      aura.addColorStop(0.45,"rgba(56,150,138,0.07)");
-      aura.addColorStop(1,   "rgba(244,241,236,0)");
+      if (isDark) {
+        aura.addColorStop(0,   "rgba(38,212,191,0.24)");
+        aura.addColorStop(0.45,"rgba(14,165,233,0.10)");
+        aura.addColorStop(1,   "rgba(12,16,23,0)");
+      } else {
+        aura.addColorStop(0,   "rgba(23,107,135,0.16)");
+        aura.addColorStop(0.45,"rgba(56,150,138,0.07)");
+        aura.addColorStop(1,   "rgba(244,241,236,0)");
+      }
       ctx.beginPath(); ctx.arc(cx, cy, R * 1.28, 0, Math.PI * 2);
       ctx.fillStyle = aura; ctx.fill();
 
       // ── Globe base fill ───────────────────────────────────────────────────
       const baseGrd = ctx.createRadialGradient(cx - R*0.25, cy - R*0.20, R*0.05, cx, cy, R);
-      baseGrd.addColorStop(0,    "rgba(230,247,250,1)");
-      baseGrd.addColorStop(0.38, "rgba(210,238,244,1)");
-      baseGrd.addColorStop(0.72, "rgba(188,226,236,1)");
-      baseGrd.addColorStop(1,    "rgba(160,210,224,1)");
+      if (isDark) {
+        baseGrd.addColorStop(0,    "rgba(24,42,60,1)");
+        baseGrd.addColorStop(0.38, "rgba(16,28,42,1)");
+        baseGrd.addColorStop(0.72, "rgba(11,20,32,1)");
+        baseGrd.addColorStop(1,    "rgba(7,14,24,1)");
+      } else {
+        baseGrd.addColorStop(0,    "rgba(230,247,250,1)");
+        baseGrd.addColorStop(0.38, "rgba(210,238,244,1)");
+        baseGrd.addColorStop(0.72, "rgba(188,226,236,1)");
+        baseGrd.addColorStop(1,    "rgba(160,210,224,1)");
+      }
       ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
       ctx.fillStyle = baseGrd; ctx.fill();
 
@@ -317,7 +332,9 @@ export default function CryptographicNetworkGlobe({ className = "", style = {} }
         const f = p.depth * p.depth;
         ctx.beginPath();
         ctx.arc(p.sx, p.sy, 1.0 * f, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(12,90,118,${0.32 * f})`;
+        ctx.fillStyle = isDark
+          ? `rgba(56,189,248,${0.55 * f})`
+          : `rgba(12,90,118,${0.32 * f})`;
         ctx.fill();
       }
 
@@ -332,7 +349,7 @@ export default function CryptographicNetworkGlobe({ className = "", style = {} }
           if (!started) { ctx.moveTo(p.sx, p.sy); started = true; }
           else ctx.lineTo(p.sx, p.sy);
         }
-        ctx.strokeStyle = "rgba(8,72,100,0.16)";
+        ctx.strokeStyle = isDark ? "rgba(38,212,191,0.20)" : "rgba(8,72,100,0.16)";
         ctx.lineWidth = 0.6;
         ctx.stroke();
       }
@@ -341,15 +358,15 @@ export default function CryptographicNetworkGlobe({ className = "", style = {} }
 
       // ── Specular highlight (top-left catch light) ─────────────────────────
       const rim = ctx.createRadialGradient(cx + R*0.36, cy - R*0.30, R*0.15, cx, cy, R);
-      rim.addColorStop(0,   "rgba(255,255,255,0.60)");
-      rim.addColorStop(0.35,"rgba(255,255,255,0.06)");
+      rim.addColorStop(0,   isDark ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.60)");
+      rim.addColorStop(0.35,isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.06)");
       rim.addColorStop(1,   "rgba(0,0,0,0)");
       ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
       ctx.fillStyle = rim; ctx.fill();
 
       // Globe border
       ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
-      ctx.strokeStyle = "rgba(15,95,125,0.25)";
+      ctx.strokeStyle = isDark ? "rgba(56,189,248,0.35)" : "rgba(15,95,125,0.25)";
       ctx.lineWidth = 1.5;
       ctx.stroke();
 

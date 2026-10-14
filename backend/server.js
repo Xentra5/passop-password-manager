@@ -12,7 +12,15 @@ dotenv.config();
 const MONGO_URL = process.env.MONGO_URL;
 const DB_NAME = process.env.DB_NAME || 'passOP';
 const PORT = Number(process.env.PORT || 3000);
-const FRONTEND_ORIGIN = process.env.CORS_ORIGIN || 'http://localhost:5173';
+const FRONTEND_ORIGINS = new Set(
+  (process.env.CORS_ORIGIN || 'http://localhost:5173')
+    .split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+);
+if (FRONTEND_ORIGINS.has('http://localhost:5173')) {
+  FRONTEND_ORIGINS.add('http://127.0.0.1:5173');
+}
 const JWT_SECRET = process.env.JWT_SECRET;
 
 if (!MONGO_URL || !JWT_SECRET) {
@@ -26,7 +34,13 @@ app.use(express.json());
 app.use(cookieParser());
 app.use(
   cors({
-    origin: FRONTEND_ORIGIN,
+    origin: (origin, callback) => {
+      if (!origin || FRONTEND_ORIGINS.has(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error('Origin is not allowed by CORS policy'));
+    },
     credentials: true, // Required for sending/receiving HttpOnly cookies across origins
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-XSRF-Token'],

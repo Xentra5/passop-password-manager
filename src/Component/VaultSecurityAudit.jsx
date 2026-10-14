@@ -32,7 +32,13 @@ export default function VaultSecurityAudit({
     totalBreachOccurrences = 0,
   } = auditData || {};
 
-  const fortifiedCount = Math.max(0, total - breachedCount - reusedCount - weakCount);
+  const affectedIds = new Set([
+    ...(auditData?.breachedIds || []),
+    ...(auditData?.reusedIds || []),
+    ...(auditData?.weakIds || []),
+  ]);
+  const fortifiedCount = Math.max(0, total - affectedIds.size);
+  const hasAccounts = total > 0;
 
   // SVG circular gauge calculation
   const radius = 38;
@@ -40,7 +46,7 @@ export default function VaultSecurityAudit({
   const strokeDashoffset = circumference - (score / 100) * circumference;
 
   return (
-    <section className="mb-8 overflow-hidden rounded-xl border border-[#ddd8d0] bg-white p-5 shadow-[0_4px_20px_rgba(31,41,51,0.04)] sm:p-6">
+    <section className="vault-health mb-8 overflow-hidden rounded-xl border border-[#ddd8d0] bg-white p-5 shadow-[0_4px_20px_rgba(31,41,51,0.04)] sm:p-6">
       {/* Header & Quick Summary */}
       <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
         
@@ -53,27 +59,28 @@ export default function VaultSecurityAudit({
                 cx="48"
                 cy="48"
                 r={radius}
-                stroke="#ebe7e1"
+                stroke="currentColor"
                 strokeWidth="7"
                 fill="transparent"
+                className="text-[#e5e9ec] dark:text-[#29313a]"
               />
               {/* Animated Progress circle */}
               <circle
                 cx="48"
                 cy="48"
                 r={radius}
-                stroke="currentColor"
+                stroke={hasAccounts ? 'currentColor' : 'transparent'}
                 strokeWidth="7"
                 strokeDasharray={circumference}
                 strokeDashoffset={strokeDashoffset}
                 strokeLinecap="round"
                 fill="transparent"
-                className={`transition-all duration-700 ease-out ${color}`}
+                className={`transition-all duration-700 ease-out ${hasAccounts ? color : ''}`}
               />
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="font-['Space_Grotesk'] text-2xl font-bold tracking-tight text-[#1f2933]">
-                {score}%
+              <span className="font-sans text-2xl font-semibold tracking-[-0.05em] text-[#1f2933] dark:text-slate-100">
+                {hasAccounts ? `${score}%` : '—'}
               </span>
               <span className="text-[10px] font-semibold uppercase tracking-wider text-[#7b746b]">
                 Score
@@ -83,15 +90,15 @@ export default function VaultSecurityAudit({
 
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-[#f4f1ec] px-3 py-1 text-xs font-semibold text-[#1f2933]">
-              <span className={`h-2 w-2 rounded-full ${bgColor} animate-pulse`}></span>
-              <span>Vault Status: {grade}</span>
+              <span className={`h-1.5 w-1.5 rounded-full ${hasAccounts ? bgColor : 'bg-slate-400'}`}></span>
+              <span>{hasAccounts ? grade : 'No assessment yet'}</span>
             </div>
-            <h3 className="mt-1.5 font-['Space_Grotesk'] text-lg font-bold tracking-tight text-[#1f2933]">
-              Cryptographic Vault Health
+            <h3 className="mt-1.5 font-sans text-lg font-semibold tracking-[-0.035em] text-[#1f2933] dark:text-slate-100">
+              Security overview
             </h3>
             <p className="text-xs text-[#7b746b]">
               {total === 0
-                ? "No passwords saved yet. Add accounts to evaluate security."
+                ? "Your saved passwords will be checked for reuse, weak choices, and known breaches."
                 : breachedCount > 0
                 ? `Alert: ${breachedCount} ${breachedCount === 1 ? 'account has' : 'accounts have'} appeared in known data breaches!`
                 : reusedCount > 0
@@ -146,7 +153,7 @@ export default function VaultSecurityAudit({
         <button
           type="button"
           onClick={() => onSelectFilter(activeFilter === 'breached' ? 'all' : 'breached')}
-          className={`flex items-center justify-between rounded-lg border p-3 text-left transition-all ${
+          className={`vault-health-metric flex items-center justify-between rounded-lg border p-3 text-left transition-all ${
             activeFilter === 'breached'
               ? 'border-rose-400 bg-rose-50 ring-2 ring-rose-200'
               : 'border-[#ddd8d0] bg-[#faf8f5] hover:border-rose-300'
@@ -168,7 +175,7 @@ export default function VaultSecurityAudit({
         <button
           type="button"
           onClick={() => onSelectFilter(activeFilter === 'reused' ? 'all' : 'reused')}
-          className={`flex items-center justify-between rounded-lg border p-3 text-left transition-all ${
+          className={`vault-health-metric flex items-center justify-between rounded-lg border p-3 text-left transition-all ${
             activeFilter === 'reused'
               ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-200'
               : 'border-[#ddd8d0] bg-[#faf8f5] hover:border-amber-300'
@@ -190,7 +197,7 @@ export default function VaultSecurityAudit({
         <button
           type="button"
           onClick={() => onSelectFilter(activeFilter === 'weak' ? 'all' : 'weak')}
-          className={`flex items-center justify-between rounded-lg border p-3 text-left transition-all ${
+          className={`vault-health-metric flex items-center justify-between rounded-lg border p-3 text-left transition-all ${
             activeFilter === 'weak'
               ? 'border-orange-400 bg-orange-50 ring-2 ring-orange-200'
               : 'border-[#ddd8d0] bg-[#faf8f5] hover:border-orange-300'
@@ -211,9 +218,9 @@ export default function VaultSecurityAudit({
         {/* Fortified Passwords */}
         <button
           type="button"
-          onClick={() => onSelectFilter('all')}
-          className={`flex items-center justify-between rounded-lg border p-3 text-left transition-all ${
-            activeFilter === 'all'
+          onClick={() => onSelectFilter(activeFilter === 'fortified' ? 'all' : 'fortified')}
+          className={`vault-health-metric flex items-center justify-between rounded-lg border p-3 text-left transition-all ${
+            activeFilter === 'fortified'
               ? 'border-emerald-400 bg-emerald-50 ring-2 ring-emerald-200'
               : 'border-[#ddd8d0] bg-[#faf8f5] hover:border-emerald-300'
           }`}

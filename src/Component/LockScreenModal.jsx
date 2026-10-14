@@ -22,6 +22,7 @@ import {
 export default function LockScreenModal({
   isOpen,
   user,
+  hasVaultKey = false,
   onUnlock,
   onLogout,
   onUnlockWithMasterPassword,
@@ -40,6 +41,7 @@ export default function LockScreenModal({
   const [remainingAttempts, setRemainingAttempts] = useState(5);
   const lockoutTimerRef = useRef(null);
   const inputRef = useRef(null);
+  const pinVerificationInFlightRef = useRef(false);
 
   const userEmail = user?.email || 'user';
 
@@ -60,13 +62,15 @@ export default function LockScreenModal({
       setPin('');
       setConfirmPin('');
       setMasterPassword('');
-      setUsePasswordMode(false);
+      // A refresh clears the in-memory encryption key by design. PIN unlock
+      // is only valid for an auto-lock within the current session.
+      setUsePasswordMode(!hasVaultKey);
       setLockoutSeconds(0);
       setRemainingAttempts(5);
       setTimeoutSetting(getAutoLockTimeoutMinutes());
       setTimeout(() => inputRef.current?.focus(), 150);
     }
-  }, [isOpen, userEmail]);
+  }, [hasVaultKey, isOpen, userEmail]);
 
   if (!isOpen) return null;
 
@@ -79,33 +83,38 @@ export default function LockScreenModal({
   // BUG #4 + #12 FIX: Shared PIN verification handler — reads lockout from pinAuth
   const handlePinVerification = async (enteredPin) => {
     // Don't allow attempts during lockout
-    if (lockoutSeconds > 0) return;
+    if (lockoutSeconds > 0 || enteredPin.length !== 4 || pinVerificationInFlightRef.current) return;
+    pinVerificationInFlightRef.current = true;
 
-    const result = await verifyUserPin(enteredPin, userEmail);
+    try {
+      const result = await verifyUserPin(enteredPin, userEmail);
 
-    if (result.valid) {
-      setLockoutSeconds(0);
-      toast.success('Vault unlocked!', {
-        theme: 'dark',
-        transition: Bounce,
-        autoClose: 1500,
-      });
-      onUnlock();
-    } else if (result.locked) {
-      setLockoutSeconds(result.secondsLeft || 30);
-      setRemainingAttempts(0);
-      toast.error(
-        `Too many wrong attempts. Try again in ${result.secondsLeft || 30} seconds.`,
-        { theme: 'dark', autoClose: 4000 }
-      );
-      triggerErrorShake();
-    } else {
-      setRemainingAttempts(result.remainingAttempts ?? 5);
-      toast.error(
-        `Incorrect PIN. ${result.remainingAttempts} attempt${result.remainingAttempts !== 1 ? 's' : ''} remaining.`,
-        { theme: 'dark', autoClose: 1800 }
-      );
-      triggerErrorShake();
+      if (result.valid) {
+        setLockoutSeconds(0);
+        toast.success('Vault unlocked!', {
+          theme: 'dark',
+          transition: Bounce,
+          autoClose: 1500,
+        });
+        onUnlock();
+      } else if (result.locked) {
+        setLockoutSeconds(result.secondsLeft || 30);
+        setRemainingAttempts(0);
+        toast.error(
+          `Too many wrong attempts. Try again in ${result.secondsLeft || 30} seconds.`,
+          { theme: 'dark', autoClose: 4000 }
+        );
+        triggerErrorShake();
+      } else {
+        setRemainingAttempts(result.remainingAttempts ?? 5);
+        toast.error(
+          `Incorrect PIN. ${result.remainingAttempts} attempt${result.remainingAttempts !== 1 ? 's' : ''} remaining.`,
+          { theme: 'dark', autoClose: 1800 }
+        );
+        triggerErrorShake();
+      }
+    } finally {
+      pinVerificationInFlightRef.current = false;
     }
   };
 
@@ -186,6 +195,15 @@ export default function LockScreenModal({
         maxLength={4}
         value={pin}
         disabled={isLockedOut}
+        enterKeyHint="done"
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            if (!isSettingUpPin) {
+              void handlePinVerification(pin);
+            }
+          }
+        }}
         onChange={(e) => {
           if (isLockedOut) return;
           const val = e.target.value.replace(/\D/g, '');
@@ -262,7 +280,7 @@ export default function LockScreenModal({
             </p>
 
             {/* Numeric Keypad */}
-            <div className="mt-5 grid grid-cols-3 gap-2.5 w-full max-w-[240px]">
+            <div className="mt-5 grid grid-cols-3 gap-2.5 w-full max-w-60">
               {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
                 <button
                   key={num}
@@ -364,7 +382,7 @@ export default function LockScreenModal({
                 type="submit"
                 className="w-full rounded-md bg-emerald-600 py-2 text-xs font-bold text-white shadow transition-all hover:bg-emerald-500 active:scale-95"
               >
-                Save PIN &amp; Unlock
+                Save PIN & Unlock
               </button>
             </div>
           </form>
@@ -375,8 +393,14 @@ export default function LockScreenModal({
           <form onSubmit={handleMasterPasswordSubmit} className="mt-5 space-y-4">
             <div>
               <label className="text-xs font-semibold text-slate-300">Enter Master Password</label>
+              {!hasVaultKey && (
+                <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+                  Your vault key is cleared after a refresh. Enter your master password to restore the dashboard securely.
+                </p>
+              )}
               <input
                 type="password"
+                enterKeyHint="done"
                 value={masterPassword}
                 onChange={(e) => setMasterPassword(e.target.value)}
                 placeholder="Master password"
@@ -393,7 +417,7 @@ export default function LockScreenModal({
               Unlock Vault
             </button>
 
-            {hasExistingPin && (
+            {hasExistingPin && hasVaultKey && (
               <button
                 type="button"
                 onClick={() => setUsePasswordMode(false)}

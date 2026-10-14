@@ -151,13 +151,11 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
   // Whenever isRegistering or form changes, React re-renders this entire section!
   // ==========================================================================
   return (
-    <main className="auth-composition flex min-h-[calc(100vh-4rem)] items-center justify-center px-4 py-12">
-      {/* Toast popup notification container */}
-      <ToastContainer position="top-right" autoClose={2000} theme="dark" />
+    <div className="auth-composition flex items-center justify-center py-2">
       <div className="auth-signal" aria-hidden="true"></div>
 
       {/* Main Auth Card */}
-      <section className="auth-panel relative z-10 w-full max-w-md rounded-lg border border-[#ddd8d0] bg-white p-6 shadow-[0_10px_35px_rgba(56,45,32,0.06)] sm:p-8">
+      <section className="auth-panel relative z-10 w-full max-w-md rounded-2xl border border-[#ddd8d0] bg-white p-6 shadow-2xl sm:p-8 dark:border-white/10 dark:bg-[#151b23]">
         
         {/* Close Button ('X' icon) */}
         {onClose && (
@@ -165,7 +163,7 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
             type="button"
             onClick={onClose}
             aria-label="Close modal"
-            className="absolute right-4 top-4 rounded-md p-1.5 text-[#857e75] hover:bg-[#f0ede6] hover:text-[#1f2933]"
+            className="absolute right-4 top-4 rounded-md p-1.5 text-[#857e75] hover:bg-[#f0ede6] hover:text-[#1f2933] dark:text-slate-400 dark:hover:bg-[#1f2937] dark:hover:text-white transition"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -182,12 +180,12 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
           {/* DYNAMIC TITLE:
               If isRegistering is true  -> "Create your vault"
               If isRegistering is false -> "Open your vault" */}
-          <h1 className="mt-2 font-['Space_Grotesk'] text-2xl font-bold text-[#1f2933]">
+          <h1 className="mt-2 font-['Space_Grotesk'] text-2xl font-bold text-[#1f2933] dark:text-white">
             {isRegistering ? "Create your vault" : "Open your vault"}
           </h1>
 
           {/* DYNAMIC SUBTITLE: changes explanation text based on mode */}
-          <p className="mt-2 text-sm leading-relaxed text-[#6f6a63]">
+          <p className="mt-2 text-sm leading-relaxed text-[#6f6a63] dark:text-slate-300">
             {isRegistering
               ? "Create an account to keep your credentials private."
               : "Sign in to access your saved credentials."}
@@ -199,7 +197,7 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
           
           {/* FIELD 1: EMAIL INPUT (Used by BOTH Login and Sign Up) */}
           <div>
-            <label htmlFor="auth-email" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6f6a63]">
+            <label htmlFor="auth-email" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6f6a63] dark:text-slate-300">
               Email
             </label>
             <input
@@ -210,62 +208,55 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
               value={form.email}
               onChange={handleChange}
               required
-              className="w-full rounded-md border border-[#d5d0c8] bg-[#faf9f7] px-3 py-2.5 text-sm text-[#1f2933] outline-none transition focus:border-[#176b87] focus:ring-1 focus:ring-[#176b87]/30"
+              className="w-full rounded-md border border-[#d5d0c8] bg-[#faf9f7] dark:border-slate-700 dark:bg-[#0d1117] dark:text-white px-3 py-2.5 text-sm text-[#1f2933] outline-none transition focus:border-[#176b87] focus:ring-1 focus:ring-[#176b87]/30"
             />
           </div>
 
           {/* FIELD 2: PASSWORD INPUT (Used by BOTH Login and Sign Up) */}
           <div>
-            <label htmlFor="auth-password" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6f6a63]">
+            <label htmlFor="auth-password" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6f6a63] dark:text-slate-300">
               Password
             </label>
             <input
               id="auth-password"
               name="password"
               type="password"
+              enterKeyHint="done"
               autoComplete={isRegistering ? "new-password" : "current-password"}
               minLength={isRegistering ? 12 : undefined}
               value={form.password}
               onChange={handleChange}
               required
-              className="w-full rounded-md border border-[#d5d0c8] bg-[#faf9f7] px-3 py-2.5 text-sm text-[#1f2933] outline-none transition focus:border-[#176b87] focus:ring-1 focus:ring-[#176b87]/30"
+              className="w-full rounded-md border border-[#d5d0c8] bg-[#faf9f7] dark:border-slate-700 dark:bg-[#0d1117] dark:text-white px-3 py-2.5 text-sm text-[#1f2933] outline-none transition focus:border-[#176b87] focus:ring-1 focus:ring-[#176b87]/30"
             />
             {/* Helper text shown ONLY on register */}
-            {isRegistering && <p className="mt-1.5 text-xs text-[#7b746b]">Use at least 12 characters (master password is your encryption key).</p>}
+            {isRegistering && <p className="mt-1.5 text-xs text-[#7b746b] dark:text-slate-400">Use at least 12 characters (master password is your encryption key).</p>}
 
           </div>
 
-          {/* 
-            FIELD 3: CONFIRM PASSWORD INPUT
-            Conditional rendering using && (Logical AND short-circuit):
-            - When isRegistering is TRUE  -> Renders this entire confirm password box.
-            - When isRegistering is FALSE -> Hides/removes this box completely (Login mode).
-          */}
+          {/* FIELD 3: CONFIRM PASSWORD INPUT */}
           {isRegistering && (
             <div>
-              <label htmlFor="auth-confirm-password" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6f6a63]">
+              <label htmlFor="auth-confirm-password" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6f6a63] dark:text-slate-300">
                 Confirm Password
               </label>
               <input
                 id="auth-confirm-password"
                 name="confirmPassword"
                 type="password"
+                enterKeyHint="done"
                 autoComplete="new-password"
                 minLength={8}
                 value={form.confirmPassword}
                 onChange={handleChange}
                 required={isRegistering}
                 placeholder="Re-enter your password"
-                /* Dynamic border color:
-                   - Red outline if passwords do NOT match
-                   - Green outline if passwords DO match
-                   - Default gray outline if empty */
-                className={`w-full rounded-md border bg-[#faf9f7] px-3 py-2.5 text-sm text-[#1f2933] outline-none transition focus:ring-1 ${
+                className={`w-full rounded-md border bg-[#faf9f7] dark:bg-[#0d1117] dark:text-white px-3 py-2.5 text-sm text-[#1f2933] outline-none transition focus:ring-1 ${
                   form.confirmPassword && form.password !== form.confirmPassword
                     ? "border-red-400 focus:border-red-500 focus:ring-red-200"
                     : form.confirmPassword && form.password === form.confirmPassword
                     ? "border-emerald-500 focus:border-emerald-600 focus:ring-emerald-200"
-                    : "border-[#d5d0c8] focus:border-[#176b87] focus:ring-[#176b87]/30"
+                    : "border-[#d5d0c8] dark:border-slate-700 focus:border-[#176b87] focus:ring-[#176b87]/30"
                 }`}
               />
 
@@ -276,17 +267,12 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
 
               {/* Real-time match feedback in green */}
               {form.confirmPassword && form.password === form.confirmPassword && (
-                <p className="mt-1.5 text-xs text-emerald-600 font-medium">✓ Passwords match</p>
+                <p className="mt-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium">✓ Passwords match</p>
               )}
             </div>
           )}
 
-          {/* SUBMIT BUTTON:
-              - disabled={isSubmitting}: prevents double-clicks while loading
-              - Text changes dynamically:
-                * "Please wait..." (when loading)
-                * "Create account" (when isRegistering is true)
-                * "Sign in"        (when isRegistering is false) */}
+          {/* SUBMIT BUTTON */}
           <button
             type="submit"
             disabled={isSubmitting}
@@ -296,24 +282,19 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
           </button>
         </form>
 
-        {/* 
-          BOTTOM TOGGLE BUTTON:
-          Flips between Sign In and Sign Up modes.
-          - previous => !previous inverts the boolean: (false becomes true, true becomes false)
-          - Also clears out confirmPassword so no leftover text remains.
-        */}
+        {/* BOTTOM TOGGLE BUTTON */}
         <button
           type="button"
           onClick={() => {
-            setIsRegistering(previous => !previous) // FLIP the switch!
+            setIsRegistering(previous => !previous)
             setForm(previous => ({ ...previous, confirmPassword: "" }))
           }}
-          className="mt-5 w-full text-xs font-semibold text-[#176b87] hover:underline"
+          className="mt-5 w-full text-xs font-semibold text-[#176b87] dark:text-cyan-400 hover:underline"
         >
           {isRegistering ? "Already have an account? Sign in" : "New here? Create an account"}
         </button>
       </section>
-    </main>
+    </div>
   )
 }
 

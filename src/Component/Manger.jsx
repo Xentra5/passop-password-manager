@@ -38,7 +38,6 @@ const Manager = ({
   token,
   vaultKey,
   onUnauthorized,
-  onPasswordRevealChange,
   onOpenSend,
   theme = "light",
 }) => {
@@ -65,6 +64,7 @@ const Manager = ({
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false)
   const [isMigrationOpen, setIsMigrationOpen] = useState(false)
   const [selectedHistoryAccount, setSelectedHistoryAccount] = useState(null)
+  const [credentialFormOpen, setCredentialFormOpen] = useState(false)
 
   const searchInputRef = useRef(null)
   const siteInputId = useId()
@@ -343,6 +343,7 @@ const Manager = ({
           autoClose: 2000,
         })
         setForm({ site: "", username: "", password: "", favorite: false, tag: "Personal", customFields: [] })
+        setCredentialFormOpen(false)
       } catch (error) {
         console.error("Error saving password:", error)
         toast.error("Could not sync with backend", { theme: "dark" })
@@ -365,6 +366,7 @@ const Manager = ({
         id: account.id,
       });
       setShowPassword(true);
+      setCredentialFormOpen(true)
       window.scrollTo({ top: 0, behavior: 'smooth' });
       toast.info('Restored previous password into form! Click "Update account" to save.', {
         theme: 'dark',
@@ -446,6 +448,7 @@ const Manager = ({
           : [],
       })
       window.scrollTo({ top: 0, behavior: 'smooth' })
+      setCredentialFormOpen(true)
     }
   }
 
@@ -465,7 +468,7 @@ const Manager = ({
       prev.map(item => (item.id === id ? { ...item, favorite: newFavStatus } : item))
     );
 
-    toast.success(newFavStatus ? `Pinned ${account.site} to Favorites ⭐` : `Removed ${account.site} from Favorites`, {
+    toast.success(newFavStatus ? `Pinned ${account.site} to Favorites` : `Removed ${account.site} from Favorites`, {
       theme: "dark",
       autoClose: 1800,
     });
@@ -592,6 +595,11 @@ const Manager = ({
       if (auditFilter === 'breached' && !auditData.breachedIds.has(item.id)) return false;
       if (auditFilter === 'reused' && !auditData.reusedIds.has(item.id)) return false;
       if (auditFilter === 'weak' && !auditData.weakIds.has(item.id)) return false;
+      if (auditFilter === 'fortified' && (
+        auditData.breachedIds.has(item.id) ||
+        auditData.reusedIds.has(item.id) ||
+        auditData.weakIds.has(item.id)
+      )) return false;
 
       // 2. Tag / Favorites filter
       if (selectedTag === 'Favorites') {
@@ -636,34 +644,32 @@ const Manager = ({
   const strength = getPasswordStrength(form.password)
   const isAnyRevealed = Boolean(showPassword || Object.values(revealedIds).some(Boolean))
 
-  useEffect(() => {
-    if (onPasswordRevealChange) {
-      onPasswordRevealChange(isAnyRevealed)
-    }
-  }, [isAnyRevealed, onPasswordRevealChange])
-
   return (
-    <div className="relative min-h-screen w-full bg-[#f4f1ec] pb-20 pt-10 text-[#1f2933] selection:bg-[#cce7ed] selection:text-[#14566d]">
+    <div className="vault-workspace reference-vault relative min-h-screen w-full pb-20 pt-10 selection:bg-[#cce7ed] selection:text-[#14566d]">
       <ToastContainer position="top-right" autoClose={2000} theme="dark" />
 
       <main className="page-enter mx-auto max-w-6xl px-4 sm:px-6">
         {/* Header / Hero Section */}
-        <section className="hero-composition mb-8 border-b border-[#ddd8d0] pb-8">
+        <section className="hero-composition mb-8 flex flex-col justify-between gap-7 border-b border-[#ddd8d0] pb-8 sm:flex-row sm:items-end dark:border-[#2a2d33]">
           <div className="hero-copy">
-          <div className="hero-eyebrow mb-3 inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#176b87]">
-            <span className="h-2 w-2 rounded-full bg-[#26968a]"></span>
-            Personal password manager
+          <div className="hero-eyebrow mb-3 inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#64748b] dark:text-slate-400">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+            Vault workspace
           </div>
-          <h1 className="hero-title font-['Space_Grotesk'] text-3xl font-bold tracking-tight text-[#1f2933] sm:text-5xl">
-            Keep your digital life in order
+          <h1 className="hero-title font-['Space_Grotesk'] text-3xl font-semibold tracking-tight text-[#111827] sm:text-5xl dark:text-white">
+            Your saved accounts
           </h1>
-          <p className="hero-support mt-3 max-w-xl text-sm leading-relaxed text-[#6f6a63] sm:text-base">
-            Store your sign-ins in one calm, private place. Add a new account or find an existing one below.
+          <p className="hero-support mt-3 max-w-xl text-sm leading-relaxed text-[#64748b] sm:text-base dark:text-slate-400">
+            Personal credentials and login records kept safely on this device.
           </p>
           </div>
+          <div className="flex items-center gap-3">
+          <button type="button" className="reference-add" onClick={() => { setForm({ site: "", username: "", password: "", favorite: false, tag: "Personal", customFields: [] }); setCredentialFormOpen(true) }}>Add credential <span>＋</span></button>
           <div
-            className={`hero-lock group cursor-pointer transition-all duration-300 ${
-              isAnyRevealed ? "unlocked" : "locked"
+            className={`vault-security-status group inline-flex w-fit cursor-pointer items-center gap-3 rounded-lg border px-3.5 py-2.5 transition-all duration-200 ${
+              isAnyRevealed
+                ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800/70 dark:bg-emerald-950/30 dark:text-emerald-400"
+                : "border-[#dbe2e8] bg-white text-[#475569] hover:border-[#94a3b8] dark:border-[#303640] dark:bg-[#17191d] dark:text-slate-300"
             }`}
             onClick={() => setShowPassword(prev => !prev)}
             title={
@@ -681,98 +687,20 @@ const Manager = ({
             }}
             aria-label={isAnyRevealed ? "Lock vault" : "Unlock vault"}
           >
-            <div className={`hero-lock-ring hero-lock-ring-outer ${isAnyRevealed ? "ring-unlocked-outer" : ""}`}></div>
-            <div className={`hero-lock-ring hero-lock-ring-inner ${isAnyRevealed ? "ring-unlocked-inner" : ""}`}></div>
-            
-            <div className="relative z-10 flex flex-col items-center">
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                className={`transition-all duration-300 drop-shadow-md ${
-                  isAnyRevealed
-                    ? "text-emerald-600 scale-105"
-                    : "text-[#176b87]"
-                }`}
-              >
-                {isAnyRevealed ? (
-                  /* Open Padlock with shackle unhooked and swung open */
-                  <g className="transition-all duration-300">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M7 11V7a5 5 0 019.9-1.2"
-                      strokeWidth="2.2"
-                      className="stroke-emerald-600 animate-[pulse_2s_infinite]"
-                    />
-                    <rect
-                      x="4.5"
-                      y="11"
-                      width="15"
-                      height="10"
-                      rx="2.5"
-                      fill="currentColor"
-                      fillOpacity="0.12"
-                      className="stroke-emerald-600"
-                      strokeWidth="1.8"
-                    />
-                    <circle cx="12" cy="15.5" r="1.2" fill="currentColor" className="text-emerald-500" />
-                    <path strokeLinecap="round" d="M12 16.7v2" strokeWidth="2" className="stroke-emerald-600" />
-                  </g>
-                ) : (
-                  /* Closed Padlock securely locked */
-                  <g className="transition-all duration-300">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M7.5 11V7a4.5 4.5 0 019 0v4"
-                      strokeWidth="2"
-                    />
-                    <rect
-                      x="4.5"
-                      y="11"
-                      width="15"
-                      height="10"
-                      rx="2.5"
-                      fill="currentColor"
-                      fillOpacity="0.08"
-                      strokeWidth="1.8"
-                    />
-                    <circle cx="12" cy="15.5" r="1.2" fill="currentColor" />
-                    <path strokeLinecap="round" d="M12 16.7v2" strokeWidth="2" />
-                  </g>
-                )}
-              </svg>
-
-              <span
-                className={`mt-2 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider transition-all duration-300 ${
-                  isAnyRevealed
-                    ? "border border-emerald-400 bg-emerald-50 text-emerald-800 shadow-sm"
-                    : "border border-[#176b87]/30 bg-[#e6f2ef] text-[#176b87]"
-                }`}
-              >
-                {isAnyRevealed ? (
-                  <>
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping"></span>
-                    <span>Unlocked</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#176b87]"></span>
-                    <span>Secured</span>
-                  </>
-                )}
-              </span>
-            </div>
+            <span className={`h-2 w-2 rounded-full ${isAnyRevealed ? "bg-emerald-500" : "bg-slate-400"}`} />
+            <span className="text-left">
+              <span className="block text-[11px] font-semibold uppercase tracking-wider">Vault {isAnyRevealed ? "unlocked" : "secured"}</span>
+              <span className="mt-0.5 block text-[10px] opacity-70">{isAnyRevealed ? "Click to hide passwords" : "Click to reveal passwords"}</span>
+            </span>
+          </div>
           </div>
         </section>
 
         {/* Input Panel Card */}
-        <section className="vault-panel panel-reveal mb-12 rounded-lg border border-[#ddd8d0] bg-white p-6 shadow-[0_10px_35px_rgba(56,45,32,0.06)] sm:p-8">
+        {credentialFormOpen && <div className="credential-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) { setCredentialFormOpen(false); if (form.id) cancelEditing() } }}><section className="vault-panel credential-dialog panel-reveal rounded-xl border border-[#e2e8f0] bg-white p-6 shadow-[0_18px_50px_-34px_rgba(15,23,42,0.45)] sm:p-8 dark:border-[#2a2d33] dark:bg-[#17191d] dark:shadow-none">
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-[#ebe7e1] pb-4">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[#e6f2ef] text-[#176b65]">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[#f1f5f9] text-[#475569] dark:bg-[#22262d] dark:text-slate-300">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
@@ -783,6 +711,7 @@ const Manager = ({
             </div>
 
             <div className="flex items-center gap-2">
+              <button type="button" aria-label="Close credential form" onClick={() => { setCredentialFormOpen(false); if (form.id) cancelEditing() }} className="rounded-md border border-[#d5d0c8] px-2 py-1 text-xs">×</button>
               {/* Favorite Toggle Button in Form */}
               <button
                 type="button"
@@ -794,13 +723,13 @@ const Manager = ({
                 }`}
                 title={form.favorite ? "Favorited (Pinned to top)" : "Click to mark as favorite"}
               >
-                <span>{form.favorite ? "⭐ Favorited" : "☆ Add to Favorites"}</span>
+                <span>{form.favorite ? "★ Favorited" : "☆ Add to Favorites"}</span>
               </button>
 
               {form.id && (
                 <button
                   type="button"
-                  onClick={cancelEditing}
+                  onClick={() => { cancelEditing(); setCredentialFormOpen(false) }}
                   className="rounded-md border border-[#d5d0c8] bg-white px-3 py-1.5 text-xs font-medium text-[#6f6a63] transition-all hover:bg-[#f4f1ec] hover:text-[#1f2933]"
                 >
                   Cancel Editing
@@ -882,9 +811,6 @@ const Manager = ({
                           : "border border-[#d5d0c8] bg-white text-[#6f6a63] hover:border-[#176b87] hover:bg-[#f0f8fa] hover:text-[#176b87]"
                       }`}
                     >
-                      <span>
-                        {tagOption === 'Personal' ? '👤' : tagOption === 'Work' ? '💼' : tagOption === 'Finance' ? '💳' : tagOption === 'Development' ? '💻' : '🌐'}
-                      </span>
                       <span>{tagOption}</span>
                     </button>
                   );
@@ -958,6 +884,7 @@ const Manager = ({
                   <input
                     id={passwordInputId}
                     type={showPassword ? "text" : "password"}
+                    enterKeyHint="done"
                     name="password"
                     value={form.password}
                     onChange={handleChange}
@@ -1139,7 +1066,7 @@ const Manager = ({
                   title="Generate 16-character password immediately"
                   className="flex items-center gap-1.5 rounded-md border border-[#d5d0c8] bg-white px-3 py-2.5 text-xs font-medium text-[#4b5563] transition-all hover:bg-[#f4f1ec] active:scale-[0.98]"
                 >
-                  <span>⚡ Quick 16-char</span>
+                  <span>Generate 16 characters</span>
                 </button>
               </div>
 
@@ -1154,7 +1081,7 @@ const Manager = ({
               </button>
             </div>
           </form>
-        </section>
+        </section></div>}
 
         {/* Vault Security Audit & HaveIBeenPwned Breach Scanner */}
         <VaultSecurityAudit
@@ -1285,7 +1212,7 @@ const Manager = ({
                     : "border border-[#d5d0c8] bg-white text-amber-700 hover:border-amber-400 hover:bg-amber-50"
                 }`}
               >
-                <span>⭐ Favorites</span>
+                <span>★ Favorites</span>
                 <span className={`rounded-full px-1.5 py-0.2 text-[10px] ${
                   selectedTag === "Favorites" ? "bg-white/20 text-white" : "bg-amber-100 text-amber-800"
                 }`}>
@@ -1307,9 +1234,6 @@ const Manager = ({
                       : "border border-[#d5d0c8] bg-white text-[#6f6a63] hover:border-[#176b87] hover:bg-[#f0f8fa] hover:text-[#176b87]"
                   }`}
                 >
-                  <span>
-                    {tag === 'Personal' ? '👤' : tag === 'Work' ? '💼' : tag === 'Finance' ? '💳' : tag === 'Development' ? '💻' : '🌐'}
-                  </span>
                   <span>{tag}</span>
                   {tagCounts[tag] > 0 && (
                     <span className={`rounded-full px-1.5 py-0.2 text-[10px] ${
@@ -1325,15 +1249,10 @@ const Manager = ({
 
           {/* Credentials Display List / Table */}
           {passwordArray.length === 0 ? (
-            <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-[#d5d0c8] bg-white py-16 text-center">
-              <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-lg bg-[#e6f2ef] text-[#176b65]">
-                <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                </svg>
-              </div>
-              <h3 className="text-sm font-semibold text-[#36414b]">No accounts yet</h3>
+            <div className="accounts-empty rounded-lg border border-[#d5d0c8] bg-white px-5 py-10 text-center">
+              <h3 className="text-sm font-semibold text-[#36414b]">Your vault is empty</h3>
               <p className="mt-1 max-w-sm text-xs text-[#7b746b]">
-                Add your first account above and it will appear here.
+                Accounts you save will appear here.
               </p>
             </div>
           ) : filteredPasswords.length === 0 ? (
@@ -1390,7 +1309,7 @@ const Manager = ({
                                   }`}
                                   title={item.favorite ? "Favorited (Pinned to top). Click to unstar." : "Click to pin to Favorites ⭐"}
                                 >
-                                  <span className="text-sm leading-none">{item.favorite ? "⭐" : "☆"}</span>
+                                  <span className="text-sm leading-none">{item.favorite ? "★" : "☆"}</span>
                                 </button>
 
                                 <SiteLogo site={item.site} size="md" />

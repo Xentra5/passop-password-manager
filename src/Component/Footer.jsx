@@ -8,10 +8,10 @@ const Footer = ({ theme = "light" }) => {
         : "border-[#ddd8d0] bg-[#f4f1ec] text-[#7b746b]"
     }`}>
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-3 px-4 sm:flex-row sm:px-6">
-        <div className="flex items-center gap-2">
+        <div className="footer-brand flex items-center gap-2">
           <PassVaultLogo size="sm" showTagline={false} />
           <span className={`text-xs ${theme === "dark" ? "text-[#8b949e]" : "text-[#958e85]"}`}>
-            • Zero-knowledge personal password manager
+            Zero-knowledge password manager
           </span>
         </div>
 
