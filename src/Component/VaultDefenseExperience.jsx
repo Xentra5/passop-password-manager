@@ -8,32 +8,45 @@ function makeCardTexture() {
   canvas.height = 760 * textureScale;
   const ctx = canvas.getContext("2d");
   ctx.scale(textureScale, textureScale);
+  ctx.save();
+  ctx.beginPath();
+  ctx.roundRect(24, 24, 1152, 712, 34);
+  ctx.clip();
   const bg = ctx.createLinearGradient(120, 40, 1070, 720);
-  bg.addColorStop(0, "#ffffff");
-  bg.addColorStop(0.55, "#f8fafc");
-  bg.addColorStop(1, "#e5e7eb");
+  bg.addColorStop(0, "#fffefa");
+  bg.addColorStop(0.38, "#f8f7f2");
+  bg.addColorStop(0.72, "#eeede7");
+  bg.addColorStop(1, "#dcdad3");
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, 1200, 760);
-  const glow = ctx.createRadialGradient(940, 150, 10, 940, 150, 540);
-  glow.addColorStop(0, "rgba(255,255,255,.7)");
-  glow.addColorStop(1, "rgba(255,255,255,0)");
+  ctx.save();
+  ctx.globalAlpha = 0.045;
+  for (let y = 0; y < 760; y += 5) {
+    ctx.fillStyle = y % 10 === 0 ? "#fff" : "#77736b";
+    ctx.fillRect(0, y, 1200, 1);
+  }
+  ctx.restore();
+  const glow = ctx.createLinearGradient(90, 80, 1120, 680);
+  glow.addColorStop(0, "rgba(255,255,255,.56)");
+  glow.addColorStop(0.45, "rgba(255,255,255,0)");
+  glow.addColorStop(1, "rgba(255,255,255,.28)");
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, 1200, 760);
-  ctx.strokeStyle = "rgba(15,23,42,.22)";
-  ctx.lineWidth = 3;
-  ctx.strokeRect(30, 30, 1140, 700);
-  ctx.fillStyle = "#111827";
-  ctx.font = "700 34px Arial";
-  ctx.letterSpacing = "7px";
-  ctx.fillText("PASSVAULT", 78, 105);
-  ctx.fillStyle = "#64748b";
-  ctx.font = "600 22px Arial";
-  ctx.letterSpacing = "4px";
-  ctx.fillText("PERSONAL VAULT", 80, 147);
+  ctx.strokeStyle = "rgba(54,53,48,.2)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(24, 24, 1152, 712);
+  ctx.fillStyle = "#77756e";
+  ctx.font = "600 25px Arial";
+  ctx.letterSpacing = "5px";
+  ctx.fillText("PASSVAULT", 78, 91);
+  ctx.fillStyle = "#a09e97";
+  ctx.font = "500 16px Arial";
+  ctx.letterSpacing = "3px";
+  ctx.fillText("PERSONAL VAULT", 80, 120);
   const chip = ctx.createLinearGradient(875, 310, 1035, 445);
-  chip.addColorStop(0, "#fff8dc");
-  chip.addColorStop(0.5, "#dfd6bf");
-  chip.addColorStop(1, "#fff2cf");
+  chip.addColorStop(0, "#e4d9b8");
+  chip.addColorStop(0.45, "#f5eed9");
+  chip.addColorStop(1, "#d5c9a8");
   ctx.fillStyle = chip;
   ctx.beginPath();
   ctx.roundRect(875, 310, 150, 128, 18);
@@ -53,31 +66,42 @@ function makeCardTexture() {
   ctx.arc(1075, 368, 36, -Math.PI * .42, Math.PI * .42);
   ctx.arc(1075, 368, 58, -Math.PI * .39, Math.PI * .39);
   ctx.stroke();
-  ctx.fillStyle = "#0f172a";
-  ctx.font = "700 30px Arial";
-  ctx.letterSpacing = "2px";
-  ctx.fillText("ENCRYPTED CREDENTIAL", 80, 438);
+  ctx.fillStyle = "#8b8982";
+  ctx.font = "600 18px Arial";
+  ctx.letterSpacing = "3px";
+  ctx.fillText("ENCRYPTED CREDENTIAL", 80, 390);
   ctx.fillStyle = "#334155";
   ctx.font = "600 27px Arial";
   ctx.letterSpacing = "2px";
-  ctx.fillText("••••  ••••  ••••  2048", 80, 500);
+  ctx.fillText("\u2022\u2022\u2022\u2022  \u2022\u2022\u2022\u2022  \u2022\u2022\u2022\u2022  2048", 80, 446);
+  ctx.fillStyle = "#8b8982";
+  ctx.font = "500 14px Arial";
+  ctx.letterSpacing = "2px";
+  ctx.fillText("CARDHOLDER", 80, 525);
+  ctx.fillText("VALID THRU", 465, 525);
+  ctx.fillStyle = "#55544f";
+  ctx.font = "600 21px Arial";
+  ctx.letterSpacing = "1px";
+  ctx.fillText("ALEX MORGAN", 80, 565);
+  ctx.fillText("08 / 29", 465, 565);
   ctx.fillStyle = "#0f172a";
   ctx.beginPath();
-  ctx.arc(104, 630, 11, 0, Math.PI * 2);
+  ctx.arc(104, 662, 8, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = "#475569";
   ctx.font = "600 20px Arial";
   ctx.letterSpacing = "2px";
-  ctx.fillText("KEY STORED ON THIS DEVICE", 135, 642);
+  ctx.fillText("KEY STORED ON THIS DEVICE", 128, 669);
 
   // Visa mark and small card-detail touch-up for the payment-card visual.
   ctx.save();
-  ctx.translate(1028, 650);
+  ctx.translate(1028, 680);
   ctx.rotate(-0.04);
   ctx.fillStyle = "#172554";
   ctx.font = "italic 700 62px Arial";
   ctx.letterSpacing = "2px";
   ctx.fillText("VISA", 0, 0);
+  ctx.restore();
   ctx.restore();
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -100,6 +124,7 @@ function makeShield() {
 
 export default function VaultDefenseExperience({ onOpenAuth }) {
   const hostRef = useRef(null);
+  const attackStatusRef = useRef(null);
   const [sceneReady, setSceneReady] = useState(false);
 
   useEffect(() => {
@@ -136,18 +161,32 @@ export default function VaultDefenseExperience({ onOpenAuth }) {
     scene.add(group);
     const shieldShape = makeShield();
     const shieldGeometry = new THREE.ShapeGeometry(shieldShape, 48);
-    const shieldFill = new THREE.Mesh(shieldGeometry, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.34, side: THREE.DoubleSide, depthWrite: false }));
+    const shieldFill = new THREE.Mesh(shieldGeometry, new THREE.MeshBasicMaterial({ color: 0xe7e7e7, transparent: true, opacity: 0.12, side: THREE.DoubleSide, depthWrite: false }));
     shieldFill.position.set(0, 0.03, -0.28);
     shieldFill.scale.set(1.05, 1.05, 1);
     group.add(shieldFill);
-    const shieldOutline = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(shieldShape.getPoints(96)), new THREE.LineBasicMaterial({ color: 0x9b8aff, transparent: true, opacity: 0.44 }));
+    const shieldOutline = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(shieldShape.getPoints(96)), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.68 }));
     shieldOutline.position.set(0, 0.03, -0.22);
     shieldOutline.scale.set(1.05, 1.05, 1);
     group.add(shieldOutline);
-    const halo = new THREE.Mesh(new THREE.TorusGeometry(2.18, 0.007, 6, 120), new THREE.MeshBasicMaterial({ color: 0x667085, transparent: true, opacity: 0.2 }));
+    const shieldOuter = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(shieldShape.getPoints(96)), new THREE.LineBasicMaterial({ color: 0xf8f8f8, transparent: true, opacity: 0.18 }));
+    shieldOuter.position.set(0, 0.03, -0.24);
+    shieldOuter.scale.set(1.12, 1.12, 1);
+    group.add(shieldOuter);
+    const shieldInner = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(shieldShape.getPoints(96)), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.34 }));
+    shieldInner.position.set(0, 0.03, -0.2);
+    shieldInner.scale.set(0.93, 0.93, 1);
+    group.add(shieldInner);
+    const shieldLight = new THREE.PointLight(0xffffff, 2.5, 5, 2);
+    shieldLight.position.set(0, 0, 1.8);
+    group.add(shieldLight);
+    const halo = new THREE.Mesh(new THREE.TorusGeometry(2.18, 0.009, 6, 120), new THREE.MeshBasicMaterial({ color: 0xd8d8d8, transparent: true, opacity: 0.24 }));
     halo.scale.set(1.13, 0.69, 1);
     halo.position.set(0, 0.03, -0.58);
     group.add(halo);
+    const impactRipple = new THREE.Mesh(new THREE.TorusGeometry(0.36, 0.012, 8, 64), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false }));
+    impactRipple.position.set(-1.43, -0.48, -0.08);
+    group.add(impactRipple);
 
     const card = new THREE.Group();
     const cardShape = new THREE.Shape();
@@ -163,12 +202,9 @@ export default function VaultDefenseExperience({ onOpenAuth }) {
     const geometry = new THREE.ExtrudeGeometry(cardShape, { depth: 0.12, bevelEnabled: true, bevelSegments: 3, bevelSize: 0.025, bevelThickness: 0.025, steps: 1 });
     geometry.center();
     const body = new THREE.Mesh(geometry, new THREE.MeshPhysicalMaterial({ color: 0xffffff, metalness: 0.16, roughness: 0.24, clearcoat: 0.9, clearcoatRoughness: 0.18 }));
-    // The texture plane is the visible front face. Keeping the physical body
-    // hidden avoids depth-buffer differences making the printed details vanish.
-    body.visible = false;
     card.add(body);
     const face = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.86, 1.72),
+      new THREE.PlaneGeometry(2.86, 1.81),
       new THREE.MeshBasicMaterial({
         map: makeCardTexture(),
         toneMapped: false,
@@ -186,21 +222,46 @@ export default function VaultDefenseExperience({ onOpenAuth }) {
     group.add(card);
 
     const attack = new THREE.Group();
-    const attackDot = new THREE.Mesh(new THREE.SphereGeometry(0.045, 16, 12), new THREE.MeshBasicMaterial({ color: 0x8d7bff }));
+    const attackGlow = new THREE.Mesh(new THREE.SphereGeometry(0.105, 20, 16), new THREE.MeshBasicMaterial({ color: 0xff3b45, transparent: true, opacity: 0.26, depthWrite: false }));
+    const attackDot = new THREE.Mesh(new THREE.SphereGeometry(0.052, 20, 16), new THREE.MeshBasicMaterial({ color: 0xff3945 }));
+    attack.add(attackGlow);
     attack.add(attackDot);
-    const attackLine = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.01, 0.01), new THREE.MeshBasicMaterial({ color: 0x8d7bff, transparent: true, opacity: 0.35 }));
+    const attackLine = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.012, 0.012), new THREE.MeshBasicMaterial({ color: 0xff3945, transparent: true, opacity: 0.45 }));
     attackLine.position.x = -0.29;
     attack.add(attackLine);
-    attack.position.set(-2.45, -1.2, -0.1);
+    attack.position.set(-2.45, -0.48, -0.1);
     scene.add(attack);
 
+    const savePath = new THREE.Line(
+      new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(1.42, 0.34, 0.02), new THREE.Vector3(2.08, 0.34, 0.02)]),
+      new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.16 })
+    );
+    scene.add(savePath);
+    const vaultNode = new THREE.Mesh(
+      new THREE.TorusGeometry(0.105, 0.012, 8, 32),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.34 })
+    );
+    vaultNode.position.set(2.08, 0.34, 0.04);
+    scene.add(vaultNode);
+    const savePacket = new THREE.Mesh(
+      new THREE.SphereGeometry(0.045, 16, 12),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false })
+    );
+    savePacket.position.set(1.42, 0.34, 0.08);
+    scene.add(savePacket);
+
     const pointer = { x: 0, y: 0 };
+    const easedPointer = { x: 0, y: 0 };
+    const raycaster = new THREE.Raycaster();
+    let cardHovered = false;
     const onPointerMove = (event) => {
       const bounds = host.getBoundingClientRect();
       pointer.x = ((event.clientX - bounds.left) / bounds.width - 0.5) * 2;
       pointer.y = ((event.clientY - bounds.top) / bounds.height - 0.5) * 2;
+      raycaster.setFromCamera({ x: pointer.x, y: -pointer.y }, camera);
+      cardHovered = raycaster.intersectObject(face, true).length > 0;
     };
-    const onPointerLeave = () => { pointer.x = 0; pointer.y = 0; };
+    const onPointerLeave = () => { pointer.x = 0; pointer.y = 0; cardHovered = false; };
     host.addEventListener("pointermove", onPointerMove);
     host.addEventListener("pointerleave", onPointerLeave);
 
@@ -222,28 +283,61 @@ export default function VaultDefenseExperience({ onOpenAuth }) {
     let animationId;
     const animate = () => {
       animationId = window.requestAnimationFrame(animate);
-      const time = reduceMotion ? 0 : clock.elapsedTime;
+      // Keep the attack / block / save story moving even when reduced motion is on.
+      // In that mode only the ambient motion runs more slowly.
+      const time = clock.elapsedTime * (reduceMotion ? 0.62 : 1);
+      const intro = Math.min(1, time / 1.1);
+      const introEase = 1 - (1 - intro) ** 3;
+      easedPointer.x += (pointer.x - easedPointer.x) * 0.055;
+      easedPointer.y += (pointer.y - easedPointer.y) * 0.055;
       const shieldPulse = 1 + Math.sin(time * 1.6) * 0.025;
       const protectionPulse = 0.48 + Math.sin(time * 1.6) * 0.12;
       group.rotation.z = Math.sin(time * 0.22) * 0.012;
       shieldFill.scale.set(1.05 * shieldPulse, 1.05 * shieldPulse, 1);
       shieldOutline.scale.set(1.05 * shieldPulse, 1.05 * shieldPulse, 1);
+      shieldOuter.scale.set(1.12 * shieldPulse, 1.12 * shieldPulse, 1);
+      shieldInner.scale.set(0.93 * (1 + Math.sin(time * 1.6 + 1) * 0.035), 0.93 * (1 + Math.sin(time * 1.6 + 1) * 0.035), 1);
       shieldOutline.material.opacity = protectionPulse;
-      shieldFill.material.opacity = 0.27 + Math.sin(time * 1.6) * 0.06;
+      shieldOuter.material.opacity = 0.12 + Math.sin(time * 1.6 + 0.6) * 0.05;
+      shieldInner.material.opacity = 0.2 + Math.sin(time * 1.6 + 1) * 0.12;
+      const cycle = (time % 3.6) / 3.6;
+      const stage = cycle < 0.62 ? "attack" : cycle < 0.76 ? "blocked" : "saved";
+      const status = attackStatusRef.current;
+      if (status && status.dataset.state !== stage) {
+        status.dataset.state = stage;
+        status.lastElementChild.textContent = stage === "attack"
+          ? "BOT ATTACK · INCOMING"
+          : stage === "blocked" ? "SHIELD · BLOCKED" : "ENCRYPTED · SAVED TO VAULT";
+      }
+      const approach = Math.min(1, cycle / 0.62);
+      const threatProgress = cycle < 0.62 ? approach * approach * (3 - 2 * approach) : 1 - Math.pow((cycle - 0.62) / 0.38, 2) * (3 - 2 * ((cycle - 0.62) / 0.38));
+      const impact = Math.max(0, 1 - Math.abs(cycle - 0.62) / 0.055);
+      shieldFill.material.opacity = 0.09 + Math.sin(time * 1.6) * 0.025 + impact * 0.13;
+      shieldLight.intensity = 1.8 + Math.sin(time * 1.6) * 0.5 + impact * 3;
+      const rippleProgress = Math.max(0, Math.min(1, (cycle - 0.62) / 0.24));
+      impactRipple.scale.setScalar(0.08 + rippleProgress * 1.7);
+      impactRipple.material.opacity = rippleProgress > 0 ? Math.sin(rippleProgress * Math.PI) * 0.68 : 0;
+      const saveProgress = Math.max(0, Math.min(1, (cycle - 0.74) / 0.17));
+      savePacket.position.x = 1.42 + saveProgress * 0.66;
+      savePacket.material.opacity = saveProgress > 0 && saveProgress < 1 ? 0.9 : 0;
+      savePath.material.opacity = 0.12 + saveProgress * 0.38;
+      vaultNode.material.opacity = saveProgress >= 1 ? 0.8 + Math.sin(time * 5) * 0.15 : 0.28;
       halo.rotation.z = time * 0.08;
       halo.material.opacity = 0.16 + Math.sin(time * 1.6) * 0.08;
-      card.position.x = Math.sin(time * 0.42) * 0.045;
-      card.position.y = 0.12 + Math.sin(time * 0.65) * 0.055;
-      card.rotation.x = -0.035 + pointer.y * 0.035;
-      card.rotation.y = -0.08 + Math.sin(time * 0.24) * 0.035 + pointer.x * 0.045;
-      card.rotation.z = -0.018 - pointer.x * 0.012;
+      const hoverScale = cardHovered ? 1.075 : 1.04;
+      card.scale.set(hoverScale, hoverScale, hoverScale);
+      card.position.x = Math.sin(time * 0.32) * 0.025 + (cardHovered ? easedPointer.x * 0.075 : 0);
+      card.position.y = -0.12 + introEase * 0.24 + Math.sin(time * 0.48) * 0.025 + (cardHovered ? -0.025 : 0);
+      card.position.z = 0.22 + introEase * 0.12 + (cardHovered ? 0.035 : 0);
+      card.rotation.x = -0.035 + easedPointer.y * (cardHovered ? 0.075 : 0.025);
+      card.rotation.y = -0.08 + Math.sin(time * 0.2) * 0.018 + easedPointer.x * (cardHovered ? 0.09 : 0.03);
+      card.rotation.z = -0.018 - easedPointer.x * (cardHovered ? 0.018 : 0.008);
       // The threat advances toward the shield, then is pushed back by its pulse.
-      const threatProgress = (Math.sin(time * 0.9) + 1) / 2;
-      attack.position.x = -2.38 + threatProgress * 0.58;
-      attackDot.material.opacity = 0.55 + threatProgress * 0.35;
-      attackLine.material.opacity = 0.18 + threatProgress * 0.2;
+      attack.position.x = -2.38 + threatProgress * 0.82;
+      attackGlow.material.opacity = 0.2 + threatProgress * 0.18 + impact * 0.35;
+      attackDot.scale.setScalar(1 + impact * 0.45);
+      attackLine.material.opacity = 0.12 + threatProgress * 0.42;
       renderer.render(scene, camera);
-      if (reduceMotion) window.cancelAnimationFrame(animationId);
     };
     animate();
 
@@ -275,7 +369,7 @@ export default function VaultDefenseExperience({ onOpenAuth }) {
           <div className="defense-canvas-host" ref={hostRef}>
             {!sceneReady && <div className="defense-fallback" aria-hidden="true"><div className="fallback-shield"><div className="fallback-card"><span>PASSVAULT</span><b>&bull;&bull;&bull;&bull; &nbsp; &bull;&bull;&bull;&bull; &nbsp; &bull;&bull;&bull;&bull; &nbsp; 2048</b><small>ENCRYPTED CREDENTIAL</small></div></div></div>}
             <span className="defense-label defense-label-top">AES-256-GCM <i /> SEALED</span>
-            <span className="defense-attack-tag"><i /> THREAT PATH &middot; BLOCKED</span>
+            <span ref={attackStatusRef} className="defense-attack-tag" data-state="attack"><i /><span>BOT ATTACK · INCOMING</span></span>
           </div>
           <div className="defense-legend"><span><i className="legend-encrypted" /> Encrypted credential</span><span><i className="legend-threat" /> Blocked threat path</span><span className="defense-illustrative">Conceptual illustration</span></div>
         </div>

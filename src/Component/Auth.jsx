@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react"
 import { ToastContainer, toast, Bounce } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
-import PassVaultLogo from "./PassVaultLogo"
 import { deriveVaultKey } from "../utils/cryptoVault"
 import { secureFetch, setCsrfToken, getCsrfToken } from "../utils/csrf"
 
@@ -155,7 +154,7 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
       <div className="auth-signal" aria-hidden="true"></div>
 
       {/* Main Auth Card */}
-      <section className="auth-panel relative z-10 w-full max-w-md rounded-2xl border border-[#ddd8d0] bg-white p-6 shadow-2xl sm:p-8 dark:border-white/10 dark:bg-[#151b23]">
+      <section className="auth-panel relative z-10 w-full max-w-md rounded-2xl border border-[#d7d7db] bg-white p-6 shadow-2xl sm:p-8 dark:border-white/10 dark:bg-[#151b23]">
         
         {/* Close Button ('X' icon) */}
         {onClose && (
@@ -163,7 +162,7 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
             type="button"
             onClick={onClose}
             aria-label="Close modal"
-            className="absolute right-4 top-4 rounded-md p-1.5 text-[#857e75] hover:bg-[#f0ede6] hover:text-[#1f2933] dark:text-slate-400 dark:hover:bg-[#1f2937] dark:hover:text-white transition"
+            className="absolute right-4 top-4 rounded-md p-1.5 text-[#66666d] hover:bg-[#f0f0f2] hover:text-[#111318] dark:text-slate-400 dark:hover:bg-[#1f2937] dark:hover:text-white transition"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -171,21 +170,17 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
           </button>
         )}
 
-        {/* Header Section (Logo, Title, and Subtitle) */}
+        {/* Header Section (Title and Subtitle) */}
         <div className="mb-6">
-          <div className="mb-3">
-            <PassVaultLogo size="sm" />
-          </div>
-
           {/* DYNAMIC TITLE:
               If isRegistering is true  -> "Create your vault"
               If isRegistering is false -> "Open your vault" */}
-          <h1 className="mt-2 font-['Space_Grotesk'] text-2xl font-bold text-[#1f2933] dark:text-white">
+          <h1 className="font-['Space_Grotesk'] text-2xl font-bold text-[#111318] dark:text-white">
             {isRegistering ? "Create your vault" : "Open your vault"}
           </h1>
 
           {/* DYNAMIC SUBTITLE: changes explanation text based on mode */}
-          <p className="mt-2 text-sm leading-relaxed text-[#6f6a63] dark:text-slate-300">
+          <p className="mt-2 text-sm leading-relaxed text-[#66666d] dark:text-slate-300">
             {isRegistering
               ? "Create an account to keep your credentials private."
               : "Sign in to access your saved credentials."}
@@ -197,7 +192,7 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
           
           {/* FIELD 1: EMAIL INPUT (Used by BOTH Login and Sign Up) */}
           <div>
-            <label htmlFor="auth-email" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6f6a63] dark:text-slate-300">
+            <label htmlFor="auth-email" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#55565d] dark:text-slate-300">
               Email
             </label>
             <input
@@ -208,13 +203,13 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
               value={form.email}
               onChange={handleChange}
               required
-              className="w-full rounded-md border border-[#d5d0c8] bg-[#faf9f7] dark:border-slate-700 dark:bg-[#0d1117] dark:text-white px-3 py-2.5 text-sm text-[#1f2933] outline-none transition focus:border-[#176b87] focus:ring-1 focus:ring-[#176b87]/30"
+              className="w-full rounded-md border border-[#cfcfd3] bg-white dark:border-slate-700 dark:bg-[#0d1117] dark:text-white px-3 py-2.5 text-sm text-[#111318] outline-none transition focus:border-[#111318] focus:ring-1 focus:ring-[#111318]/20"
             />
           </div>
 
           {/* FIELD 2: PASSWORD INPUT (Used by BOTH Login and Sign Up) */}
           <div>
-            <label htmlFor="auth-password" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6f6a63] dark:text-slate-300">
+            <label htmlFor="auth-password" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#55565d] dark:text-slate-300">
               Password
             </label>
             <input
@@ -227,10 +222,10 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
               value={form.password}
               onChange={handleChange}
               required
-              className="w-full rounded-md border border-[#d5d0c8] bg-[#faf9f7] dark:border-slate-700 dark:bg-[#0d1117] dark:text-white px-3 py-2.5 text-sm text-[#1f2933] outline-none transition focus:border-[#176b87] focus:ring-1 focus:ring-[#176b87]/30"
+              className="w-full rounded-md border border-[#cfcfd3] bg-white dark:border-slate-700 dark:bg-[#0d1117] dark:text-white px-3 py-2.5 text-sm text-[#111318] outline-none transition focus:border-[#111318] focus:ring-1 focus:ring-[#111318]/20"
             />
             {/* Helper text shown ONLY on register */}
-            {isRegistering && <p className="mt-1.5 text-xs text-[#7b746b] dark:text-slate-400">Use at least 12 characters (master password is your encryption key).</p>}
+            {isRegistering && <p className="mt-1.5 text-xs text-[#777880] dark:text-slate-400">Use at least 12 characters (master password is your encryption key).</p>}
 
           </div>
 
@@ -251,12 +246,12 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
                 onChange={handleChange}
                 required={isRegistering}
                 placeholder="Re-enter your password"
-                className={`w-full rounded-md border bg-[#faf9f7] dark:bg-[#0d1117] dark:text-white px-3 py-2.5 text-sm text-[#1f2933] outline-none transition focus:ring-1 ${
+                className={`w-full rounded-md border bg-white dark:bg-[#0d1117] dark:text-white px-3 py-2.5 text-sm text-[#111318] outline-none transition focus:ring-1 ${
                   form.confirmPassword && form.password !== form.confirmPassword
                     ? "border-red-400 focus:border-red-500 focus:ring-red-200"
                     : form.confirmPassword && form.password === form.confirmPassword
-                    ? "border-emerald-500 focus:border-emerald-600 focus:ring-emerald-200"
-                    : "border-[#d5d0c8] dark:border-slate-700 focus:border-[#176b87] focus:ring-[#176b87]/30"
+                    ? "border-[#111318] focus:border-[#111318] focus:ring-[#111318]/20"
+                    : "border-[#cfcfd3] dark:border-slate-700 focus:border-[#111318] focus:ring-[#111318]/20"
                 }`}
               />
 
@@ -265,9 +260,9 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
                 <p className="mt-1.5 text-xs text-red-500 font-medium">Passwords do not match.</p>
               )}
 
-              {/* Real-time match feedback in green */}
+              {/* Real-time match feedback */}
               {form.confirmPassword && form.password === form.confirmPassword && (
-                <p className="mt-1.5 text-xs text-emerald-600 dark:text-emerald-400 font-medium">✓ Passwords match</p>
+                <p className="mt-1.5 text-xs text-[#55565d] dark:text-slate-300 font-medium">✓ Passwords match</p>
               )}
             </div>
           )}
@@ -276,7 +271,7 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full rounded-md bg-[#176b87] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#145d74] disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-md bg-[#111318] px-4 py-2.5 text-sm font-bold text-white transition hover:bg-[#303137] disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSubmitting ? "Please wait..." : isRegistering ? "Create account" : "Sign in"}
           </button>
@@ -289,7 +284,7 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
             setIsRegistering(previous => !previous)
             setForm(previous => ({ ...previous, confirmPassword: "" }))
           }}
-          className="mt-5 w-full text-xs font-semibold text-[#176b87] dark:text-cyan-400 hover:underline"
+          className="mt-5 w-full text-xs font-semibold text-[#33343a] dark:text-slate-300 hover:underline"
         >
           {isRegistering ? "Already have an account? Sign in" : "New here? Create an account"}
         </button>

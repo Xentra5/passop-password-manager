@@ -237,19 +237,19 @@ h1 span {
 .hero-lock-ring-inner { inset: 3rem; opacity: 0.25; animation: ring-spin 12s linear infinite reverse; }
 
 .hero-lock.unlocked {
-  color: #059669;
+  color: #7567d9;
   opacity: 0.95;
-  filter: drop-shadow(0 0 25px rgba(16, 185, 129, 0.4));
+  filter: drop-shadow(0 0 25px rgba(117, 103, 217, 0.4));
 }
 
 .hero-lock.unlocked .hero-lock-ring-outer {
-  border-color: #10b981;
+  border-color: #8d7bff;
   opacity: 0.55;
   animation: ring-spin 8s linear infinite;
 }
 
 .hero-lock.unlocked .hero-lock-ring-inner {
-  border-color: #34d399;
+  border-color: #c4b7ff;
   opacity: 0.45;
   animation: ring-spin 5s linear infinite reverse;
 }
@@ -2643,4 +2643,66 @@ html.dark ::-webkit-scrollbar-thumb:hover,
 @media (max-width:560px) {
   .landing-page-view .cipher-lab-input-row { grid-template-columns:1fr; }
   .landing-page-view .cipher-lab-trigger { width:100%; }
+}
+
+/* Keep status and action states in the same indigo-neutral system. */
+.landing-page-view .landing-page [class*="text-emerald-"],
+.landing-page-view .landing-page [class*="text-teal-"],
+.landing-page-view .landing-page [class*="text-cyan-"] { color: #a294ff !important; }
+.landing-page-view .landing-page [class*="bg-emerald-"],
+.landing-page-view .landing-page [class*="bg-teal-"],
+.landing-page-view .landing-page [class*="bg-cyan-"] { background-color: #26243a !important; }
+.landing-page-view .landing-page [class*="border-emerald-"],
+.landing-page-view .landing-page [class*="border-teal-"],
+.landing-page-view .landing-page [class*="border-cyan-"] { border-color: #4a4568 !important; }
+.landing-page-view .landing-page [class*="ring-emerald-"],
+.landing-page-view .landing-page [class*="ring-teal-"],
+.landing-page-view .landing-page [class*="ring-cyan-"] { --tw-ring-color: #4a4568 !important; }
+.landing-page-view .landing-page [class*="hover:bg-emerald-"]:hover,
+.landing-page-view .landing-page [class*="hover:bg-teal-"]:hover,
+.landing-page-view .landing-page [class*="hover:bg-cyan-"]:hover { background-color: #343052 !important; }
+
+/* Vault defense: monochrome shield with a clear red attacker signal. */
+.landing-page-view .landing-page .defense-canvas-host {
+  background: radial-gradient(ellipse at 50% 52%, #202020 0, #111 39%, #090909 72%, #060606 100%) !important;
+}
+.landing-page-view .landing-page .defense-canvas-host::after {
+  background: radial-gradient(ellipse at center, transparent 44%, rgba(0,0,0,.62) 100%) !important;
+}
+.landing-page-view .landing-page .defense-topline span:first-child i,
+.landing-page-view .landing-page .defense-label-top i {
+  background: #f0f0f0 !important;
+  box-shadow: 0 0 8px rgba(255,255,255,.55) !important;
+}
+.landing-page-view .landing-page .defense-label {
+  border-color: #444 !important;
+  background: rgba(8,8,8,.88) !important;
+  color: #e7e7e7 !important;
+}
+.landing-page-view .landing-page .defense-attack-tag {
+  border-color: rgba(255,65,75,.42) !important;
+  background: rgba(20,8,9,.94) !important;
+  color: #ffb3b7 !important;
+  box-shadow: 0 6px 22px rgba(0,0,0,.3), inset 0 1px rgba(255,255,255,.04);
+}
+.landing-page-view .landing-page .defense-attack-tag i {
+  background: #ff3945 !important;
+  box-shadow: 0 0 12px rgba(255,57,69,.85) !important;
+}
+.landing-page-view .landing-page .defense-attack-tag {
+  gap: 8px;
+  min-height: 30px;
+  transition: color .25s ease, border-color .25s ease, background-color .25s ease;
+}
+.landing-page-view .landing-page .defense-attack-tag[data-state="blocked"],
+.landing-page-view .landing-page .defense-attack-tag[data-state="saved"] {
+  border-color: #555 !important;
+  background: rgba(10,10,10,.94) !important;
+  color: #ededed !important;
+}
+.landing-page-view .landing-page .defense-attack-tag[data-state="blocked"] i,
+.landing-page-view .landing-page .defense-attack-tag[data-state="saved"] i {
+  background: #f1f1f1 !important;
+  box-shadow: 0 0 9px rgba(255,255,255,.65) !important;
+  animation: none !important;
 }
