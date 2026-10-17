@@ -52,7 +52,7 @@ import {
 } from "@phosphor-icons/react";
 import { useSpotlight, useTilt, useScrollReveal, useMagnetic } from "../hooks/useMotion";
 import CryptographicNetworkGlobe from "./CryptographicNetworkGlobe";
-import VaultDefenseExperience from "./VaultDefenseExperience";
+import HeroVault from "./HeroVault";
 
 // Sample test passwords for the interactive Entropy Analyzer
 const SAMPLE_SEEDS = [
@@ -395,7 +395,7 @@ const LandingPage = ({ onOpenAuth }) => {
         </div>
       </section>
 
-      <VaultDefenseExperience onOpenAuth={onOpenAuth} />
+      <HeroVault />
 
       {/* =====================================================================
           SECTION 4: INTERACTIVE LIVE CIPHER SANDBOX (Type & Scramble)
@@ -468,7 +468,11 @@ const LandingPage = ({ onOpenAuth }) => {
                 </div>
 
                 {/* Encrypted Hex Output Terminal Box */}
-                <div className="cipher-lab-output relative overflow-hidden rounded-2xl border border-slate-700/80 bg-[#161d26] p-5 text-white shadow-inner">
+                <div className={`cipher-lab-output relative overflow-hidden rounded-2xl border p-5 text-white shadow-inner transition-all duration-300 ${
+                    isScrambling
+                      ? "border-cyan-500/60 bg-[#0d1520] shadow-[0_0_20px_rgba(34,211,238,0.18)]"
+                      : "border-slate-700/80 bg-[#161d26]"
+                  }`}>
                   <div className="cipher-stream-scan" />
 
                   <div className="cipher-lab-output-head flex items-center justify-between border-b border-slate-700/80 pb-3">
@@ -498,7 +502,11 @@ const LandingPage = ({ onOpenAuth }) => {
                   </div>
 
                   <div className="cipher-lab-hash mt-4 overflow-x-auto font-mono text-sm tracking-wide text-emerald-400 transition-all">
-                    <span className={isScrambling ? "text-cyan-300 font-bold" : ""}>
+                  <span className={`transition-all duration-150 ${
+                    isScrambling
+                      ? "text-cyan-300 font-bold cipher-scramble-active"
+                      : "text-emerald-400"
+                  }`}>
                       {cipherHex}
                     </span>
                   </div>
@@ -546,7 +554,7 @@ const LandingPage = ({ onOpenAuth }) => {
           </div>
         </ScrollRevealSection>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+        <div className="grid grid-cols-1 gap-0 md:grid-cols-3 md:items-stretch">
           {/* Stage 1: Key Derivation */}
           <ScrollRevealSection delayClass="stagger-1">
             <div
@@ -573,6 +581,16 @@ const LandingPage = ({ onOpenAuth }) => {
             </div>
           </ScrollRevealSection>
 
+          {/* Pipeline Arrow 1→2 */}
+          <div className="hidden md:flex items-center justify-center self-center px-1 py-0">
+            <span className="pipeline-arrow-connector">
+              <svg viewBox="0 0 48 24" width="48" height="24" aria-hidden="true" className="pipeline-arrow-svg">
+                <path d="M2 12 H38" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" fill="none" className="pipeline-dash"/>
+                <path d="M34 6 L46 12 L34 18" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </span>
+          </div>
+
           {/* Stage 2: Envelope Encryption */}
           <ScrollRevealSection delayClass="stagger-2">
             <div
@@ -598,6 +616,16 @@ const LandingPage = ({ onOpenAuth }) => {
               </p>
             </div>
           </ScrollRevealSection>
+
+          {/* Pipeline Arrow 2→3 */}
+          <div className="hidden md:flex items-center justify-center self-center px-1 py-0">
+            <span className="pipeline-arrow-connector">
+              <svg viewBox="0 0 48 24" width="48" height="24" aria-hidden="true" className="pipeline-arrow-svg">
+                <path d="M2 12 H38" stroke="currentColor" strokeWidth="1.5" strokeDasharray="4 3" fill="none" className="pipeline-dash"/>
+                <path d="M34 6 L46 12 L34 18" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </span>
+          </div>
 
           {/* Stage 3: Blind Document Storage */}
           <ScrollRevealSection delayClass="stagger-3">
@@ -706,7 +734,7 @@ const LandingPage = ({ onOpenAuth }) => {
               <button
                 type="button"
                 onClick={() => onOpenAuth("register")}
-                className="tactile-btn tactile-btn-primary rounded-xl bg-[#176b87] px-8 py-3.5 text-sm font-bold text-white shadow-md transition-all hover:bg-[#145d74]"
+                className="tactile-btn cta-primary-glow rounded-xl bg-gradient-to-r from-[#176b87] via-[#1a8fa0] to-[#26968a] px-8 py-3.5 text-sm font-bold text-white shadow-md transition-all hover:scale-[1.04] hover:shadow-[0_0_28px_rgba(14,165,233,0.45)] active:scale-[0.98]"
               >
                 Open Vault Now
               </button>
@@ -714,7 +742,7 @@ const LandingPage = ({ onOpenAuth }) => {
               <button
                 type="button"
                 onClick={() => onOpenAuth("login")}
-                className="tactile-btn rounded-xl border border-[#d5d0c8] bg-[#faf9f7] dark:border-slate-700 dark:bg-[#1c2430] dark:text-white dark:hover:bg-[#253040] px-7 py-3.5 text-sm font-semibold text-[#1f2933] shadow-xs transition-all hover:bg-[#f0ede6]"
+                className="tactile-btn rounded-xl border border-[#d5d0c8] bg-[#faf9f7] dark:border-slate-700 dark:bg-[#1c2430] dark:text-white dark:hover:bg-[#253040] px-7 py-3.5 text-sm font-semibold text-[#1f2933] shadow-xs transition-all hover:bg-[#f0ede6] hover:scale-[1.02] active:scale-[0.98]"
               >
                 Sign in to Existing Vault
               </button>

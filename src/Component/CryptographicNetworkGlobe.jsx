@@ -292,11 +292,13 @@ export default function CryptographicNetworkGlobe({ className = "", style = {} }
       const isDark = document.documentElement.classList.contains("dark");
 
       // ── Outer atmosphere aura ─────────────────────────────────────────────
-      const aura = ctx.createRadialGradient(cx, cy, R * 0.88, cx, cy, R * 1.28);
+      const aura = ctx.createRadialGradient(cx, cy, R * 0.88, cx, cy, R * 1.32);
       if (isDark) {
-        aura.addColorStop(0,   "rgba(38,212,191,0.24)");
-        aura.addColorStop(0.45,"rgba(14,165,233,0.10)");
-        aura.addColorStop(1,   "rgba(12,16,23,0)");
+        // Stronger, more vivid cyan-violet aura in dark mode
+        aura.addColorStop(0,   "rgba(56,189,248,0.35)");
+        aura.addColorStop(0.3, "rgba(38,212,191,0.18)");
+        aura.addColorStop(0.6, "rgba(124,58,237,0.08)");
+        aura.addColorStop(1,   "rgba(0,0,0,0)");
       } else {
         aura.addColorStop(0,   "rgba(23,107,135,0.16)");
         aura.addColorStop(0.45,"rgba(56,150,138,0.07)");
@@ -308,10 +310,11 @@ export default function CryptographicNetworkGlobe({ className = "", style = {} }
       // ── Globe base fill ───────────────────────────────────────────────────
       const baseGrd = ctx.createRadialGradient(cx - R*0.25, cy - R*0.20, R*0.05, cx, cy, R);
       if (isDark) {
-        baseGrd.addColorStop(0,    "rgba(24,42,60,1)");
-        baseGrd.addColorStop(0.38, "rgba(16,28,42,1)");
-        baseGrd.addColorStop(0.72, "rgba(11,20,32,1)");
-        baseGrd.addColorStop(1,    "rgba(7,14,24,1)");
+        // Deep space: much darker so neon arcs pop at full contrast
+        baseGrd.addColorStop(0,    "rgba(5,14,28,1)");
+        baseGrd.addColorStop(0.38, "rgba(3,9,18,1)");
+        baseGrd.addColorStop(0.72, "rgba(2,6,14,1)");
+        baseGrd.addColorStop(1,    "rgba(1,4,10,1)");
       } else {
         baseGrd.addColorStop(0,    "rgba(230,247,250,1)");
         baseGrd.addColorStop(0.38, "rgba(210,238,244,1)");
@@ -358,17 +361,27 @@ export default function CryptographicNetworkGlobe({ className = "", style = {} }
 
       // ── Specular highlight (top-left catch light) ─────────────────────────
       const rim = ctx.createRadialGradient(cx + R*0.36, cy - R*0.30, R*0.15, cx, cy, R);
-      rim.addColorStop(0,   isDark ? "rgba(255,255,255,0.25)" : "rgba(255,255,255,0.60)");
-      rim.addColorStop(0.35,isDark ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.06)");
+      rim.addColorStop(0,   isDark ? "rgba(100,200,255,0.18)" : "rgba(255,255,255,0.60)");
+      rim.addColorStop(0.35,isDark ? "rgba(56,189,248,0.04)" : "rgba(255,255,255,0.06)");
       rim.addColorStop(1,   "rgba(0,0,0,0)");
       ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
       ctx.fillStyle = rim; ctx.fill();
 
-      // Globe border
+      // Globe border — brighter cyan ring in dark mode
       ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
-      ctx.strokeStyle = isDark ? "rgba(56,189,248,0.35)" : "rgba(15,95,125,0.25)";
-      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = isDark ? "rgba(56,189,248,0.55)" : "rgba(15,95,125,0.25)";
+      ctx.lineWidth = isDark ? 1.8 : 1.5;
       ctx.stroke();
+
+      // Dark mode: extra inner rim glow for depth
+      if (isDark) {
+        const innerRim = ctx.createRadialGradient(cx, cy, R * 0.82, cx, cy, R);
+        innerRim.addColorStop(0, "rgba(0,0,0,0)");
+        innerRim.addColorStop(0.7, "rgba(14,165,233,0.06)");
+        innerRim.addColorStop(1, "rgba(14,165,233,0.18)");
+        ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2);
+        ctx.fillStyle = innerRim; ctx.fill();
+      }
 
       // ── ARCS — drawn OVER the sphere so they're always visible ───────────
       for (let ai = 0; ai < ARCS.length; ai++) {
