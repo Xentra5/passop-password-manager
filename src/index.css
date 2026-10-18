@@ -264,6 +264,14 @@ h1 span {
   position: relative;
 }
 
+.auth-panel .auth-field:-webkit-autofill,
+.auth-panel .auth-field:-webkit-autofill:hover,
+.auth-panel .auth-field:-webkit-autofill:focus {
+  -webkit-text-fill-color: #fff;
+  -webkit-box-shadow: 0 0 0 1000px #000 inset;
+  transition: background-color 9999s ease-out 0s;
+}
+
 .auth-signal {
   border: 1px solid rgba(23, 107, 135, 0.14);
   border-radius: 50%;
@@ -1623,20 +1631,23 @@ h1 span {
 }
 
 .globe-hud-metric-dot {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
+  position: relative;
 }
 
 .globe-hud-metric-dot.active {
   background: #26968a;
-  box-shadow: 0 0 0 2px rgba(38,150,138,0.25);
+  box-shadow: 0 0 8px rgba(38,150,138,0.7);
   animation: beacon-ping 2.5s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
 
 .globe-hud-metric-dot.secure {
-  background: #176b87;
+  background: #38bdf8;
+  box-shadow: 0 0 8px rgba(56, 189, 248, 0.6);
+  animation: beacon-ping 3s cubic-bezier(0, 0, 0.2, 1) infinite 0.75s;
 }
 
 /* ==========================================================================
@@ -1981,9 +1992,17 @@ body.dark {
 .dark .spotlight-card::before {
   background: radial-gradient(
     420px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
-    rgba(38, 212, 191, 0.12),
-    transparent 60%
+    rgba(38, 212, 191, 0.14),
+    transparent 65%
   ) !important;
+}
+
+.dark .spotlight-card::after {
+  background: radial-gradient(
+    280px circle at var(--mouse-x, 50%) var(--mouse-y, 50%),
+    rgba(56, 189, 248, 0.45),
+    transparent 70%
+  ) border-box !important;
 }
 
 /* Dark mode scrollbars */
@@ -2056,15 +2075,14 @@ html.dark ::-webkit-scrollbar-thumb:hover,
 }
 
 .dark .spotlight-card {
-  background: #0f0f10 !important;
-  border-color: #222226 !important;
-  border-radius: 8px;
-  box-shadow: none !important;
+  background: #11151d !important;
+  border-color: rgba(255, 255, 255, 0.1) !important;
 }
 
 .dark .spotlight-card:hover {
-  background: #141416 !important;
-  border-color: #64748b !important;
+  background: #151b24 !important;
+  border-color: rgba(56, 189, 248, 0.45) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5), 0 0 20px rgba(56, 189, 248, 0.1) !important;
 }
 
 .dark .auth-panel {
@@ -2705,4 +2723,41 @@ html.dark ::-webkit-scrollbar-thumb:hover,
   background: #f1f1f1 !important;
   box-shadow: 0 0 9px rgba(255,255,255,.65) !important;
   animation: none !important;
+}
+
+/* ==========================================================================
+   PIPELINE ARROW CONNECTORS & STREAM ANIMATION
+   ========================================================================== */
+.pipeline-arrow-connector {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #176b87;
+  padding: 0 0.5rem;
+}
+
+.dark .pipeline-arrow-connector {
+  color: #38bdf8;
+}
+
+.pipeline-arrow-svg {
+  filter: drop-shadow(0 0 6px rgba(23, 107, 135, 0.35));
+  transition: transform 0.2s ease;
+}
+
+.dark .pipeline-arrow-svg {
+  filter: drop-shadow(0 0 8px rgba(56, 189, 248, 0.55));
+}
+
+.pipeline-dash {
+  animation: pipeline-flow 1.8s linear infinite;
+}
+
+@keyframes pipeline-flow {
+  0% {
+    stroke-dashoffset: 14;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
 }

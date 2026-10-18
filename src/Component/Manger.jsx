@@ -53,6 +53,7 @@ const Manager = ({
   const [passwordArray, setPasswordArray] = useState([])
   const [showPassword, setShowPassword] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
+  const [activeSuggestion, setActiveSuggestion] = useState(0)
   const [copiedKey, setCopiedKey] = useState(null)
   const [revealedIds, setRevealedIds] = useState({})
   const [revealedCustomFieldIds, setRevealedCustomFieldIds] = useState({})
@@ -65,11 +66,45 @@ const Manager = ({
   const [isMigrationOpen, setIsMigrationOpen] = useState(false)
   const [selectedHistoryAccount, setSelectedHistoryAccount] = useState(null)
   const [credentialFormOpen, setCredentialFormOpen] = useState(false)
+  const [deleteConfirmAccount, setDeleteConfirmAccount] = useState(null)
 
   const searchInputRef = useRef(null)
   const siteInputId = useId()
   const usernameInputId = useId()
   const passwordInputId = useId()
+
+  const searchSuggestions = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) return []
+
+    return passwordArray
+      .filter((item) => {
+        const site = (item.site || "").toLowerCase()
+        const username = (item.username || "").toLowerCase()
+        const domain = extractDomain(item.site).toLowerCase()
+        return site.includes(query) || username.includes(query) || domain.includes(query)
+      })
+      .slice(0, 6)
+  }, [passwordArray, searchQuery])
+
+  const handleSearchKeyDown = (event) => {
+    if (!searchSuggestions.length) return
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault()
+      setActiveSuggestion((index) => (index + 1) % searchSuggestions.length)
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault()
+      setActiveSuggestion((index) => (index - 1 + searchSuggestions.length) % searchSuggestions.length)
+    } else if (event.key === "Enter") {
+      event.preventDefault()
+      const suggestion = searchSuggestions[activeSuggestion]
+      if (suggestion) setSearchQuery(suggestion.site || suggestion.username)
+    } else if (event.key === "Escape") {
+      setSearchQuery("")
+      setActiveSuggestion(0)
+    }
+  }
 
   const authHeaders = () => ({
     Authorization: `Bearer ${token}`,
@@ -405,31 +440,43 @@ const Manager = ({
     }
   };
 
-  const DeletePassword = async (id) => {
-    const confirmed = window.confirm("Are you sure you want to delete this credential from your vault?")
-    if (confirmed) {
-      try {
-        if (backendOnline) {
-          const response = await secureFetch(`${API_BASE_URL}/${id}`, {
-            method: "DELETE",
-            headers: authHeaders(),
-          })
-          if (response.status === 401) onUnauthorized()
-          if (!response.ok) throw new Error(`Backend status ${response.status}`)
-        }
+  const initiateDeletePassword = (account) => {
+    setDeleteConfirmAccount(account)
+  }
 
-        setPasswordArray(previousPasswords =>
-          previousPasswords.filter(item => item.id !== id)
-        )
-        toast.info('Credential removed from vault', {
-          theme: "dark",
-          transition: Bounce,
-          autoClose: 2000,
+  const DeletePassword = (id) => {
+    const account = passwordArray.find(item => item.id === id)
+    if (account) {
+      initiateDeletePassword(account)
+    }
+  }
+
+  const executeDeletePassword = async () => {
+    if (!deleteConfirmAccount) return
+    const id = deleteConfirmAccount.id
+    try {
+      if (backendOnline) {
+        const response = await secureFetch(`${API_BASE_URL}/${id}`, {
+          method: "DELETE",
+          headers: authHeaders(),
         })
-      } catch (error) {
-        console.error("Error deleting password:", error)
-        toast.error("Could not delete credential from backend", { theme: "dark" })
+        if (response.status === 401) onUnauthorized()
+        if (!response.ok) throw new Error(`Backend status ${response.status}`)
       }
+
+      setPasswordArray(previousPasswords =>
+        previousPasswords.filter(item => item.id !== id)
+      )
+      toast.info('Credential removed from vault', {
+        theme: "dark",
+        transition: Bounce,
+        autoClose: 2000,
+      })
+    } catch (error) {
+      console.error("Error deleting password:", error)
+      toast.error("Could not delete credential from backend", { theme: "dark" })
+    } finally {
+      setDeleteConfirmAccount(null)
     }
   }
 
@@ -926,7 +973,7 @@ const Manager = ({
 
                 {/* Strength Meter Bar */}
                 {form.password && (
-                  <div className="mt-2 flex h-1 w-full overflow-hidden rounded-full bg-[#e8e4de]">
+                  <div className="mt-2.5 flex h-1.5 w-full overflow-hidden rounded-full bg-[#e8e4de] dark:bg-slate-700/60">
                     <div className={`h-full transition-all duration-300 ${strength.color} ${strength.width}`}></div>
                   </div>
                 )}
@@ -1167,8 +1214,16 @@ const Manager = ({
                     ref={searchInputRef}
                     type="text"
                     value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value)
+                      setActiveSuggestion(0)
+                    }}
+                    onKeyDown={handleSearchKeyDown}
                     placeholder="Search site, user, or field..."
+                    role="combobox"
+                    aria-expanded={searchSuggestions.length > 0}
+                    aria-controls="vault-search-suggestions"
+                    aria-autocomplete="list"
                     className="w-full rounded-md border border-[#d5d0c8] bg-white py-2 pl-9 pr-16 text-xs text-[#1f2933] placeholder:text-[#aaa39a] transition-all focus:border-[#176b87] focus:outline-none focus:ring-1 focus:ring-[#176b87]/30"
                   />
                   <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
@@ -1176,6 +1231,42 @@ const Manager = ({
                       Ctrl K
                     </kbd>
                   </div>
+                  {searchSuggestions.length > 0 && (
+                    <div
+                      id="vault-search-suggestions"
+                      role="listbox"
+                      className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-md border border-[#d5d0c8] bg-white py-1 shadow-xl dark:border-[#303640] dark:bg-[#17191d]"
+                    >
+                      <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#8c857b] dark:text-slate-500">
+                        Matching accounts
+                      </p>
+                      {searchSuggestions.map((item, index) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          role="option"
+                          aria-selected={index === activeSuggestion}
+                          onMouseEnter={() => setActiveSuggestion(index)}
+                          onClick={() => {
+                            setSearchQuery(item.site || item.username)
+                            searchInputRef.current?.focus()
+                          }}
+                          className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors ${
+                            index === activeSuggestion
+                              ? "bg-[#f0f8fa] text-[#176b87] dark:bg-[#222b31] dark:text-cyan-300"
+                              : "text-[#1f2933] hover:bg-[#faf9f7] dark:text-slate-200 dark:hover:bg-[#22262d]"
+                          }`}
+                        >
+                          <SiteLogo site={item.site} size="sm" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs font-semibold">{item.site || "Untitled account"}</span>
+                            <span className="block truncate text-[10px] opacity-65">{item.username || "No username"}</span>
+                          </span>
+                          <span className="text-[10px] opacity-60">Password saved</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1249,11 +1340,28 @@ const Manager = ({
 
           {/* Credentials Display List / Table */}
           {passwordArray.length === 0 ? (
-            <div className="accounts-empty rounded-lg border border-[#d5d0c8] bg-white px-5 py-10 text-center">
-              <h3 className="text-sm font-semibold text-[#36414b]">Your vault is empty</h3>
-              <p className="mt-1 max-w-sm text-xs text-[#7b746b]">
-                Accounts you save will appear here.
+            <div className="accounts-empty rounded-xl border border-[#d5d0c8] bg-white p-12 text-center dark:border-white/10 dark:bg-[#151b23]">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#176b87]/20 bg-[#f0f8fa] text-[#176b87] shadow-inner dark:border-cyan-500/20 dark:bg-cyan-950/30 dark:text-cyan-400">
+                <svg className="h-7 w-7 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <h3 className="font-['Space_Grotesk'] text-lg font-bold text-[#1f2933] dark:text-white">
+                Your vault is empty and secure
+              </h3>
+              <p className="mx-auto mt-2 max-w-sm text-xs leading-relaxed text-[#6f6a63] dark:text-slate-400">
+                No credentials stored yet. Every account you add is client-side encrypted before reaching the database.
               </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setForm({ site: "", username: "", password: "", favorite: false, tag: "Personal", customFields: [] })
+                  setCredentialFormOpen(true)
+                }}
+                className="tactile-btn mt-6 inline-flex items-center gap-2 rounded-xl bg-[#176b87] px-5 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#145d74] hover:scale-[1.02] active:scale-[0.98] dark:bg-cyan-600 dark:hover:bg-cyan-500"
+              >
+                <span>＋ Add your first credential</span>
+              </button>
             </div>
           ) : filteredPasswords.length === 0 ? (
             <div className="rounded-lg border border-[#ddd8d0] bg-white py-10 text-center">
@@ -1540,7 +1648,7 @@ const Manager = ({
                                 </button>
                                 <button
                                   type="button"
-                                  onClick={() => DeletePassword(item.id)}
+                                  onClick={() => initiateDeletePassword(item)}
                                   title="Delete credential"
                                   className="rounded-md border border-[#ead2ce] bg-[#fff8f6] p-1.5 text-[#b85c50] transition-all hover:border-[#d99d95] hover:bg-[#fff1ee] hover:text-[#963f35] active:scale-95"
                                 >
@@ -1644,6 +1752,69 @@ const Manager = ({
           onRestorePassword={handleRestorePassword}
           onClearHistory={handleClearHistory}
         />
+
+        {/* Custom Accessible Delete Confirmation Dialog */}
+        {deleteConfirmAccount && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setDeleteConfirmAccount(null)
+            }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-dialog-title"
+          >
+            <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[#d5d0c8] bg-white p-6 shadow-2xl transition-all dark:border-white/10 dark:bg-[#12161f]">
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400">
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 id="delete-dialog-title" className="font-['Space_Grotesk'] text-lg font-bold text-[#1f2933] dark:text-white">
+                    Delete credential?
+                  </h3>
+                  <p className="mt-1 text-xs leading-relaxed text-[#6f6a63] dark:text-slate-400">
+                    Are you sure you want to remove this record from your vault? This cryptographic envelope will be permanently erased.
+                  </p>
+
+                  <div className="mt-3.5 flex items-center gap-2.5 rounded-lg border border-[#e2e8f0] bg-[#faf9f7] px-3 py-2 text-xs dark:border-slate-800 dark:bg-[#171d27]">
+                    <SiteLogo site={deleteConfirmAccount.site} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-[#1f2933] truncate dark:text-white">
+                        {deleteConfirmAccount.site}
+                      </div>
+                      <div className="text-[11px] text-[#7b746b] truncate dark:text-slate-400">
+                        {deleteConfirmAccount.username}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-3 border-t border-[#f0ede6] pt-4 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmAccount(null)}
+                  className="tactile-btn rounded-xl border border-[#d5d0c8] bg-white px-4 py-2 text-xs font-semibold text-[#6f6a63] transition hover:bg-[#f4f1ec] dark:border-slate-700 dark:bg-[#1a212c] dark:text-slate-300 dark:hover:bg-[#222c3b]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={executeDeletePassword}
+                  className="tactile-btn inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 px-4 py-2 text-xs font-bold text-white shadow-md transition hover:from-rose-500 hover:to-rose-600 hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  <span>Delete Credential</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   )

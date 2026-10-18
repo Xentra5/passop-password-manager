@@ -6,6 +6,7 @@ import { secureFetch } from "./utils/csrf";
 
 const CATEGORIES = ["Personal", "Finance", "Work", "Developer"];
 const initialForm = { service: "", category: "Personal", username: "", password: "", note: "" };
+const POPULAR_SERVICES = ["Netflix", "Stripe", "Notion", "YouTube", "Google", "GitHub", "Amazon", "Facebook", "Instagram", "Microsoft"];
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api/passwords";
 const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL ?? "http://localhost:3000/api/auth";
 
@@ -45,6 +46,41 @@ function App() {
     const term = query.trim().toLowerCase();
     return matchesCategory && (!weakOnly || passwordStrength(item.password) === "Weak") && (!term || `${item.service} ${item.username} ${item.category}`.toLowerCase().includes(term));
   }), [credentials, category, query, weakOnly]);
+
+  const searchSuggestions = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return [];
+
+    return credentials
+      .filter((item) => {
+        const service = (item.service || "").toLowerCase();
+        const username = (item.username || "").toLowerCase();
+        const itemCategory = (item.category || "").toLowerCase();
+        return service.includes(term) || username.includes(term) || itemCategory.includes(term);
+      })
+      .slice(0, 6);
+  }, [credentials, query]);
+
+  const [activeSuggestion, setActiveSuggestion] = useState(0);
+  const [serviceSuggestionIndex, setServiceSuggestionIndex] = useState(0);
+
+  function handleSearchKeyDown(event) {
+    if (!searchSuggestions.length) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setActiveSuggestion((index) => (index + 1) % searchSuggestions.length);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setActiveSuggestion((index) => (index - 1 + searchSuggestions.length) % searchSuggestions.length);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      const suggestion = searchSuggestions[activeSuggestion];
+      if (suggestion) setQuery(suggestion.service || suggestion.username);
+    } else if (event.key === "Escape") {
+      setQuery("");
+      setActiveSuggestion(0);
+    }
+  }
 
   const weakCount = credentials.filter((item) => passwordStrength(item.password) === "Weak").length;
   const strongCount = credentials.filter((item) => passwordStrength(item.password) === "Strong").length;
@@ -120,12 +156,38 @@ function App() {
   });
 
   function openNewCredential() {
-    setForm(initialForm); setEditingId(null); setDrawerOpen(true);
+    setForm(initialForm); setEditingId(null); setServiceSuggestionIndex(0); setDrawerOpen(true);
   }
 
   function openEdit(item) {
     setForm({ service: item.service, category: item.category, username: item.username, password: item.password, note: item.note || "" });
     setEditingId(item.id); setDrawerOpen(true);
+  }
+
+  const serviceSuggestions = useMemo(() => {
+    const term = form.service.trim().toLowerCase();
+    if (!term) return [];
+
+    const savedServices = credentials.map((item) => item.service).filter(Boolean);
+    return [...new Set([...savedServices, ...POPULAR_SERVICES])]
+      .filter((service) => service.toLowerCase().includes(term))
+      .slice(0, 6);
+  }, [credentials, form.service]);
+
+  function handleServiceKeyDown(event) {
+    if (!serviceSuggestions.length) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setServiceSuggestionIndex((index) => (index + 1) % serviceSuggestions.length);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setServiceSuggestionIndex((index) => (index - 1 + serviceSuggestions.length) % serviceSuggestions.length);
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      setForm((value) => ({ ...value, service: serviceSuggestions[serviceSuggestionIndex] }));
+    } else if (event.key === "Escape") {
+      setServiceSuggestionIndex(0);
+    }
   }
 
   async function saveCredential(event) {
@@ -226,7 +288,28 @@ function App() {
         </section>
 
         <div className="list-toolbar">
-          <label className="search-box"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input ref={searchRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by name, username or service..." aria-label="Search credentials"/><kbd>/</kbd></label>
+          <div className="quick-search">
+            <label className="search-box"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input ref={searchRef} value={query} onChange={(event) => { setQuery(event.target.value); setActiveSuggestion(0); }} onKeyDown={handleSearchKeyDown} placeholder="Search by name, username or service..." aria-label="Search credentials" aria-autocomplete="list" aria-controls="quick-search-suggestions" aria-expanded={searchSuggestions.length > 0}/><kbd>/</kbd></label>
+            {searchSuggestions.length > 0 && (
+              <div id="quick-search-suggestions" className="quick-search-suggestions" role="listbox">
+                {searchSuggestions.map((item, index) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="option"
+                    aria-selected={index === activeSuggestion}
+                    className={index === activeSuggestion ? "active" : ""}
+                    onMouseEnter={() => setActiveSuggestion(index)}
+                    onClick={() => { setQuery(item.service || item.username); searchRef.current?.focus(); }}
+                  >
+                    <span className="suggestion-icon">{(item.service || "?").charAt(0).toUpperCase()}</span>
+                    <span className="suggestion-copy"><strong>{item.service || "Untitled account"}</strong><small>{item.username || "No username"}</small></span>
+                    <span className="suggestion-status">Saved</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           <nav className="category-tabs" aria-label="Filter by category">
             {["All", "Finance", "Work", "Personal"].map((value) => <button key={value} className={category === value && !weakOnly ? "active" : ""} onClick={() => { setCategory(value); setWeakOnly(false); }}>{value}{value === "All" && <span>({credentials.length})</span>}</button>)}
           </nav>
@@ -255,7 +338,39 @@ function App() {
         <aside className="credential-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
           <div className="drawer-heading"><h2 id="drawer-title">{editingId ? "Edit credential" : "Add new credential"}</h2><button aria-label="Close" onClick={() => setDrawerOpen(false)}>×</button></div>
           <form className="credential-form" onSubmit={saveCredential}>
-            <label>Service or website<input autoFocus required value={form.service} onChange={(event) => setForm({ ...form, service: event.target.value })} placeholder="e.g. Netflix, Stripe, Notion" /></label>
+            <label className="service-field">
+              Service or website
+              <input
+                autoFocus
+                required
+                value={form.service}
+                onChange={(event) => { setForm({ ...form, service: event.target.value }); setServiceSuggestionIndex(0); }}
+                onKeyDown={handleServiceKeyDown}
+                placeholder="e.g. Netflix, Stripe, Notion"
+                role="combobox"
+                aria-autocomplete="list"
+                aria-controls="service-suggestions"
+                aria-expanded={serviceSuggestions.length > 0}
+              />
+              {serviceSuggestions.length > 0 && (
+                <div id="service-suggestions" className="service-suggestions" role="listbox">
+                  {serviceSuggestions.map((service, index) => (
+                    <button
+                      key={service}
+                      type="button"
+                      role="option"
+                      aria-selected={index === serviceSuggestionIndex}
+                      className={index === serviceSuggestionIndex ? "active" : ""}
+                      onMouseEnter={() => setServiceSuggestionIndex(index)}
+                      onClick={() => setForm((value) => ({ ...value, service }))}
+                    >
+                      <span className="suggestion-icon">{service.charAt(0)}</span>
+                      <span>{service}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </label>
             <fieldset><legend>Category</legend><div className="form-categories">{CATEGORIES.map((value) => <button type="button" key={value} className={form.category === value ? "selected" : ""} onClick={() => setForm({ ...form, category: value })}>{value}</button>)}</div></fieldset>
             <label>Username or email<input required value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} placeholder="name@domain.com or handle" /></label>
             <label>Password<div className="password-entry"><input required value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="Enter or generate"/><button type="button" onClick={generatePassword}>Generate</button></div>{form.password && <small className="password-tip">Tip: generated passphrases are 18 characters with high entropy.</small>}</label>
