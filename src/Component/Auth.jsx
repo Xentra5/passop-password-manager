@@ -45,6 +45,8 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
   // --------------------------------------------------------------------------
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [authError, setAuthError] = useState("")
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
 
   // --------------------------------------------------------------------------
   // STATE 4: lastInitialMode
@@ -219,18 +221,29 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
             <label htmlFor="auth-password" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-white/75">
               Password
             </label>
-            <input
-              id="auth-password"
-              name="password"
-              type="password"
-              enterKeyHint="done"
-              autoComplete={isRegistering ? "new-password" : "current-password"}
-              minLength={isRegistering ? 12 : undefined}
-              value={form.password}
-              onChange={handleChange}
-              required
-              className="auth-field w-full rounded-md border border-white/35 bg-black px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-white/45 focus:border-white focus:ring-1 focus:ring-white/30"
-            />
+            <div className="auth-password-field">
+              <input
+                id="auth-password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                enterKeyHint="done"
+                autoComplete={isRegistering ? "new-password" : "current-password"}
+                minLength={isRegistering ? 12 : undefined}
+                value={form.password}
+                onChange={handleChange}
+                required
+                className="auth-field w-full rounded-md border border-white/35 bg-black px-3 py-2.5 pr-11 text-sm text-white outline-none transition placeholder:text-white/45 focus:border-white focus:ring-1 focus:ring-white/30"
+              />
+              <button
+                type="button"
+                className="auth-password-toggle"
+                onClick={() => setShowPassword((visible) => !visible)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                aria-pressed={showPassword}
+              >
+                {showPassword ? <EyeIcon /> : <EyeSlashIcon />}
+              </button>
+            </div>
             {/* Helper text shown ONLY on register */}
             {isRegistering && <p className="mt-1.5 text-xs text-white/55">Use at least 12 characters (master password is your encryption key).</p>}
 
@@ -242,25 +255,36 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
               <label htmlFor="auth-confirm-password" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-white/75">
                 Confirm Password
               </label>
-              <input
-                id="auth-confirm-password"
-                name="confirmPassword"
-                type="password"
-                enterKeyHint="done"
-                autoComplete="new-password"
-                minLength={8}
-                value={form.confirmPassword}
-                onChange={handleChange}
-                required={isRegistering}
-                placeholder="Re-enter your password"
-                className={`auth-field w-full rounded-md border bg-black px-3 py-2.5 text-sm text-white outline-none transition focus:ring-1 ${
+              <div className="auth-password-field">
+                <input
+                  id="auth-confirm-password"
+                  name="confirmPassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  enterKeyHint="done"
+                  autoComplete="new-password"
+                  minLength={8}
+                  value={form.confirmPassword}
+                  onChange={handleChange}
+                  required={isRegistering}
+                  placeholder="Re-enter your password"
+                  className={`auth-field w-full rounded-md border bg-black px-3 py-2.5 pr-11 text-sm text-white outline-none transition focus:ring-1 ${
                   form.confirmPassword && form.password !== form.confirmPassword
                     ? "border-red-400 focus:border-red-500 focus:ring-red-200"
                     : form.confirmPassword && form.password === form.confirmPassword
                     ? "border-white focus:border-white focus:ring-white/30"
                     : "border-white/35 focus:border-white focus:ring-white/30"
-                }`}
-              />
+                  }`}
+                />
+                <button
+                  type="button"
+                  className="auth-password-toggle"
+                  onClick={() => setShowConfirmPassword((visible) => !visible)}
+                  aria-label={showConfirmPassword ? "Hide confirmed password" : "Show confirmed password"}
+                  aria-pressed={showConfirmPassword}
+                >
+                  {showConfirmPassword ? <EyeIcon /> : <EyeSlashIcon />}
+                </button>
+              </div>
 
               {/* Real-time mismatch feedback in red */}
               {form.confirmPassword && form.password !== form.confirmPassword && (
@@ -278,7 +302,7 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full rounded-md bg-white px-4 py-2.5 text-sm font-bold text-black shadow-sm transition hover:bg-white/85 disabled:cursor-not-allowed disabled:opacity-60"
+            className="auth-submit w-full rounded-md bg-white px-4 py-2.5 text-sm font-bold text-black shadow-sm transition hover:bg-white/85 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isSubmitting ? "Please wait..." : isRegistering ? "Create account" : "Sign in"}
           </button>
@@ -307,3 +331,20 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
 }
 
 export default Auth
+
+function EyeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z" />
+      <circle cx="12" cy="12" r="2.5" />
+    </svg>
+  )
+}
+
+function EyeSlashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="m3 3 18 18M10.6 6.2A10.8 10.8 0 0 1 12 6c6 0 9.5 6 9.5 6a17 17 0 0 1-3 3.6M6.3 6.8C3.9 8.6 2.5 12 2.5 12s3.5 6 9.5 6c1 0 1.9-.2 2.7-.5" />
+    </svg>
+  )
+}

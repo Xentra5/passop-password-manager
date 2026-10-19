@@ -34,6 +34,7 @@ function App() {
   const [category, setCategory] = useState("All");
   const [weakOnly, setWeakOnly] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerClosing, setDrawerClosing] = useState(false);
   const [form, setForm] = useState(initialForm);
   const [editingId, setEditingId] = useState(null);
   const [revealed, setRevealed] = useState({});
@@ -63,6 +64,7 @@ function App() {
 
   const [activeSuggestion, setActiveSuggestion] = useState(0);
   const [serviceSuggestionIndex, setServiceSuggestionIndex] = useState(0);
+  const [serviceSuggestionsDismissed, setServiceSuggestionsDismissed] = useState(false);
 
   function handleSearchKeyDown(event) {
     if (!searchSuggestions.length) return;
@@ -142,7 +144,7 @@ function App() {
 
   useEffect(() => {
     const onKeyDown = (event) => {
-      if (event.key === "Escape") setDrawerOpen(false);
+      if (event.key === "Escape") closeDrawer();
       if (event.key === "/" && !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) {
         event.preventDefault(); searchRef.current?.focus();
       }
@@ -156,23 +158,32 @@ function App() {
   });
 
   function openNewCredential() {
-    setForm(initialForm); setEditingId(null); setServiceSuggestionIndex(0); setDrawerOpen(true);
+    setForm(initialForm); setEditingId(null); setServiceSuggestionIndex(0); setServiceSuggestionsDismissed(false); setDrawerClosing(false); setDrawerOpen(true);
   }
 
   function openEdit(item) {
     setForm({ service: item.service, category: item.category, username: item.username, password: item.password, note: item.note || "" });
-    setEditingId(item.id); setDrawerOpen(true);
+    setEditingId(item.id); setServiceSuggestionsDismissed(true); setDrawerClosing(false); setDrawerOpen(true);
+  }
+
+  function closeDrawer() {
+    if (!drawerOpen || drawerClosing) return;
+    setDrawerClosing(true);
+    window.setTimeout(() => {
+      setDrawerOpen(false);
+      setDrawerClosing(false);
+    }, 380);
   }
 
   const serviceSuggestions = useMemo(() => {
     const term = form.service.trim().toLowerCase();
-    if (!term) return [];
+    if (!term || serviceSuggestionsDismissed) return [];
 
     const savedServices = credentials.map((item) => item.service).filter(Boolean);
     return [...new Set([...savedServices, ...POPULAR_SERVICES])]
       .filter((service) => service.toLowerCase().includes(term))
       .slice(0, 6);
-  }, [credentials, form.service]);
+  }, [credentials, form.service, serviceSuggestionsDismissed]);
 
   function handleServiceKeyDown(event) {
     if (!serviceSuggestions.length) return;
@@ -185,6 +196,7 @@ function App() {
     } else if (event.key === "Enter") {
       event.preventDefault();
       setForm((value) => ({ ...value, service: serviceSuggestions[serviceSuggestionIndex] }));
+      setServiceSuggestionsDismissed(true);
     } else if (event.key === "Escape") {
       setServiceSuggestionIndex(0);
     }
@@ -194,7 +206,7 @@ function App() {
     event.preventDefault();
     if (!session.user || !vaultKey) {
       setVaultError("Sign in to save credentials to your account.");
-      setDrawerOpen(false);
+      closeDrawer();
       setShowLanding(true);
       return;
     }
@@ -225,7 +237,7 @@ function App() {
       setCredentials((items) => editingId
         ? items.map((item) => item.id === id ? { ...item, ...form, site: payload.site, tag: payload.tag } : item)
         : [...items, { ...form, id, site: payload.site, tag: payload.tag, favorite: false }]);
-      setDrawerOpen(false);
+      closeDrawer();
       setForm(initialForm);
     } catch (error) {
       setVaultError(error.message);
@@ -334,9 +346,9 @@ function App() {
 
       <footer className="replica-footer"><span>PassVault — Hand-crafted personal credential manager</span><span>Press <kbd>/</kbd> to search&nbsp;&nbsp; Press <kbd>A</kbd> to add account&nbsp;&nbsp; Press <kbd>Esc</kbd> to close</span></footer>
 
-      {drawerOpen && <div className="drawer-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) setDrawerOpen(false); }}>
-        <aside className="credential-drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title">
-          <div className="drawer-heading"><h2 id="drawer-title">{editingId ? "Edit credential" : "Add new credential"}</h2><button aria-label="Close" onClick={() => setDrawerOpen(false)}>×</button></div>
+      {drawerOpen && <div className={`drawer-scrim${drawerClosing ? " is-closing" : ""}`} onMouseDown={(event) => { if (event.target === event.currentTarget) closeDrawer(); }}>
+        <aside className={`credential-drawer${drawerClosing ? " is-closing" : ""}`} role="dialog" aria-modal="true" aria-labelledby="drawer-title">
+          <div className="drawer-heading"><h2 id="drawer-title">{editingId ? "Edit credential" : "Add new credential"}</h2><button aria-label="Close" onClick={closeDrawer}>×</button></div>
           <form className="credential-form" onSubmit={saveCredential}>
             <label className="service-field">
               Service or website
@@ -344,7 +356,7 @@ function App() {
                 autoFocus
                 required
                 value={form.service}
-                onChange={(event) => { setForm({ ...form, service: event.target.value }); setServiceSuggestionIndex(0); }}
+                onChange={(event) => { setForm({ ...form, service: event.target.value }); setServiceSuggestionIndex(0); setServiceSuggestionsDismissed(false); }}
                 onKeyDown={handleServiceKeyDown}
                 placeholder="e.g. Netflix, Stripe, Notion"
                 role="combobox"
@@ -362,7 +374,7 @@ function App() {
                       aria-selected={index === serviceSuggestionIndex}
                       className={index === serviceSuggestionIndex ? "active" : ""}
                       onMouseEnter={() => setServiceSuggestionIndex(index)}
-                      onClick={() => setForm((value) => ({ ...value, service }))}
+                      onClick={() => { setForm((value) => ({ ...value, service })); setServiceSuggestionsDismissed(true); }}
                     >
                       <span className="suggestion-icon">{service.charAt(0)}</span>
                       <span>{service}</span>
@@ -375,7 +387,7 @@ function App() {
             <label>Username or email<input required value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} placeholder="name@domain.com or handle" /></label>
             <label>Password<div className="password-entry"><input required value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="Enter or generate"/><button type="button" onClick={generatePassword}>Generate</button></div>{form.password && <small className="password-tip">Tip: generated passphrases are 18 characters with high entropy.</small>}</label>
             <label>Optional note<input value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="Recovery pin, security question, seed hint" /></label>
-            <div className="drawer-actions"><button type="button" className="cancel-button" onClick={() => setDrawerOpen(false)}>Cancel</button><button type="submit" className="save-button" disabled={isSaving}>{isSaving ? "Saving…" : "Save to vault"}</button></div>
+            <div className="drawer-actions"><button type="button" className="cancel-button" onClick={closeDrawer}>Cancel</button><button type="submit" className="save-button" disabled={isSaving}>{isSaving ? "Saving…" : "Save to vault"}</button></div>
           </form>
         </aside>
       </div>}
