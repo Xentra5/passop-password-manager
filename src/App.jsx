@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LandingPage from "./Component/LandingPage";
 import Auth from "./Component/Auth";
 import { encryptCredential, decryptCredential, encryptCustomFields, decryptCustomFields, clearCachedVaultKey } from "./utils/cryptoVault";
 import { secureFetch } from "./utils/csrf";
+import { getAutoLockTimeoutMinutes, setAutoLockTimeoutMinutes } from "./utils/pinAuth";
 
 const CATEGORIES = ["Personal", "Finance", "Work", "Developer"];
 const initialForm = { service: "", category: "Personal", username: "", password: "", note: "" };
@@ -12,7 +13,7 @@ const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL ?? "http://localhost:3000
 
 function passwordStrength(value) {
   if (!value) return "";
-  if (value.length < 10) return "Weak";
+  if (value.length < 10 || !/[A-Z]/.test(value) || !/[0-9]/.test(value)) return "Weak";
   return "Strong";
 }
 
@@ -40,6 +41,10 @@ function App() {
   const [revealed, setRevealed] = useState({});
   const [copied, setCopied] = useState("");
   const [showLanding, setShowLanding] = useState(true);
+  const [isVaultLocked, setIsVaultLocked] = useState(false);
+  const [healthOpen, setHealthOpen] = useState(false);
+  const [autoLockMinutes, setAutoLockMinutes] = useState(() => getAutoLockTimeoutMinutes());
+  const clipboardTimerRef = useRef(null);
   const searchRef = useRef(null);
 
   const filtered = useMemo(() => credentials.filter((item) => {
@@ -86,6 +91,17 @@ function App() {
 
   const weakCount = credentials.filter((item) => passwordStrength(item.password) === "Weak").length;
   const strongCount = credentials.filter((item) => passwordStrength(item.password) === "Strong").length;
+  const passwordGroups = useMemo(() => {
+    const groups = new Map();
+    credentials.forEach((item) => {
+      if (item.password) groups.set(item.password, (groups.get(item.password) || 0) + 1);
+    });
+    return groups;
+  }, [credentials]);
+  const reusedCount = credentials.filter((item) => item.password && passwordGroups.get(item.password) > 1).length;
+  const healthScore = credentials.length
+    ? Math.max(0, Math.round(100 - (weakCount / credentials.length) * 45 - (reusedCount / credentials.length) * 35))
+    : 100;
 
   function authHeaders(json = false) {
     return {
@@ -105,6 +121,7 @@ function App() {
     setAuthModalOpen(false);
     setShowLanding(false);
     setVaultError("");
+    setIsVaultLocked(false);
     localStorage.setItem("passvault_user", JSON.stringify(data.user));
   }
 
@@ -117,7 +134,40 @@ function App() {
     setCredentials([]);
     setShowLanding(true);
     setVaultError("");
+    setIsVaultLocked(false);
   }
+
+  const lockVault = useCallback(() => {
+    if (!session.user) return;
+    setRevealed({});
+    setQuery("");
+    setHealthOpen(false);
+    setIsVaultLocked(true);
+    setAuthModalMode("login");
+    setAuthModalOpen(true);
+  }, [session.user]);
+
+  function updateAutoLockMinutes(value) {
+    const minutes = Number(value);
+    setAutoLockMinutes(minutes);
+    setAutoLockTimeoutMinutes(minutes);
+  }
+
+  useEffect(() => {
+    if (!session.user || !vaultKey || isVaultLocked || autoLockMinutes <= 0) return undefined;
+    let timer;
+    const resetTimer = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(lockVault, autoLockMinutes * 60 * 1000);
+    };
+    const events = ["pointerdown", "keydown", "mousemove", "scroll", "touchstart"];
+    events.forEach((event) => window.addEventListener(event, resetTimer, { passive: true }));
+    resetTimer();
+    return () => {
+      window.clearTimeout(timer);
+      events.forEach((event) => window.removeEventListener(event, resetTimer));
+    };
+  }, [session.user, vaultKey, isVaultLocked, autoLockMinutes, lockVault]);
 
   useEffect(() => {
     if (!session.user || !vaultKey) return undefined;
@@ -253,7 +303,23 @@ function App() {
   }
 
   async function copyValue(value, id) {
-    try { await navigator.clipboard.writeText(value); setCopied(id); window.setTimeout(() => setCopied(""), 1300); } catch { /* Clipboard access can be blocked by the browser. */ }
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(id);
+      window.clearTimeout(clipboardTimerRef.current);
+      clipboardTimerRef.current = window.setTimeout(async () => {
+        try {
+          if (!navigator.clipboard.readText || (await navigator.clipboard.readText()) === value) {
+            await navigator.clipboard.writeText("");
+          }
+        } catch {
+          // Clipboard permissions may prevent clearing.
+        }
+        setCopied("");
+      }, 30000);
+    } catch {
+      setVaultError("Clipboard access was blocked by your browser.");
+    }
   }
 
   async function removeCredential(id) {
@@ -282,6 +348,7 @@ function App() {
           <div className="replica-header-actions">
             <button className="landing-toggle" onClick={() => setShowLanding(true)}>Landing page</button>
             <button className="add-credential-button" onClick={openNewCredential}>Add credential <kbd>A</kbd></button>
+            <button className="lock-vault-button" onClick={lockVault} title="Lock vault now">Lock</button>
             <span className="profile-button" aria-label="Signed-in account"><span className="profile-dot">●</span>{session.user?.name || session.user?.email}</span>
             <button className="logout-button" onClick={handleLogout}>Log out</button>
           </div>
@@ -296,8 +363,27 @@ function App() {
 
         <section className="vault-summary" aria-label="Vault password summary">
           <div className="summary-counts"><span>{strongCount} strong</span><b>•</b><span className="weak-count">{weakCount} weak</span><b>•</b><span className="breached-count">0 breached</span></div>
-          <button className="summary-review" disabled={!weakCount} onClick={() => setWeakOnly((value) => !value)}>{weakOnly ? "Show all passwords" : weakCount ? `Review ${weakCount} vulnerable password${weakCount === 1 ? "" : "s"}` : "All passwords look good"}<span aria-hidden="true">›</span></button>
+          <div className="summary-actions">
+            <button className="summary-review" onClick={() => setHealthOpen((value) => !value)}>Security score {healthScore}% <span aria-hidden="true">›</span></button>
+            <button className="summary-review" disabled={!weakCount} onClick={() => setWeakOnly((value) => !value)}>{weakOnly ? "Show all passwords" : weakCount ? `Review ${weakCount} vulnerable password${weakCount === 1 ? "" : "s"}` : "All passwords look good"}<span aria-hidden="true">›</span></button>
+          </div>
         </section>
+        {healthOpen && (
+          <section className="health-dashboard" aria-label="Password health dashboard">
+            <div><strong>{healthScore}%</strong><span>Overall health</span></div>
+            <div><strong>{weakCount}</strong><span>Weak passwords</span></div>
+            <div><strong>{reusedCount}</strong><span>Reused passwords</span></div>
+            <label>Auto-lock
+              <select value={autoLockMinutes} onChange={(event) => updateAutoLockMinutes(event.target.value)}>
+                <option value="0">Off</option>
+                <option value="1">1 minute</option>
+                <option value="5">5 minutes</option>
+                <option value="15">15 minutes</option>
+                <option value="30">30 minutes</option>
+              </select>
+            </label>
+          </section>
+        )}
 
         <div className="list-toolbar">
           <div className="quick-search">
@@ -344,7 +430,7 @@ function App() {
         </section>
       </main>
 
-      <footer className="replica-footer"><span>PassVault — Hand-crafted personal credential manager</span><span>Press <kbd>/</kbd> to search&nbsp;&nbsp; Press <kbd>A</kbd> to add account&nbsp;&nbsp; Press <kbd>Esc</kbd> to close</span></footer>
+      <footer className="replica-footer"><span>PassVault — Hand-crafted personal credential manager</span><span>Clipboard clears after 30 seconds&nbsp;&nbsp; Press <kbd>/</kbd> to search&nbsp;&nbsp; Press <kbd>A</kbd> to add account</span></footer>
 
       {drawerOpen && <div className={`drawer-scrim${drawerClosing ? " is-closing" : ""}`} onMouseDown={(event) => { if (event.target === event.currentTarget) closeDrawer(); }}>
         <aside className={`credential-drawer${drawerClosing ? " is-closing" : ""}`} role="dialog" aria-modal="true" aria-labelledby="drawer-title">
@@ -391,7 +477,8 @@ function App() {
           </form>
         </aside>
       </div>}
-      <AuthOverlay open={authModalOpen} mode={authModalMode} onClose={() => setAuthModalOpen(false)} onAuthenticated={handleAuthenticated} />
+      {isVaultLocked && <div className="vault-lock-notice" role="status"><strong>Vault locked</strong><span>Sign in again to unlock your encrypted credentials.</span></div>}
+      <AuthOverlay open={authModalOpen} mode={authModalMode} onClose={() => { if (!isVaultLocked) setAuthModalOpen(false); }} onAuthenticated={handleAuthenticated} />
     </div>
   );
 }

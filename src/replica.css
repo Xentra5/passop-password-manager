@@ -35,6 +35,18 @@ kbd { min-width:13px; padding:1px 3px; border:1px solid #343434; border-radius:3
 .summary-counts .weak-count,.summary-counts .breached-count { color:#ee4d52; }
 .summary-review { padding:0; border:0; background:transparent; display:flex; align-items:center; gap:9px; color:#c5cbd4; font:13px 'DM Sans',sans-serif; }
 .summary-review:disabled { cursor:default; }
+.summary-actions { display:flex; align-items:center; gap:16px; }
+.health-dashboard { margin:10px 0 0; padding:14px 18px; border:1px solid #222226; border-radius:8px; display:flex; align-items:center; gap:28px; background:#080808; }
+.health-dashboard > div { display:flex; flex-direction:column; gap:4px; }
+.health-dashboard strong { color:#f8fafc; font:18px 'JetBrains Mono',monospace; }
+.health-dashboard span { color:#8490a2; font-size:10px; }
+.health-dashboard label { margin-left:auto; display:flex; align-items:center; gap:8px; color:#9aa5b5; font-size:10px; }
+.health-dashboard select { padding:5px 7px; border:1px solid #343434; border-radius:4px; background:#111; color:#f2f2f2; font-size:10px; }
+.lock-vault-button { height:30px; padding:0 9px; border:1px solid #343434; border-radius:5px; background:#080808; color:#c6cfdb; font-size:10px; transition:background .2s ease,border-color .2s ease,color .2s ease; }
+.lock-vault-button:hover { border-color:#fff; background:#171717; color:#fff; }
+.vault-lock-notice { position:fixed; bottom:22px; left:50%; z-index:110; display:flex; align-items:center; gap:10px; padding:10px 14px; border:1px solid #343434; border-radius:6px; background:#0b0b0b; box-shadow:0 10px 30px #000b; color:#d5dce6; font-size:11px; transform:translateX(-50%); }
+.vault-lock-notice strong { color:#fff; }
+.vault-lock-notice span { color:#8994a5; }
 .summary-review span { color:#707b8e; font-size:16px; }
 .list-toolbar { display:flex; align-items:center; justify-content:space-between; gap:18px; padding:13px 0 12px; border-bottom:1px solid #171717; }
 .search-box { width:min(360px,55%); height:32px; padding:0 8px; border:1px solid #242424; border-radius:5px; display:flex; align-items:center; gap:8px; background:#080808; }

@@ -72,7 +72,7 @@ const SpotlightCard = ({ children, className = "", ...props }) => {
   return (
     <div
       ref={cardRef}
-      className={`spotlight-card rounded-2xl border border-[#ddd8d0] shadow-sm transition-all duration-300 hover:border-[#176b87]/40 hover:shadow-[0_12px_32px_rgba(23,107,135,0.08)] ${className}`}
+      className={`spotlight-card rounded-2xl border border-[#ddd8d0] dark:border-white/10 dark:bg-[#151b23] shadow-sm transition-all duration-300 hover:border-[#176b87]/40 dark:hover:border-cyan-500/50 hover:shadow-[0_12px_32px_rgba(23,107,135,0.08)] dark:hover:shadow-[0_12px_32px_rgba(34,211,238,0.12)] ${className}`}
       {...props}
     >
       <div className="spotlight-card-content h-full w-full">{children}</div>
@@ -395,7 +395,18 @@ const LandingPage = ({ onOpenAuth }) => {
         </div>
       </section>
 
-      <HeroVault />
+      {/* SECTION 3: HERO VAULT SECURITY EXPERIENCE */}
+      <div className="relative overflow-hidden py-4 md:py-8">
+        <div
+          className="pointer-events-none absolute top-1/2 left-1/4 -translate-y-1/2 -translate-x-1/2 h-80 w-80 rounded-full bg-cyan-500/10 blur-[100px]"
+          aria-hidden="true"
+        />
+        <div
+          className="pointer-events-none absolute top-1/2 right-1/4 -translate-y-1/2 translate-x-1/2 h-80 w-80 rounded-full bg-violet-500/12 blur-[100px]"
+          aria-hidden="true"
+        />
+        <HeroVault />
+      </div>
 
       {/* =====================================================================
           SECTION 4: INTERACTIVE LIVE CIPHER SANDBOX (Type & Scramble)
@@ -554,7 +565,7 @@ const LandingPage = ({ onOpenAuth }) => {
           </div>
         </ScrollRevealSection>
 
-        <div className="grid grid-cols-1 gap-0 md:grid-cols-3 md:items-stretch">
+        <div className="grid grid-cols-1 items-center gap-4 md:grid-cols-[1fr_auto_1fr_auto_1fr] md:items-stretch">
           {/* Stage 1: Key Derivation */}
           <ScrollRevealSection delayClass="stagger-1">
             <div

@@ -10,12 +10,19 @@ const phaseAnnouncements = {
   blocked: "The shield blocks the requests; the password stays encrypted",
   vaulting: "The encrypted password is stored in the vault",
 };
+const phaseDescriptions = {
+  idle: ["Your login stays on this device", "A sample login is ready to protect."],
+  encrypting: ["Encrypting on this device", "Your password is encrypted before it can sync."],
+  attack: ["Automated attempts detected", "Your login remains encrypted."],
+  blocked: ["Your login stays protected", "Automated attempts are blocked at the vault."],
+  vaulting: ["Only encrypted data syncs", "Your key stays on this device."],
+};
 const phaseLabels = {
   idle: "SAMPLE LOGIN",
-  encrypting: "ENCRYPTING IN BROWSER",
-  attack: "BOT REQUESTS DETECTED",
-  blocked: "PASSWORD STAYS ENCRYPTED",
-  vaulting: "CIPHERTEXT SYNCED",
+  encrypting: "ENCRYPTING LOGIN",
+  attack: "AUTOMATED ATTEMPTS",
+  blocked: "ATTEMPTS BLOCKED",
+  vaulting: "ENCRYPTED DATA SYNCED",
 };
 
 function usePrefersReducedMotion() {
@@ -51,24 +58,25 @@ function Card({ phase, cardLast4, holderName, cardRef, onPointerMove, onPointerL
       <rect className={styles.cardDim} x="300" y="184" width="400" height="212" rx="13" />
       {phase === "encrypting" && <rect className={styles.scan} x="300" y="184" width="36" height="212" rx="13" />}
       <g className={styles.cardInk}>
-        <text x="326" y="216" className={styles.micro}>PASSVAULT</text>
-        <text x="326" y="237" className={styles.secondary}>SAVED LOGIN / EXAMPLE.COM</text>
-        <text x="326" y="275" className={styles.label}>{sealed ? "CIPHERTEXT / AES-256-GCM" : "SAMPLE PASSWORD"}</text>
-        <text x="326" y="312" className={`${styles.number} ${sealed ? styles.hiddenNumber : ""}`}>demo-pass-{cardLast4}</text>
-        <text x="326" y="312" className={`${styles.number} ${styles.cipher}`}>8F3A 9C21 7D0E</text>
-        <text x="326" y="350" className={styles.label}>USERNAME</text>
-        <text x="326" y="372" className={styles.secondary}>{holderName.toLowerCase().trim().split(/\s+/)[0]}@example.com</text>
-        <text x="326" y="388" className={styles.label}>ENCRYPTED BEFORE SYNC</text>
+        <text x="326" y="214" className={styles.micro}>PASSVAULT</text>
+        <text x="326" y="232" className={styles.secondary}>SAVED LOGIN / EXAMPLE.COM</text>
+        <text x="326" y="262" className={styles.label}>{sealed ? "ENCRYPTED LOGIN" : "SAMPLE PASSWORD"}</text>
+        <text x="326" y="292" className={`${styles.number} ${sealed ? styles.hiddenNumber : ""}`}>demo-pass-{cardLast4}</text>
+        <text x="326" y="292" className={`${styles.number} ${styles.cipher}`}>8F3A 9C21 7D0E</text>
+        <text x="326" y="322" className={styles.label}>USERNAME</text>
+        <text x="326" y="340" className={styles.secondary}>{holderName.toLowerCase().trim().split(/\s+/)[0]}@example.com</text>
+        <text x="326" y="364" className={styles.label}>PRIVATE BY DESIGN</text>
       </g>
       {sealed
-        ? <g className={styles.sealedPill}><rect x="602" y="204" width="70" height="24" rx="12" /><circle cx="615" cy="216" r="3" /><text x="625" y="216">SEALED</text></g>
+        ? <g className={styles.sealedPill}><rect x="590" y="202" width="86" height="26" rx="13" /><circle cx="606" cy="215" r="3.5" /><text x="617" y="215">SEALED</text></g>
         : <text x="605" y="220" className={styles.cardMark}>LOGIN</text>}
       <g className={`${styles.cardLock} ${["attack", "blocked"].includes(phase) ? styles.show : ""}`}>
-        <circle cx="626" cy="350" r="15" />
-        <rect x="619" y="346" width="14" height="11" rx="2" />
-        <path d="M622 346v-5a4 4 0 0 1 8 0v5" />
-        <circle cx="626" cy="351" r="1.5" className={styles.lockKeyhole} />
-        <text x="650" y="350">{phase === "blocked" ? "LOCKED" : "LOCKING"}</text>
+        <rect x="562" y="334" width="114" height="32" rx="16" className={styles.cardLockBadge} />
+        <circle cx="580" cy="350" r="11" />
+        <rect x="575" y="346" width="10" height="8" rx="1.5" />
+        <path d="M577 346v-3a3 3 0 0 1 6 0v3" />
+        <circle cx="580" cy="350.5" r="1" className={styles.lockKeyhole} />
+        <text x="596" y="350">{phase === "blocked" ? "LOCKED" : "LOCKING"}</text>
       </g>
     </g>
   );
@@ -123,8 +131,8 @@ export default function HeroVault({ className = "", loop = true, cardLast4 = "20
     const bounds = event.currentTarget.getBoundingClientRect();
     const x = ((event.clientX - bounds.left) / bounds.width) * 2 - 1;
     const y = ((event.clientY - bounds.top) / bounds.height) * 2 - 1;
-    cardRef.current?.style.setProperty("--tilt-x", `${x * 7}deg`);
-    cardRef.current?.style.setProperty("--tilt-y", `${y * -6}deg`);
+    cardRef.current?.style.setProperty("--tilt-x", `${x * 3}deg`);
+    cardRef.current?.style.setProperty("--tilt-y", `${y * -2}deg`);
   }
   function resetCardTilt() {
     cardRef.current?.style.setProperty("--tilt-x", "0deg");
@@ -132,7 +140,7 @@ export default function HeroVault({ className = "", loop = true, cardLast4 = "20
   }
   return (
     <section ref={rootRef} className={`${styles.root} ${className}`} role="img" aria-label="PassVault encrypts a sample login in the browser, blocks four automated requests at the vault shield, and syncs ciphertext while keeping the key on this device.">
-      <div className={styles.topbar}><span><i /> BROWSER-SIDE ENCRYPTION</span><span>PASSVAULT / SECURE FLOW</span></div>
+      <div className={styles.topbar}><span><i /> ENCRYPTION HAPPENS ON THIS DEVICE</span><span>PASSVAULT</span></div>
       <svg className={styles.visual} viewBox="0 0 1000 560" role="presentation">
         <defs>
           <linearGradient id="hero-scan-gradient"><stop offset="0" stopColor="#8d91ff" stopOpacity="0" /><stop offset=".5" stopColor="#b9baff" stopOpacity=".6" /><stop offset="1" stopColor="#8d91ff" stopOpacity="0" /></linearGradient>
@@ -143,21 +151,20 @@ export default function HeroVault({ className = "", loop = true, cardLast4 = "20
           <marker id="hero-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 8 4 0 8" /></marker>
         </defs>
         <Shield className={`${styles.outerShield} ${activePhase === "blocked" ? styles.shieldActive : ""}`} />
-        <Shield className={styles.innerShield} />
         <text x="72" y="200" className={styles.small}>{phaseLabels[activePhase]}</text>
         <ThreatWave phase={activePhase} />
-        <g className={`${styles.blocked} ${activePhase === "blocked" ? styles.show : ""}`}><rect x="350" y="130" width="194" height="28" rx="5" /><text x="362" y="148">4 REQUESTS STOPPED</text></g>
+        <g className={`${styles.blocked} ${activePhase === "blocked" ? styles.show : ""}`}><rect x="372" y="122" width="256" height="34" rx="6" /><text x="500" y="139">4 ATTEMPTS BLOCKED</text></g>
         <Card phase={activePhase} cardLast4={cardLast4} holderName={holderName} cardRef={cardRef} onPointerMove={tiltCard} onPointerLeave={resetCardTilt} />
-        <g className={styles.safeTag}><rect x="52" y="60" width="176" height="34" rx="4" /><text x="69" y="77">AES-256-GCM / SEALED</text></g>
-        <g className={styles.sideLabel}><text x="746" y="94">Keys never leave your device</text><text x="746" y="116">LOCAL KEY / LOCAL TRUST</text></g>
+        <g className={styles.safeTag}><rect x="36" y="56" width="252" height="38" rx="6" /><text x="162" y="75">ENCRYPTED ON DEVICE</text></g>
+        <g className={styles.sideLabel} textAnchor="end"><text x="944" y="90">Your key stays on this device</text></g>
         <g className={`${styles.flow} ${activePhase === "vaulting" ? styles.show : ""}`}>
-          <text x="716" y="410">CIPHERTEXT ONLY / VAULT</text>
+          <text x="730" y="416">ENCRYPTED DATA SYNC</text>
           <g className={styles.device}><rect x="724" y="438" width="32" height="48" rx="4" /><circle cx="740" cy="476" r="2" /></g>
           <path d="M768 462h42" className={styles.arrow} markerEnd="url(#hero-arrow)" /><VaultIcon />
         </g>
       </svg>
-      <div className={styles.caption}><strong>Only ciphertext syncs to storage</strong><span>Your master key stays in this browser.</span></div>
-      <div className={styles.legend}><span><b className={styles.safeDot} />Encrypted credential</span><span><b className={styles.redDot} />Automated probe</span><em>Illustrative security flow</em></div>
+      <div key={activePhase} className={styles.caption}><strong>{phaseDescriptions[activePhase][0]}</strong><span>{phaseDescriptions[activePhase][1]}</span></div>
+      <div className={styles.legend}><span><b className={styles.safeDot} />Encrypted login</span><span><b className={styles.redDot} />Automated attempt</span><em>Illustrative flow</em></div>
       <div className={styles.srLive} aria-live="polite" aria-atomic="true">{phaseAnnouncements[activePhase]}</div>
     </section>
   );
