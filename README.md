@@ -12,6 +12,8 @@
 
 An enterprise-grade, zero-knowledge, full-stack password security vault and high-performance interactive web application. Engineered with **React 19**, **WebCrypto AES-256-GCM**, **Three.js**, **Express 5**, and **MongoDB**, featuring **Linear/Apple-inspired motion design**, client-side cryptographic isolation, real-time breach detection, encrypted one-time secret sharing, and multi-tenant security architecture.
 
+> **Project status:** PassVault is actively developed. Review the deployment and security notes before exposing an instance to the public internet.
+
 ---
 
 ## 🚀 Key Milestones & What's New
@@ -238,6 +240,7 @@ PasswordProject/
 ### Prerequisites
 - **Node.js**: v18.0.0 or later (v20+ recommended)
 - **MongoDB**: Local MongoDB instance (`mongodb://127.0.0.1:27017`) or MongoDB Atlas URI
+- A modern browser with **Web Crypto API** support
 
 ---
 
@@ -264,9 +267,11 @@ PasswordProject/
    PORT=3000
    CORS_ORIGIN=http://localhost:5173
    JWT_SECRET=your-super-strong-jwt-secret-key-here
-   VAULT_ENCRYPTION_KEY=your-32-byte-hex-encryption-key-here
    NODE_ENV=development
+   VAULT_ENCRYPTION_KEY=your-long-random-encryption-key-here
    ```
+
+   `JWT_SECRET` and `VAULT_ENCRYPTION_KEY` must be long, randomly generated values in any real deployment. Never commit `.env` or reuse the example values.
 
 4. Start the backend service:
    ```bash
@@ -309,13 +314,28 @@ PasswordProject/
    http://localhost:5173
    ```
 
+### Available scripts
+
+Run these commands from the frontend directory:
+
+| Command | Description |
+|---|---|
+| `npm run dev` | Start the Vite development server with hot reload |
+| `npm run build` | Create a production build in `dist/` |
+| `npm run preview` | Serve the production build locally |
+| `npm run lint` | Run ESLint across the frontend |
+
+The backend uses `npm start` and `npm run dev` to start `backend/server.js`.
+
 ---
 
 ## 📡 API Reference
 
-All mutating routes (`POST`, `PUT`, `DELETE`) enforce **Double-Submit Anti-CSRF protection** requiring an `X-CSRF-Token` header matching the `XSRF-TOKEN` cookie. Authenticated endpoints use **HttpOnly session cookies** (with fallback to `Authorization: Bearer <token>`).
+All mutating routes (`POST`, `PUT`, and `DELETE`) enforce **Double-Submit Anti-CSRF protection** requiring an `X-CSRF-Token` or `X-XSRF-Token` header matching the `XSRF-TOKEN` cookie. Authenticated endpoints use the HttpOnly `passvault_token` session cookie; the API also accepts `Authorization: Bearer <token>` as a fallback for CLI tools and integrations.
 
 ### 1. Authentication & Session Endpoints
+Mutating routes (`POST`, `PUT`, and `DELETE`) require a CSRF header (`X-CSRF-Token` or `X-XSRF-Token`) matching the `XSRF-TOKEN` cookie. Authenticated routes use the HttpOnly `passvault_token` session cookie; bearer authorization is also supported for integrations.
+
 | Method | Route | Description | Auth Required | CSRF Required |
 |---|---|---|:---:|:---:|
 | `GET` | `/api/csrf-token` | Issue or refresh Double-Submit CSRF cookie & token | ❌ | ❌ |
@@ -355,13 +375,22 @@ All mutating routes (`POST`, `PUT`, `DELETE`) enforce **Double-Submit Anti-CSRF 
 
 PassVault is engineered with zero-trust architectural principles:
 
-1. **Zero-Knowledge Core**: Plaintext passwords, notes, and custom fields never leave the client's browser. Encryption occurs before any network transmission using standard WebCrypto APIs.
+1. **Zero-Knowledge Core**: Vault passwords, notes, and custom fields are encrypted in the browser with WebCrypto before transmission. The current client format is `enc:v2`; the backend stores and returns that ciphertext without decrypting it. The server also retains an `enc:v1` AES-GCM fallback for legacy records.
 2. **600,000 PBKDF2 Iterations**: Meets NIST SP 800-132 recommendations, providing heavy defense against GPU-accelerated offline dictionary and rainbow table attacks.
-3. **Non-Extractable Keys**: CryptoKey objects are instantiated with `extractable: false`, preventing external scripts or extensions from reading raw key bytes out of browser memory.
+3. **Non-Extractable Keys**: Vault `CryptoKey` objects use `extractable: false` and remain in React memory only. Refreshing the page requires entering the master password again. The per-device KDF salt stored in local storage is not the encryption key.
 4. **Anti-CSRF Double-Submit**: State changes require an authenticated cryptographic header token matching an unforgeable cookie verified via constant-time byte comparisons (`crypto.timingSafeEqual`).
 5. **HttpOnly Cookie Storage**: Authentication tokens are isolated in HttpOnly, SameSite cookies to protect against script-based token theft (XSS exfiltration).
 6. **Input Sanitization**: CSV imports and user inputs are strictly validated and stripped of executable tags and control characters to prevent Stored XSS.
 7. **Scoped Data Isolation**: MongoDB queries strictly filter by `userId`, enforcing multi-tenant isolation across all vault operations.
+
+### Production deployment checklist
+
+- Use HTTPS for the frontend and backend, and set `NODE_ENV=production`.
+- Set `CORS_ORIGIN` to the exact frontend origin(s), separated by commas.
+- Use different, randomly generated `JWT_SECRET` and `VAULT_ENCRYPTION_KEY` values and store them in a secret manager.
+- Set every `VITE_*_API_URL` value to an HTTPS API URL before building the frontend.
+- Protect MongoDB with authentication, network restrictions, and backups.
+- Treat plaintext exports and PassVault Send links as sensitive. Send links carry the decryption key in the URL fragment, so the complete link must be shared securely.
 
 ---
 
