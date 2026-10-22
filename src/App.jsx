@@ -38,6 +38,9 @@ function App() {
   const [drawerClosing, setDrawerClosing] = useState(false);
   const [form, setForm] = useState(initialForm);
   const [editingId, setEditingId] = useState(null);
+  const [currentPasswordConfirmation, setCurrentPasswordConfirmation] = useState("");
+  const [newPasswordConfirmation, setNewPasswordConfirmation] = useState("");
+  const [credentialFormError, setCredentialFormError] = useState("");
   const [revealed, setRevealed] = useState({});
   const [copied, setCopied] = useState("");
   const [showLanding, setShowLanding] = useState(true);
@@ -91,6 +94,8 @@ function App() {
 
   const weakCount = credentials.filter((item) => passwordStrength(item.password) === "Weak").length;
   const strongCount = credentials.filter((item) => passwordStrength(item.password) === "Strong").length;
+  const editingCredential = credentials.find((item) => item.id === editingId);
+  const isChangingPassword = Boolean(editingCredential && editingCredential.password !== form.password);
   const passwordGroups = useMemo(() => {
     const groups = new Map();
     credentials.forEach((item) => {
@@ -208,12 +213,12 @@ function App() {
   });
 
   function openNewCredential() {
-    setForm(initialForm); setEditingId(null); setServiceSuggestionIndex(0); setServiceSuggestionsDismissed(false); setDrawerClosing(false); setDrawerOpen(true);
+    setForm(initialForm); setEditingId(null); setCurrentPasswordConfirmation(""); setNewPasswordConfirmation(""); setCredentialFormError(""); setServiceSuggestionIndex(0); setServiceSuggestionsDismissed(false); setDrawerClosing(false); setDrawerOpen(true);
   }
 
   function openEdit(item) {
     setForm({ service: item.service, category: item.category, username: item.username, password: item.password, note: item.note || "" });
-    setEditingId(item.id); setServiceSuggestionsDismissed(true); setDrawerClosing(false); setDrawerOpen(true);
+    setEditingId(item.id); setCurrentPasswordConfirmation(""); setNewPasswordConfirmation(""); setCredentialFormError(""); setServiceSuggestionsDismissed(true); setDrawerClosing(false); setDrawerOpen(true);
   }
 
   function closeDrawer() {
@@ -261,6 +266,16 @@ function App() {
       return;
     }
     const existing = credentials.find((item) => item.id === editingId);
+    const passwordChanged = Boolean(existing && existing.password !== form.password);
+    if (passwordChanged && currentPasswordConfirmation !== existing.password) {
+      setCredentialFormError("Enter the account's current password to change it.");
+      return;
+    }
+    if (passwordChanged && newPasswordConfirmation !== form.password) {
+      setCredentialFormError("Confirm the new password before saving.");
+      return;
+    }
+    setCredentialFormError("");
     const id = editingId || crypto.randomUUID();
     const customFields = form.note.trim()
       ? await encryptCustomFields([{ id: "note", label: "Note", value: form.note.trim(), type: "text" }], vaultKey)
@@ -287,6 +302,8 @@ function App() {
       setCredentials((items) => editingId
         ? items.map((item) => item.id === id ? { ...item, ...form, site: payload.site, tag: payload.tag } : item)
         : [...items, { ...form, id, site: payload.site, tag: payload.tag, favorite: false }]);
+      setCurrentPasswordConfirmation("");
+      setNewPasswordConfirmation("");
       closeDrawer();
       setForm(initialForm);
     } catch (error) {
@@ -300,6 +317,9 @@ function App() {
     const alphabet = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%";
     const bytes = crypto.getRandomValues(new Uint8Array(18));
     setForm((value) => ({ ...value, password: Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join("") }));
+    setCurrentPasswordConfirmation("");
+    setNewPasswordConfirmation("");
+    setCredentialFormError("");
   }
 
   async function copyValue(value, id) {
@@ -471,8 +491,13 @@ function App() {
             </label>
             <fieldset><legend>Category</legend><div className="form-categories">{CATEGORIES.map((value) => <button type="button" key={value} className={form.category === value ? "selected" : ""} onClick={() => setForm({ ...form, category: value })}>{value}</button>)}</div></fieldset>
             <label>Username or email<input required value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} placeholder="name@domain.com or handle" /></label>
-            <label>Password<div className="password-entry"><input required value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder="Enter or generate"/><button type="button" onClick={generatePassword}>Generate</button></div>{form.password && <small className="password-tip">Tip: generated passphrases are 18 characters with high entropy.</small>}</label>
+            <label>Password<div className="password-entry"><input type="password" autoComplete={editingId ? "current-password" : "new-password"} required value={form.password} onChange={(event) => { setForm({ ...form, password: event.target.value }); setCurrentPasswordConfirmation(""); setNewPasswordConfirmation(""); setCredentialFormError(""); }} placeholder="Enter or generate"/><button type="button" onClick={generatePassword}>Generate</button></div>{form.password && <small className="password-tip">Tip: generated passphrases are 18 characters with high entropy.</small>}</label>
+            {isChangingPassword && <div className="password-confirmation-fields">
+              <label>Current password<input type="password" autoComplete="current-password" required value={currentPasswordConfirmation} onChange={(event) => { setCurrentPasswordConfirmation(event.target.value); setCredentialFormError(""); }} placeholder="Enter the current account password" /></label>
+              <label>Confirm new password<input type="password" autoComplete="new-password" required value={newPasswordConfirmation} onChange={(event) => { setNewPasswordConfirmation(event.target.value); setCredentialFormError(""); }} placeholder="Re-enter the new password" /></label>
+            </div>}
             <label>Optional note<input value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="Recovery pin, security question, seed hint" /></label>
+            {credentialFormError && <p className="credential-form-error" role="alert">{credentialFormError}</p>}
             <div className="drawer-actions"><button type="button" className="cancel-button" onClick={closeDrawer}>Cancel</button><button type="submit" className="save-button" disabled={isSaving}>{isSaving ? "Saving…" : "Save to vault"}</button></div>
           </form>
         </aside>

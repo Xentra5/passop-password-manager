@@ -120,6 +120,8 @@ kbd { min-width:13px; padding:1px 3px; border:1px solid #343434; border-radius:3
 .password-entry input { flex:1; min-width:0; }
 .password-entry button { height:33px; padding:0 10px; border:1px solid #272727; border-radius:5px; background:#151515; color:#d5dce6; font-size:9px; }
 .password-tip { color:#69778c; font-size:8px; }
+.password-confirmation-fields { display:grid; gap:14px; }
+.credential-form-error { margin:0; color:#fca5a5; font-size:11px; line-height:1.4; }
 .credential-form .drawer-actions { margin-top:auto; display:flex; justify-content:flex-end; gap:8px; padding-top:16px; }
 .drawer-actions button { height:34px; padding:0 12px; border-radius:5px; font-size:9px; }
 .cancel-button { border:1px solid #282828; background:#080808; color:#c0c8d4; }

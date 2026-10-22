@@ -33,6 +33,18 @@ export const getTagBadgeStyle = (tag) => {
   }
 };
 
+const HoverHint = ({ text, children, className = "" }) => (
+  <span className={`group relative inline-flex ${className}`}>
+    {children}
+    <span
+      role="tooltip"
+      className="pointer-events-none absolute bottom-full left-1/2 z-40 mb-2 w-max max-w-56 -translate-x-1/2 rounded-md bg-[#1f2933] px-2.5 py-1.5 text-center text-[10px] font-medium leading-tight text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+    >
+      {text}
+    </span>
+  </span>
+);
+
 
 const Manager = ({
   token,
@@ -67,6 +79,8 @@ const Manager = ({
   const [selectedHistoryAccount, setSelectedHistoryAccount] = useState(null)
   const [credentialFormOpen, setCredentialFormOpen] = useState(false)
   const [deleteConfirmAccount, setDeleteConfirmAccount] = useState(null)
+  const [currentPasswordConfirmation, setCurrentPasswordConfirmation] = useState("")
+  const [newPasswordConfirmation, setNewPasswordConfirmation] = useState("")
 
   const searchInputRef = useRef(null)
   const siteInputId = useId()
@@ -113,6 +127,10 @@ const Manager = ({
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value })
+    if (e.target.name === "password") {
+      setCurrentPasswordConfirmation("")
+      setNewPasswordConfirmation("")
+    }
   }
 
   // Keyboard shortcut listener: Ctrl+K or Cmd+K focuses vault search, Esc clears it
@@ -196,22 +214,21 @@ const Manager = ({
     const limit = Math.floor(0x100000000 / charsetLen) * charsetLen
     let generated = ""
     const randomBuffer = new Uint32Array(64) // oversample; we'll filter
-    let idx = 0
+    let idx = randomBuffer.length
     while (generated.length < 16) {
       if (idx >= randomBuffer.length) {
         crypto.getRandomValues(randomBuffer)
         idx = 0
       }
-      crypto.getRandomValues(randomBuffer)
-      for (let i = 0; i < randomBuffer.length && generated.length < 16; i++) {
-        if (randomBuffer[i] < limit) {
-          generated += charset[randomBuffer[i] % charsetLen]
-        }
+      const value = randomBuffer[idx++]
+      if (value < limit) {
+        generated += charset[value % charsetLen]
       }
-      idx = randomBuffer.length // force refill next iteration if needed
     }
 
     setForm(prev => ({ ...prev, password: generated }))
+    setCurrentPasswordConfirmation("")
+    setNewPasswordConfirmation("")
     setShowPassword(true)
     toast.success("Generated 16-character fortified password", {
       theme: "dark",
@@ -222,6 +239,8 @@ const Manager = ({
 
   const handleApplyGeneratedPassword = (newPassword) => {
     setForm(prev => ({ ...prev, password: newPassword }));
+    setCurrentPasswordConfirmation("")
+    setNewPasswordConfirmation("")
     setShowPassword(true);
     toast.success("Applied fortified secret to credential form!", {
       theme: "dark",
@@ -232,12 +251,24 @@ const Manager = ({
 
   const handleBulkImport = async (candidates) => {
     // 1. Zero-Knowledge Client-Side Encryption for each candidate
+    const localCandidates = candidates.map((acc) => ({
+      ...acc,
+      id: acc.id || uuidv4(),
+      site: (acc.site || "").trim(),
+      username: (acc.username || "").trim(),
+      favorite: Boolean(acc.favorite),
+      tag: acc.tag || "Personal",
+      customFields: Array.isArray(acc.customFields) ? acc.customFields : [],
+    }));
     const encryptedRecords = await Promise.all(
-      candidates.map(async (acc) => ({
-        id: acc.id || uuidv4(),
-        site: acc.site.trim(),
-        username: acc.username.trim(),
+      localCandidates.map(async (acc) => ({
+        id: acc.id,
+        site: acc.site,
+        username: acc.username,
         password: await encryptCredential(acc.password, vaultKey),
+        favorite: acc.favorite,
+        tag: acc.tag,
+        customFields: await encryptCustomFields(acc.customFields, vaultKey),
       }))
     );
 
@@ -254,11 +285,6 @@ const Manager = ({
     }
 
     // 3. Update local state with plaintext for instant UI display
-    const localCandidates = candidates.map((acc, idx) => ({
-      ...acc,
-      id: encryptedRecords[idx].id,
-    }));
-
     setPasswordArray(prev => [...prev, ...localCandidates]);
   };
 
@@ -294,6 +320,29 @@ const Manager = ({
   }
 
   const savePassword = async () => {
+    const existingAccount = form.id
+      ? passwordArray.find(item => item.id === form.id)
+      : null
+    const isChangingExistingPassword = Boolean(
+      existingAccount && existingAccount.password !== form.password
+    )
+
+    if (
+      isChangingExistingPassword &&
+      currentPasswordConfirmation !== existingAccount.password
+    ) {
+      toast.error("Enter this account's current password to save a password change.", {
+        theme: "dark",
+      })
+      return
+    }
+    if (isChangingExistingPassword && newPasswordConfirmation !== form.password) {
+      toast.error("Confirm the new password before saving this change.", {
+        theme: "dark",
+      })
+      return
+    }
+
     if (form.site.trim().length >= 3 && form.username.trim().length >= 3 && form.password.length >= 3) {
       const isEditing = Boolean(form.id)
       const generatedId = form.id || uuidv4()
@@ -378,6 +427,8 @@ const Manager = ({
           autoClose: 2000,
         })
         setForm({ site: "", username: "", password: "", favorite: false, tag: "Personal", customFields: [] })
+        setCurrentPasswordConfirmation("")
+        setNewPasswordConfirmation("")
         setCredentialFormOpen(false)
       } catch (error) {
         console.error("Error saving password:", error)
@@ -398,8 +449,15 @@ const Manager = ({
         site: account.site,
         username: account.username,
         password: oldPassword,
+        favorite: Boolean(account.favorite),
+        tag: account.tag || "Personal",
         id: account.id,
+        customFields: Array.isArray(account.customFields)
+          ? account.customFields.map(field => ({ ...field }))
+          : [],
       });
+      setCurrentPasswordConfirmation("")
+      setNewPasswordConfirmation("")
       setShowPassword(true);
       setCredentialFormOpen(true)
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -418,7 +476,7 @@ const Manager = ({
       const updatedAccount = { ...account, history: [] };
 
       if (backendOnline) {
-        await secureFetch(`${API_BASE_URL}/${accountId}`, {
+        const response = await secureFetch(`${API_BASE_URL}/${accountId}`, {
           method: 'PUT',
           headers: authHeaders(),
           body: JSON.stringify({
@@ -429,6 +487,8 @@ const Manager = ({
             history: [],
           }),
         });
+        if (response.status === 401) onUnauthorized();
+        if (!response.ok) throw new Error(`Backend status ${response.status}`);
       }
 
       setPasswordArray(prev => prev.map(p => p.id === accountId ? updatedAccount : p));
@@ -442,13 +502,6 @@ const Manager = ({
 
   const initiateDeletePassword = (account) => {
     setDeleteConfirmAccount(account)
-  }
-
-  const DeletePassword = (id) => {
-    const account = passwordArray.find(item => item.id === id)
-    if (account) {
-      initiateDeletePassword(account)
-    }
   }
 
   const executeDeletePassword = async () => {
@@ -494,6 +547,8 @@ const Manager = ({
           ? passwordToEdit.customFields.map(f => ({ ...f }))
           : [],
       })
+      setCurrentPasswordConfirmation("")
+      setNewPasswordConfirmation("")
       window.scrollTo({ top: 0, behavior: 'smooth' })
       setCredentialFormOpen(true)
     }
@@ -501,6 +556,8 @@ const Manager = ({
 
   const cancelEditing = () => {
     setForm({ site: "", username: "", password: "", favorite: false, tag: "Personal", customFields: [] })
+    setCurrentPasswordConfirmation("")
+    setNewPasswordConfirmation("")
     setShowPassword(false)
   }
 
@@ -522,7 +579,7 @@ const Manager = ({
 
     if (backendOnline) {
       try {
-        await secureFetch(`${API_BASE_URL}/${id}`, {
+        const response = await secureFetch(`${API_BASE_URL}/${id}`, {
           method: "PUT",
           headers: authHeaders(),
           body: JSON.stringify({
@@ -532,8 +589,14 @@ const Manager = ({
             favorite: newFavStatus,
           }),
         });
+        if (response.status === 401) onUnauthorized();
+        if (!response.ok) throw new Error(`Backend status ${response.status}`);
       } catch (err) {
         console.warn("Failed to sync favorite status to backend:", err);
+        setPasswordArray(prev => prev.map(item =>
+          item.id === id ? { ...item, favorite: account.favorite } : item
+        ));
+        toast.error("Could not update favorite status", { theme: "dark" });
       }
     }
   };
@@ -689,11 +752,17 @@ const Manager = ({
   }, [passwordArray, auditFilter, auditData, selectedTag, searchQuery]);
 
   const strength = getPasswordStrength(form.password)
+  const editingAccount = form.id
+    ? passwordArray.find(item => item.id === form.id)
+    : null
+  const isChangingExistingPassword = Boolean(
+    editingAccount && editingAccount.password !== form.password
+  )
   const isAnyRevealed = Boolean(showPassword || Object.values(revealedIds).some(Boolean))
 
   return (
     <div className="vault-workspace reference-vault relative min-h-screen w-full pb-20 pt-10 selection:bg-[#cce7ed] selection:text-[#14566d]">
-      <ToastContainer position="top-right" autoClose={2000} theme="dark" />
+      <ToastContainer position="top-right" autoClose={2000} theme={theme} />
 
       <main className="page-enter mx-auto max-w-6xl px-4 sm:px-6">
         {/* Header / Hero Section */}
@@ -711,7 +780,7 @@ const Manager = ({
           </p>
           </div>
           <div className="flex items-center gap-3">
-          <button type="button" className="reference-add" onClick={() => { setForm({ site: "", username: "", password: "", favorite: false, tag: "Personal", customFields: [] }); setCredentialFormOpen(true) }}>Add credential <span>＋</span></button>
+          <button type="button" className="reference-add" onClick={() => { setForm({ site: "", username: "", password: "", favorite: false, tag: "Personal", customFields: [] }); setCurrentPasswordConfirmation(""); setNewPasswordConfirmation(""); setCredentialFormOpen(true) }}>Add credential <span>＋</span></button>
           <div
             className={`vault-security-status group inline-flex w-fit cursor-pointer items-center gap-3 rounded-lg border px-3.5 py-2.5 transition-all duration-200 ${
               isAnyRevealed
@@ -975,6 +1044,42 @@ const Manager = ({
                 {form.password && (
                   <div className="mt-2.5 flex h-1.5 w-full overflow-hidden rounded-full bg-[#e8e4de] dark:bg-slate-700/60">
                     <div className={`h-full transition-all duration-300 ${strength.color} ${strength.width}`}></div>
+                  </div>
+                )}
+                {isChangingExistingPassword && (
+                  <div className="mt-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label htmlFor="current-password-confirmation" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6f6a63]">
+                          Current password
+                        </label>
+                        <input
+                          id="current-password-confirmation"
+                          type="password"
+                          autoComplete="current-password"
+                          value={currentPasswordConfirmation}
+                          onChange={(event) => setCurrentPasswordConfirmation(event.target.value)}
+                          placeholder="Enter the account's current password"
+                          className="w-full rounded-md border border-[#d5d0c8] bg-[#faf9f7] px-3 py-2.5 text-sm text-[#1f2933] placeholder:text-[#aaa39a] focus:border-[#176b87] focus:outline-none focus:ring-1 focus:ring-[#176b87]/30"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="new-password-confirmation" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6f6a63]">
+                          Confirm new password
+                        </label>
+                        <input
+                          id="new-password-confirmation"
+                          type="password"
+                          autoComplete="new-password"
+                          value={newPasswordConfirmation}
+                          onChange={(event) => setNewPasswordConfirmation(event.target.value)}
+                          placeholder="Re-enter the new password"
+                          className="w-full rounded-md border border-[#d5d0c8] bg-[#faf9f7] px-3 py-2.5 text-sm text-[#1f2933] placeholder:text-[#aaa39a] focus:border-[#176b87] focus:outline-none focus:ring-1 focus:ring-[#176b87]/30"
+                          required
+                        />
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -1382,10 +1487,10 @@ const Manager = ({
                 <table className="w-full text-left text-sm">
                   <thead className="border-b border-[#ebe7e1] bg-[#faf9f7] text-[11px] uppercase tracking-wider text-[#7b746b]">
                     <tr>
-                      <th className="px-5 py-3.5 font-semibold">Website</th>
-                      <th className="px-5 py-3.5 font-semibold">Username</th>
-                      <th className="px-5 py-3.5 font-semibold">Password</th>
-                      <th className="px-5 py-3.5 text-right font-semibold">Actions</th>
+                      <th className="px-5 py-3.5 font-semibold" title="Saved service name, brand logo, folder, and security alerts">Website</th>
+                      <th className="px-5 py-3.5 font-semibold" title="Username or email saved for this service">Username</th>
+                      <th className="px-5 py-3.5 font-semibold" title="Password is hidden until you choose to reveal it">Password</th>
+                      <th className="px-5 py-3.5 text-right font-semibold" title="Send, view history, edit, or delete this credential">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[#ebe7e1] text-xs">
@@ -1415,12 +1520,15 @@ const Manager = ({
                                       ? "border border-amber-300 bg-amber-50 text-amber-500 shadow-2xs hover:bg-amber-100"
                                       : "text-[#c2bab0] hover:border hover:border-[#d5d0c8] hover:bg-white hover:text-amber-500"
                                   }`}
-                                  title={item.favorite ? "Favorited (Pinned to top). Click to unstar." : "Click to pin to Favorites ⭐"}
+                                  title={item.favorite ? "Favorited: pinned to Favorites. Click to remove the pin." : "Favorite: click to pin this account to Favorites."}
+                                  aria-label={item.favorite ? "Remove account from Favorites" : "Pin account to Favorites"}
                                 >
                                   <span className="text-sm leading-none">{item.favorite ? "★" : "☆"}</span>
                                 </button>
 
-                                <SiteLogo site={item.site} size="md" />
+                                <HoverHint text={`Brand logo for ${item.site || "this service"}. The logo is detected from the website domain.`}>
+                                  <SiteLogo site={item.site} size="md" />
+                                </HoverHint>
                                 <div className="min-w-0">
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     {(() => {
@@ -1453,8 +1561,8 @@ const Manager = ({
 
                                     {/* Category / Folder Badge */}
                                     <span
-                                      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${getTagBadgeStyle(item.tag || 'Personal')}`}
                                       title={`Folder: ${item.tag || 'Personal'}`}
+                                      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${getTagBadgeStyle(item.tag || 'Personal')}`}
                                     >
                                       {item.tag || 'Personal'}
                                     </span>
@@ -1462,7 +1570,7 @@ const Manager = ({
                                     {auditData.breachedIds.has(item.id) && (
                                       <span
                                         className="inline-flex items-center gap-1 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 border border-rose-200"
-                                        title="Alert: This password has leaked in public data breaches!"
+                                        title="Leaked: this password was found in a public data breach. Change it immediately."
                                       >
                                         🚨 Leaked
                                       </span>
@@ -1470,7 +1578,7 @@ const Manager = ({
                                     {auditData.reusedIds.has(item.id) && (
                                       <span
                                         className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 border border-amber-200"
-                                        title="Notice: Password is used on multiple accounts"
+                                        title="Reused: this password is used on multiple accounts. Use a unique password."
                                       >
                                         🔁 Reused
                                       </span>
@@ -1478,7 +1586,7 @@ const Manager = ({
                                     {auditData.weakIds.has(item.id) && (
                                       <span
                                         className="inline-flex items-center gap-1 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-800 border border-orange-200"
-                                        title="Notice: Password length is under 10 or lacks character diversity"
+                                        title="Weak: this password is short or lacks uppercase letters/numbers."
                                       >
                                         ⚠️ Weak
                                       </span>
@@ -1498,15 +1606,17 @@ const Manager = ({
                                     )}
                                   </div>
                                   <div className="flex items-center gap-1 mt-0.5">
-                                    <a
-                                      href={item.site.startsWith('http') ? item.site : `https://${item.site}`}
-                                      target="_blank"
-                                      rel="noreferrer"
-                                      title={item.site}
-                                      className="max-w-60 truncate text-[11px] text-[#7b746b] hover:text-[#176b87] hover:underline"
-                                    >
-                                      {item.site}
-                                    </a>
+                                    <HoverHint text="Open the saved website in a new browser tab.">
+                                      <a
+                                        href={item.site.startsWith('http') ? item.site : `https://${item.site}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        title={item.site}
+                                        className="max-w-60 truncate text-[11px] text-[#7b746b] hover:text-[#176b87] hover:underline"
+                                      >
+                                        {item.site}
+                                      </a>
+                                    </HoverHint>
                                     <button
                                       type="button"
                                       onClick={() => copyToClipboard(item.site, `${item.id}-site`, "Website")}
@@ -1529,11 +1639,14 @@ const Manager = ({
                             {/* Username Column */}
                             <td className="px-5 py-4 text-slate-300">
                               <div className="flex items-center gap-1.5 text-[#4b5563]">
-                                <span className="max-w-45 truncate">{item.username}</span>
+                                <HoverHint text="Saved username or email. Use the copy button to place it on your clipboard.">
+                                  <span className="max-w-45 truncate">{item.username}</span>
+                                </HoverHint>
                                 <button
                                   type="button"
                                   onClick={() => copyToClipboard(item.username, `${item.id}-user`, "Username")}
                                   title="Copy username"
+                                  aria-label="Copy username or email"
                                   className="rounded p-1 text-[#aaa39a] transition-colors hover:bg-[#ebe7e1] hover:text-[#176b87]"
                                 >
                                   {isCopiedUser ? (
@@ -1552,21 +1665,25 @@ const Manager = ({
                               <div className="flex items-center gap-2">
                                 {/* Plaintext or masked password display */}
                                 <div className="flex items-center gap-1.5">
-                                  <span
-                                    className={`text-xs font-mono transition-all ${
-                                      isRevealed
-                                        ? "font-semibold text-emerald-900 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200"
-                                        : "text-[#4b5563] tracking-widest"
-                                    }`}
-                                  >
-                                    {isRevealed ? item.password : "••••••••••••"}
-                                  </span>
+                                  <HoverHint text={isRevealed ? "Password is visible. Use the eye button to hide it." : "Password is hidden. Use the eye button to reveal it or the copy button to copy it."}>
+                                    <span
+                                      title={isRevealed ? "Password visible. Click the eye icon to hide it." : "Password hidden. Click the eye icon to reveal it."}
+                                      className={`text-xs font-mono transition-all ${
+                                        isRevealed
+                                          ? "font-semibold text-emerald-900 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200"
+                                          : "text-[#4b5563] tracking-widest"
+                                      }`}
+                                    >
+                                      {isRevealed ? item.password : "••••••••••••"}
+                                    </span>
+                                  </HoverHint>
                                 </div>
 
                                 <button
                                   type="button"
                                   onClick={() => togglePasswordReveal(item.id)}
                                   title={isRevealed ? "Hide password" : "Reveal password"}
+                                  aria-label={isRevealed ? "Hide password" : "Reveal password"}
                                   className={`rounded p-1.5 transition-all ${
                                     isRevealed
                                       ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-300"
@@ -1590,6 +1707,7 @@ const Manager = ({
                                   type="button"
                                   onClick={() => copyToClipboard(item.password, `${item.id}-pass`, "Password")}
                                   title="Copy password"
+                                  aria-label="Copy password"
                                   className="rounded p-1 text-[#aaa39a] transition-colors hover:bg-[#ebe7e1] hover:text-[#176b87]"
                                 >
                                   {isCopiedPass ? (
