@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LandingPage from "./Component/LandingPage";
 import Auth from "./Component/Auth";
+import PasswordHistoryModal from "./Component/PasswordHistoryModal";
 import { encryptCredential, decryptCredential, encryptCustomFields, decryptCustomFields, clearCachedVaultKey } from "./utils/cryptoVault";
 import { secureFetch } from "./utils/csrf";
 import { getAutoLockTimeoutMinutes, setAutoLockTimeoutMinutes } from "./utils/pinAuth";
@@ -46,6 +47,7 @@ function App() {
   const [showLanding, setShowLanding] = useState(true);
   const [isVaultLocked, setIsVaultLocked] = useState(false);
   const [healthOpen, setHealthOpen] = useState(false);
+  const [selectedHistoryAccount, setSelectedHistoryAccount] = useState(null);
   const [autoLockMinutes, setAutoLockMinutes] = useState(() => getAutoLockTimeoutMinutes());
   const clipboardTimerRef = useRef(null);
   const searchRef = useRef(null);
@@ -187,9 +189,15 @@ function App() {
       })
       .then(async (items) => Promise.all(items.map(async (item) => {
         const password = await decryptCredential(item.password, vaultKey);
+        const history = Array.isArray(item.history)
+          ? await Promise.all(item.history.map(async (entry) => ({
+            password: await decryptCredential(entry.password, vaultKey),
+            changedAt: entry.changedAt,
+          })))
+          : [];
         const customFields = Array.isArray(item.customFields) ? await decryptCustomFields(item.customFields, vaultKey) : [];
         const note = customFields.find((field) => field.label === "Note")?.value || "";
-        return { ...item, service: item.site, password, category: item.tag === "Development" ? "Developer" : (item.tag || "Personal"), note, customFields };
+        return { ...item, service: item.site, password, history, category: item.tag === "Development" ? "Developer" : (item.tag || "Personal"), note, customFields };
       })))
       .then((items) => { if (!cancelled) setCredentials(items); })
       .catch((error) => { if (!cancelled) setVaultError(error.message); })
@@ -288,7 +296,24 @@ function App() {
       favorite: Boolean(existing?.favorite),
       tag: form.category === "Developer" ? "Development" : form.category,
       customFields,
+      history: passwordChanged
+        ? await Promise.all([
+          { password: existing.password, changedAt: new Date().toISOString() },
+          ...(existing.history || []),
+        ].slice(0, 50).map(async (entry) => ({
+          password: await encryptCredential(entry.password, vaultKey),
+          changedAt: entry.changedAt,
+        })))
+        : (existing?.history
+          ? await Promise.all(existing.history.map(async (entry) => ({
+            password: await encryptCredential(entry.password, vaultKey),
+            changedAt: entry.changedAt,
+          })))
+          : []),
     };
+    const history = passwordChanged
+      ? [{ password: existing.password, changedAt: new Date().toISOString() }, ...(existing.history || [])].slice(0, 50)
+      : (existing?.history || []);
     setIsSaving(true);
     setVaultError("");
     try {
@@ -300,8 +325,8 @@ function App() {
       if (response.status === 401) throw new Error("Your session expired. Please sign in again.");
       if (!response.ok) throw new Error("The database could not save this credential.");
       setCredentials((items) => editingId
-        ? items.map((item) => item.id === id ? { ...item, ...form, site: payload.site, tag: payload.tag } : item)
-        : [...items, { ...form, id, site: payload.site, tag: payload.tag, favorite: false }]);
+        ? items.map((item) => item.id === id ? { ...item, ...form, site: payload.site, tag: payload.tag, history } : item)
+        : [...items, { ...form, id, site: payload.site, tag: payload.tag, favorite: false, history: [] }]);
       setCurrentPasswordConfirmation("");
       setNewPasswordConfirmation("");
       closeDrawer();
@@ -310,6 +335,48 @@ function App() {
       setVaultError(error.message);
     } finally {
       setIsSaving(false);
+    }
+
+  }
+
+  function openHistory(item) {
+    setSelectedHistoryAccount({ ...item, site: item.service });
+  }
+
+  function restoreHistoricalPassword(accountId, historicalPassword) {
+    const account = credentials.find((item) => item.id === accountId);
+    if (!account) return;
+    openEdit(account);
+    setForm((value) => ({ ...value, password: historicalPassword }));
+    setSelectedHistoryAccount(null);
+    setCredentialFormError("");
+  }
+
+  async function clearPasswordHistory(accountId) {
+    const account = credentials.find((item) => item.id === accountId);
+    if (!account) return;
+    setVaultError("");
+    try {
+      const response = await secureFetch(`${API_BASE_URL}/${encodeURIComponent(accountId)}`, {
+        method: "PUT",
+        headers: authHeaders(true),
+        body: JSON.stringify({
+          id: account.id,
+          site: account.service,
+          username: account.username,
+          password: await encryptCredential(account.password, vaultKey),
+          favorite: Boolean(account.favorite),
+          tag: account.category === "Developer" ? "Development" : account.category,
+          customFields: await encryptCustomFields(account.customFields || [], vaultKey),
+          history: [],
+        }),
+      });
+      if (!response.ok) throw new Error("The database could not clear this password history.");
+      const updated = { ...account, history: [] };
+      setCredentials((items) => items.map((item) => item.id === accountId ? updated : item));
+      setSelectedHistoryAccount(updated);
+    } catch (error) {
+      setVaultError(error.message);
     }
   }
 
@@ -444,13 +511,21 @@ function App() {
               <div className="username-cell"><span>{item.username}</span><button className="icon-action inline-copy" aria-label="Copy username" onClick={() => copyValue(item.username, `${item.id}-user`)}>{copied === `${item.id}-user` ? "✓" : "▢"}</button></div>
               <div className="password-cell"><span>{revealed[item.id] ? item.password : "•".repeat(Math.min(Math.max(item.password.length, 8), 16))}</span><button className="icon-action" aria-label={revealed[item.id] ? "Hide password" : "Reveal password"} onClick={() => setRevealed((value) => ({ ...value, [item.id]: !value[item.id] }))}>{revealed[item.id] ? "◉" : "◌"}</button><button className="icon-action" aria-label="Copy password" onClick={() => copyValue(item.password, `${item.id}-password`)}>{copied === `${item.id}-password` ? "✓" : "▢"}</button></div>
               <div><span className={`strength-tag ${strength.toLowerCase()}`}>{strength}</span></div>
-              <div className="row-actions"><button className="icon-action" aria-label="Edit credential" onClick={() => openEdit(item)}>✎</button><button className="icon-action delete-action" aria-label="Delete credential" onClick={() => removeCredential(item.id)}>×</button></div>
+              <div className="row-actions"><button className="icon-action" aria-label={`View password history${item.history?.length ? ` (${item.history.length} previous versions)` : ""}`} title={`${item.history?.length || 0} previous password changes`} onClick={() => openHistory(item)}>↺{item.history?.length ? <sup>{item.history.length}</sup> : null}</button><button className="icon-action" aria-label="Edit credential" onClick={() => openEdit(item)}>✎</button><button className="icon-action delete-action" aria-label="Delete credential" onClick={() => removeCredential(item.id)}>×</button></div>
             </article>;
           })}
         </section>
       </main>
 
       <footer className="replica-footer"><span>PassVault — Hand-crafted personal credential manager</span><span>Clipboard clears after 30 seconds&nbsp;&nbsp; Press <kbd>/</kbd> to search&nbsp;&nbsp; Press <kbd>A</kbd> to add account</span></footer>
+
+      <PasswordHistoryModal
+        isOpen={Boolean(selectedHistoryAccount)}
+        onClose={() => setSelectedHistoryAccount(null)}
+        account={selectedHistoryAccount}
+        onRestorePassword={restoreHistoricalPassword}
+        onClearHistory={clearPasswordHistory}
+      />
 
       {drawerOpen && <div className={`drawer-scrim${drawerClosing ? " is-closing" : ""}`} onMouseDown={(event) => { if (event.target === event.currentTarget) closeDrawer(); }}>
         <aside className={`credential-drawer${drawerClosing ? " is-closing" : ""}`} role="dialog" aria-modal="true" aria-labelledby="drawer-title">

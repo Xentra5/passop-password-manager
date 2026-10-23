@@ -560,7 +560,7 @@ app.put('/api/passwords/:id', authenticateToken, async (req, res) => {
     }
 
     if (Array.isArray(password.history)) {
-      updateFields.history = password.history.slice(0, 5).map(h => ({
+      updateFields.history = password.history.slice(0, 50).filter(h => h && typeof h.password === 'string').map(h => ({
         password: encryptVaultPassword(h.password),
         changedAt: h.changedAt ? new Date(h.changedAt) : new Date(),
       }));
