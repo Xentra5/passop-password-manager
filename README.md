@@ -56,9 +56,10 @@ PassVault has evolved from a basic credential CRUD into a production-hardened, d
   - Real-time Shannon entropy calculation (bits) and estimated offline/online crack-time visualization.
 
 - [x] **Zero-Knowledge Password Version History (`PasswordHistoryModal.jsx`)**:
-  - Automatically records up to 5 historical versions whenever a credential is updated.
+  - Automatically records up to 5 historical versions when a credential password changes.
   - Historical snapshots are client-side encrypted before network transmission.
-  - Timestamped change logs and 1-click credential rollback/restoration.
+  - Timestamped change logs with reveal, copy, and 1-click credential rollback/restoration actions.
+  - Explicit history clearing from the password history timeline.
 
 - [x] **Dynamic Custom Fields & Organization (`Manager.jsx`)**:
   - Add arbitrary encrypted custom fields (API tokens, recovery codes, PINs, security questions).
@@ -77,6 +78,19 @@ PassVault has evolved from a basic credential CRUD into a production-hardened, d
   - Custom React motion hooks: `useSpotlight`, `useTilt`, `useScrollReveal`, `useMagnetic`.
   - Inertial momentum scrolling powered by **Lenis**.
   - Dark mode and light mode theme support with persistent preferences.
+
+---
+
+## 🔁 Password History Workflow
+
+Password history is available from the history action in the credential list:
+
+1. Change a credential's password and save it. The previous value is encrypted in the browser and added to the beginning of its history.
+2. Open the history action to view the active password and its timestamped previous versions.
+3. Use **Reveal** or **Copy** for an individual version, or choose **Restore** to make that version active again.
+4. Choose **Clear History** to permanently remove all previous versions for that credential. The active password is not deleted.
+
+Only password changes create history entries; edits to metadata, tags, favorites, or custom fields do not. History is capped at the five most recent versions per credential.
 
 ---
 
