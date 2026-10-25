@@ -1,0 +1,14 @@
+# Auto-detect text files and normalize line endings to LF in the repo.
+# This eliminates the "LF will be replaced by CRLF" warnings on Windows.
+* text=auto eol=lf
+
+# Explicitly mark binary files as binary so Git never touches their line endings.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
