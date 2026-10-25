@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import LandingPage from "./Component/LandingPage";
 import Auth from "./Component/Auth";
 import PasswordHistoryModal from "./Component/PasswordHistoryModal";
+import LockScreenModal from "./Component/LockScreenModal";
 import { encryptCredential, decryptCredential, encryptCustomFields, decryptCustomFields, clearCachedVaultKey } from "./utils/cryptoVault";
-import { secureFetch } from "./utils/csrf";
+import { secureFetch, setCsrfToken } from "./utils/csrf";
 import { getAutoLockTimeoutMinutes, setAutoLockTimeoutMinutes } from "./utils/pinAuth";
 
 const CATEGORIES = ["Personal", "Finance", "Work", "Developer"];
@@ -49,6 +50,9 @@ function App() {
   const [healthOpen, setHealthOpen] = useState(false);
   const [selectedHistoryAccount, setSelectedHistoryAccount] = useState(null);
   const [autoLockMinutes, setAutoLockMinutes] = useState(() => getAutoLockTimeoutMinutes());
+  // BUG #2 FIX: Track whether we are still checking the session cookie on mount.
+  // This prevents the landing page from flashing before the /me check completes.
+  const [isRestoringSession, setIsRestoringSession] = useState(true);
   const clipboardTimerRef = useRef(null);
   const searchRef = useRef(null);
 
@@ -129,6 +133,7 @@ function App() {
     setShowLanding(false);
     setVaultError("");
     setIsVaultLocked(false);
+    setIsRestoringSession(false);
     localStorage.setItem("passvault_user", JSON.stringify(data.user));
   }
 
@@ -144,15 +149,65 @@ function App() {
     setIsVaultLocked(false);
   }
 
+  // BUG #2 FIX: On every page load/refresh, silently try GET /api/auth/me.
+  // If the HttpOnly cookie is still valid, restore the user session without
+  // forcing them back to the landing page. The vault key is NOT restored
+  // (it only lives in RAM) — so we show the LockScreenModal for re-entry.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await fetch(`${AUTH_API_URL}/me`, {
+          method: "GET",
+          credentials: "include",
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (!cancelled && data?.user) {
+            // Restore CSRF token from the /me response
+            if (data.csrfToken) setCsrfToken(data.csrfToken);
+            // Session cookie is valid — restore user identity but vault key is gone (page refresh).
+            // Show vault locked screen so user re-enters master password.
+            setSession({ user: data.user, token: null });
+            setShowLanding(false);
+            setIsVaultLocked(true);
+          }
+        }
+        // If the /me call fails (401) — no valid cookie — show the landing page as normal.
+      } catch {
+        // Network error or backend offline — stay on landing page.
+      } finally {
+        if (!cancelled) setIsRestoringSession(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Run ONCE on mount only
+
   const lockVault = useCallback(() => {
     if (!session.user) return;
+    clearCachedVaultKey();
+    setVaultKey(null);
+    setCredentials([]);
     setRevealed({});
     setQuery("");
     setHealthOpen(false);
     setIsVaultLocked(true);
-    setAuthModalMode("login");
-    setAuthModalOpen(true);
   }, [session.user]);
+
+  // Called by LockScreenModal when user re-enters their master password after a page refresh.
+  // Re-derives the vault key so the vault can be decrypted again without a full re-login.
+  const handleUnlockWithMasterPassword = useCallback(async (masterPassword) => {
+    const { deriveVaultKey } = await import("./utils/cryptoVault");
+    const key = await deriveVaultKey(masterPassword, session.user.email);
+    setVaultKey(key);
+    setIsVaultLocked(false);
+  }, [session.user]);
+
+  // Called by LockScreenModal when user unlocks with PIN (vault key already in RAM).
+  const handlePinUnlock = useCallback(() => {
+    setIsVaultLocked(false);
+  }, []);
 
   function updateAutoLockMinutes(value) {
     const minutes = Number(value);
@@ -420,6 +475,16 @@ function App() {
     }
   }
 
+  // BUG #2 FIX: While checking the session cookie on mount, show a minimal loading
+  // indicator to prevent the landing page from incorrectly flashing for logged-in users.
+  if (isRestoringSession) {
+    return (
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#0b0f17", color: "#a0aec0", fontFamily: "system-ui, sans-serif", fontSize: "1rem", letterSpacing: "0.05em" }}>
+        <span style={{ opacity: 0.7 }}>Restoring session…</span>
+      </div>
+    );
+  }
+
   if (showLanding) {
     return <><div className="landing-page-view dark min-h-screen bg-[#0b0f17] text-white">
       <header className="landing-return-header"><a href="#home">PassVault <small>personal vault</small></a><button type="button" onClick={() => openAuth("login")}>Sign in</button></header>
@@ -474,7 +539,7 @@ function App() {
 
         <div className="list-toolbar">
           <div className="quick-search">
-            <label className="search-box"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input ref={searchRef} value={query} onChange={(event) => { setQuery(event.target.value); setActiveSuggestion(0); }} onKeyDown={handleSearchKeyDown} placeholder="Search by name, username or service..." aria-label="Search credentials" aria-autocomplete="list" aria-controls="quick-search-suggestions" aria-expanded={searchSuggestions.length > 0}/><kbd>/</kbd></label>
+            <label className="search-box"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5" /><path d="m13 13 4 4" /></svg><input ref={searchRef} value={query} onChange={(event) => { setQuery(event.target.value); setActiveSuggestion(0); }} onKeyDown={handleSearchKeyDown} placeholder="Search by name, username or service..." aria-label="Search credentials" aria-autocomplete="list" aria-controls="quick-search-suggestions" aria-expanded={searchSuggestions.length > 0} /><kbd>/</kbd></label>
             {searchSuggestions.length > 0 && (
               <div id="quick-search-suggestions" className="quick-search-suggestions" role="listbox">
                 {searchSuggestions.map((item, index) => (
@@ -566,7 +631,7 @@ function App() {
             </label>
             <fieldset><legend>Category</legend><div className="form-categories">{CATEGORIES.map((value) => <button type="button" key={value} className={form.category === value ? "selected" : ""} onClick={() => setForm({ ...form, category: value })}>{value}</button>)}</div></fieldset>
             <label>Username or email<input required value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} placeholder="name@domain.com or handle" /></label>
-            <label>Password<div className="password-entry"><input type="password" autoComplete={editingId ? "current-password" : "new-password"} required value={form.password} onChange={(event) => { setForm({ ...form, password: event.target.value }); setCurrentPasswordConfirmation(""); setNewPasswordConfirmation(""); setCredentialFormError(""); }} placeholder="Enter or generate"/><button type="button" onClick={generatePassword}>Generate</button></div>{form.password && <small className="password-tip">Tip: generated passphrases are 18 characters with high entropy.</small>}</label>
+            <label>Password<div className="password-entry"><input type="password" autoComplete={editingId ? "current-password" : "new-password"} required value={form.password} onChange={(event) => { setForm({ ...form, password: event.target.value }); setCurrentPasswordConfirmation(""); setNewPasswordConfirmation(""); setCredentialFormError(""); }} placeholder="Enter or generate" /><button type="button" onClick={generatePassword}>Generate</button></div>{form.password && <small className="password-tip">Tip: generated passphrases are 18 characters with high entropy.</small>}</label>
             {isChangingPassword && <div className="password-confirmation-fields">
               <label>Current password<input type="password" autoComplete="current-password" required value={currentPasswordConfirmation} onChange={(event) => { setCurrentPasswordConfirmation(event.target.value); setCredentialFormError(""); }} placeholder="Enter the current account password" /></label>
               <label>Confirm new password<input type="password" autoComplete="new-password" required value={newPasswordConfirmation} onChange={(event) => { setNewPasswordConfirmation(event.target.value); setCredentialFormError(""); }} placeholder="Re-enter the new password" /></label>
@@ -577,8 +642,16 @@ function App() {
           </form>
         </aside>
       </div>}
-      {isVaultLocked && <div className="vault-lock-notice" role="status"><strong>Vault locked</strong><span>Sign in again to unlock your encrypted credentials.</span></div>}
-      <AuthOverlay open={authModalOpen} mode={authModalMode} onClose={() => { if (!isVaultLocked) setAuthModalOpen(false); }} onAuthenticated={handleAuthenticated} />
+      {/* BUG #2 FIX: LockScreenModal re-derives vault key after F5 refresh instead of full logout */}
+      <LockScreenModal
+        isOpen={isVaultLocked}
+        user={session.user}
+        hasVaultKey={Boolean(vaultKey)}
+        onUnlock={handlePinUnlock}
+        onUnlockWithMasterPassword={handleUnlockWithMasterPassword}
+        onLogout={handleLogout}
+      />
+      <AuthOverlay open={authModalOpen && !isVaultLocked} mode={authModalMode} onClose={() => { if (!isVaultLocked) setAuthModalOpen(false); }} onAuthenticated={handleAuthenticated} />
     </div>
   );
 }

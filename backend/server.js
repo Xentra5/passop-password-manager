@@ -426,9 +426,9 @@ app.get('/api/passwords', authenticateToken, async (req, res) => {
       customFields: Array.isArray(item.customFields) ? item.customFields : [],
       history: Array.isArray(item.history)
         ? item.history.map(h => ({
-            ...h,
-            password: decryptVaultPassword(h.password),
-          }))
+          ...h,
+          password: decryptVaultPassword(h.password),
+        }))
         : [],
     }));
     res.json(decryptedPasswords);

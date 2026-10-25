@@ -164,7 +164,7 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
 
       {/* Main Auth Card */}
       <section className="auth-panel relative z-10 w-full max-w-md rounded-2xl border border-white/20 bg-black p-6 text-white shadow-2xl sm:p-8">
-        
+
         {/* Close Button ('X' icon) */}
         {onClose && (
           <button
@@ -198,7 +198,7 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
 
         {/* Authentication Form */}
         <form onSubmit={handleSubmit} className="space-y-5">
-          
+
           {/* FIELD 1: EMAIL INPUT (Used by BOTH Login and Sign Up) */}
           <div>
             <label htmlFor="auth-email" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-white/75">
@@ -267,13 +267,12 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
                   onChange={handleChange}
                   required={isRegistering}
                   placeholder="Re-enter your password"
-                  className={`auth-field w-full rounded-md border bg-black px-3 py-2.5 pr-11 text-sm text-white outline-none transition focus:ring-1 ${
-                  form.confirmPassword && form.password !== form.confirmPassword
-                    ? "border-red-400 focus:border-red-500 focus:ring-red-200"
-                    : form.confirmPassword && form.password === form.confirmPassword
-                    ? "border-white focus:border-white focus:ring-white/30"
-                    : "border-white/35 focus:border-white focus:ring-white/30"
-                  }`}
+                  className={`auth-field w-full rounded-md border bg-black px-3 py-2.5 pr-11 text-sm text-white outline-none transition focus:ring-1 ${form.confirmPassword && form.password !== form.confirmPassword
+                      ? "border-red-400 focus:border-red-500 focus:ring-red-200"
+                      : form.confirmPassword && form.password === form.confirmPassword
+                        ? "border-white focus:border-white focus:ring-white/30"
+                        : "border-white/35 focus:border-white focus:ring-white/30"
+                    }`}
                 />
                 <button
                   type="button"

@@ -146,11 +146,10 @@ export default function VaultMigrationModal({
           <button
             type="button"
             onClick={() => setActiveTab('import')}
-            className={`flex items-center justify-center gap-2 rounded-md py-2 text-xs font-semibold transition-all ${
-              activeTab === 'import'
+            className={`flex items-center justify-center gap-2 rounded-md py-2 text-xs font-semibold transition-all ${activeTab === 'import'
                 ? 'bg-white text-[#176b87] shadow-sm'
                 : 'text-[#6f6a63] hover:text-[#1f2933]'
-            }`}
+              }`}
           >
             <span>📥 Import Accounts</span>
           </button>
@@ -158,11 +157,10 @@ export default function VaultMigrationModal({
           <button
             type="button"
             onClick={() => setActiveTab('export')}
-            className={`flex items-center justify-center gap-2 rounded-md py-2 text-xs font-semibold transition-all ${
-              activeTab === 'export'
+            className={`flex items-center justify-center gap-2 rounded-md py-2 text-xs font-semibold transition-all ${activeTab === 'export'
                 ? 'bg-white text-[#176b87] shadow-sm'
                 : 'text-[#6f6a63] hover:text-[#1f2933]'
-            }`}
+              }`}
           >
             <span>📤 Export Vault</span>
           </button>

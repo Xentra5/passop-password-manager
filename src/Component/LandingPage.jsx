@@ -53,6 +53,7 @@ import {
 import { useSpotlight, useTilt, useScrollReveal, useMagnetic } from "../hooks/useMotion";
 import CryptographicNetworkGlobe from "./CryptographicNetworkGlobe";
 import HeroVault from "./HeroVault";
+import VaultDefenseExperience from "./VaultDefenseExperience";
 
 // Sample test passwords for the interactive Entropy Analyzer
 const SAMPLE_SEEDS = [
@@ -407,6 +408,9 @@ const LandingPage = ({ onOpenAuth }) => {
         />
         <HeroVault />
       </div>
+
+      {/* SECTION: 3D VAULT DEFENSE INTERACTIVE EXPERIENCE (#features anchor) */}
+      <VaultDefenseExperience onOpenAuth={onOpenAuth} />
 
       {/* =====================================================================
           SECTION 4: INTERACTIVE LIVE CIPHER SANDBOX (Type & Scramble)

@@ -302,7 +302,7 @@ export function useGSAPReveal({ delay = 0, y = 24, duration = 0.75, stagger = 0.
             }
           );
         }, el);
-      } catch (err) {
+      } catch {
         // GSAP not available — CSS fallback handles reveal
       }
     };

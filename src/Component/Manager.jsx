@@ -1,0 +1,1923 @@
+import { useState, useEffect, useId, useMemo, useRef, Fragment } from 'react'
+import { ToastContainer, toast, Bounce } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import { v4 as uuidv4 } from "uuid";
+import SiteLogo, { extractDomain, getFamousBrand, POPULAR_SERVICES } from './SiteLogo';
+import { encryptCredential, decryptCredential, encryptCustomFields, decryptCustomFields } from '../utils/cryptoVault';
+import VaultSecurityAudit from './VaultSecurityAudit';
+import { checkPasswordBreach, auditVaultSecurity } from '../utils/breachCheck';
+import PasswordGeneratorModal from './PasswordGeneratorModal';
+import VaultMigrationModal from './VaultMigrationModal';
+import PasswordHistoryModal from './PasswordHistoryModal';
+import { secureFetch } from '../utils/csrf';
+
+// BUG #6 FIX: Use env variable so production deploys use HTTPS.
+// Set VITE_API_BASE_URL=https://your-domain.com/api/passwords in .env
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api/passwords"
+
+export const PRESET_TAGS = ['Personal', 'Work', 'Finance', 'Development', 'Social'];
+
+export const getTagBadgeStyle = (tag) => {
+  switch ((tag || '').toLowerCase()) {
+    case 'finance':
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50';
+    case 'work':
+      return 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-400 dark:border-blue-800/50';
+    case 'development':
+      return 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-400 dark:border-purple-800/50';
+    case 'social':
+      return 'bg-pink-50 text-pink-700 border-pink-200 dark:bg-pink-950/40 dark:text-pink-400 dark:border-pink-800/50';
+    case 'personal':
+    default:
+      return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800/50';
+  }
+};
+
+const HoverHint = ({ text, children, className = "" }) => (
+  <span className={`group relative inline-flex ${className}`}>
+    {children}
+    <span
+      role="tooltip"
+      className="pointer-events-none absolute bottom-full left-1/2 z-40 mb-2 w-max max-w-56 -translate-x-1/2 rounded-md bg-[#1f2933] px-2.5 py-1.5 text-center text-[10px] font-medium leading-tight text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+    >
+      {text}
+    </span>
+  </span>
+);
+
+
+const Manager = ({
+  token,
+  vaultKey,
+  onUnauthorized,
+  onOpenSend,
+  theme = "light",
+}) => {
+  const [form, setForm] = useState({
+    site: "",
+    username: "",
+    password: "",
+    favorite: false,
+    tag: "Personal",
+    customFields: [],
+  })
+  const [selectedTag, setSelectedTag] = useState("All")
+  const [passwordArray, setPasswordArray] = useState([])
+  const [showPassword, setShowPassword] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [activeSuggestion, setActiveSuggestion] = useState(0)
+  const [copiedKey, setCopiedKey] = useState(null)
+  const [revealedIds, setRevealedIds] = useState({})
+  const [revealedCustomFieldIds, setRevealedCustomFieldIds] = useState({})
+  const [expandedCustomFieldAccounts, setExpandedCustomFieldAccounts] = useState({})
+  const [backendOnline, setBackendOnline] = useState(true)
+  const [breachResults, setBreachResults] = useState(() => new Map())
+  const [isScanningBreaches, setIsScanningBreaches] = useState(false)
+  const [auditFilter, setAuditFilter] = useState('all')
+  const [isGeneratorOpen, setIsGeneratorOpen] = useState(false)
+  const [isMigrationOpen, setIsMigrationOpen] = useState(false)
+  const [selectedHistoryAccount, setSelectedHistoryAccount] = useState(null)
+  const [credentialFormOpen, setCredentialFormOpen] = useState(false)
+  const [deleteConfirmAccount, setDeleteConfirmAccount] = useState(null)
+  const [currentPasswordConfirmation, setCurrentPasswordConfirmation] = useState("")
+  const [newPasswordConfirmation, setNewPasswordConfirmation] = useState("")
+
+  const searchInputRef = useRef(null)
+  const siteInputId = useId()
+  const usernameInputId = useId()
+  const passwordInputId = useId()
+
+  const searchSuggestions = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase()
+    if (!query) return []
+
+    return passwordArray
+      .filter((item) => {
+        const site = (item.site || "").toLowerCase()
+        const username = (item.username || "").toLowerCase()
+        const domain = extractDomain(item.site).toLowerCase()
+        return site.includes(query) || username.includes(query) || domain.includes(query)
+      })
+      .slice(0, 6)
+  }, [passwordArray, searchQuery])
+
+  const handleSearchKeyDown = (event) => {
+    if (!searchSuggestions.length) return
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault()
+      setActiveSuggestion((index) => (index + 1) % searchSuggestions.length)
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault()
+      setActiveSuggestion((index) => (index - 1 + searchSuggestions.length) % searchSuggestions.length)
+    } else if (event.key === "Enter") {
+      event.preventDefault()
+      const suggestion = searchSuggestions[activeSuggestion]
+      if (suggestion) setSearchQuery(suggestion.site || suggestion.username)
+    } else if (event.key === "Escape") {
+      setSearchQuery("")
+      setActiveSuggestion(0)
+    }
+  }
+
+  const authHeaders = () => ({
+    Authorization: `Bearer ${token}`,
+    "Content-Type": "application/json",
+  })
+
+  const handleChange = (e) => {
+    setForm({ ...form, [e.target.name]: e.target.value })
+    if (e.target.name === "password") {
+      setCurrentPasswordConfirmation("")
+      setNewPasswordConfirmation("")
+    }
+  }
+
+  // Keyboard shortcut listener: Ctrl+K or Cmd+K focuses vault search, Esc clears it
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        if (searchInputRef.current) {
+          searchInputRef.current.focus();
+          searchInputRef.current.select();
+        }
+      } else if (e.key === 'Escape') {
+        if (document.activeElement === searchInputRef.current) {
+          setSearchQuery("");
+          searchInputRef.current.blur();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+    const loadPasswords = async () => {
+      try {
+        const req = await secureFetch(API_BASE_URL, {
+          headers: authHeaders(),
+        })
+        if (!req.ok) {
+          if (req.status === 401) onUnauthorized()
+          throw new Error(`Backend returned ${req.status}`)
+        }
+        const passwords = await req.json()
+        const decryptedList = await Promise.all(
+          passwords.map(async (item) => {
+            const decryptedPass = await decryptCredential(item.password, vaultKey);
+            const decryptedFields = Array.isArray(item.customFields)
+              ? await decryptCustomFields(item.customFields, vaultKey)
+              : [];
+            const decryptedHistory = Array.isArray(item.history)
+              ? await Promise.all(
+                item.history.map(async (h) => ({
+                  password: await decryptCredential(h.password, vaultKey),
+                  changedAt: h.changedAt,
+                }))
+              )
+              : [];
+            return {
+              ...item,
+              password: decryptedPass,
+              favorite: Boolean(item.favorite),
+              tag: item.tag || 'Personal',
+              customFields: decryptedFields,
+              history: decryptedHistory,
+            };
+          })
+        )
+        if (!isCancelled) {
+          setPasswordArray(decryptedList)
+          setBackendOnline(true)
+        }
+      } catch (error) {
+        console.warn('Backend unavailable, using local session state:', error)
+        if (!isCancelled) {
+          setBackendOnline(false)
+        }
+      }
+    }
+
+    void loadPasswords()
+    return () => {
+      isCancelled = true;
+    }
+  }, [token, vaultKey, onUnauthorized])
+
+  const generateStrongPassword = () => {
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-="
+    const charsetLen = charset.length
+    // BUG #11 FIX: Rejection-sampling to eliminate modulo bias
+    const limit = Math.floor(0x100000000 / charsetLen) * charsetLen
+    let generated = ""
+    const randomBuffer = new Uint32Array(64) // oversample; we'll filter
+    let idx = randomBuffer.length
+    while (generated.length < 16) {
+      if (idx >= randomBuffer.length) {
+        crypto.getRandomValues(randomBuffer)
+        idx = 0
+      }
+      const value = randomBuffer[idx++]
+      if (value < limit) {
+        generated += charset[value % charsetLen]
+      }
+    }
+
+    setForm(prev => ({ ...prev, password: generated }))
+    setCurrentPasswordConfirmation("")
+    setNewPasswordConfirmation("")
+    setShowPassword(true)
+    toast.success("Generated 16-character fortified password", {
+      theme: "dark",
+      transition: Bounce,
+      autoClose: 2000,
+    })
+  }
+
+  const handleApplyGeneratedPassword = (newPassword) => {
+    setForm(prev => ({ ...prev, password: newPassword }));
+    setCurrentPasswordConfirmation("")
+    setNewPasswordConfirmation("")
+    setShowPassword(true);
+    toast.success("Applied fortified secret to credential form!", {
+      theme: "dark",
+      transition: Bounce,
+      autoClose: 2000,
+    });
+  };
+
+  const handleBulkImport = async (candidates) => {
+    // 1. Zero-Knowledge Client-Side Encryption for each candidate
+    const localCandidates = candidates.map((acc) => ({
+      ...acc,
+      id: acc.id || uuidv4(),
+      site: (acc.site || "").trim(),
+      username: (acc.username || "").trim(),
+      favorite: Boolean(acc.favorite),
+      tag: acc.tag || "Personal",
+      customFields: Array.isArray(acc.customFields) ? acc.customFields : [],
+    }));
+    const encryptedRecords = await Promise.all(
+      localCandidates.map(async (acc) => ({
+        id: acc.id,
+        site: acc.site,
+        username: acc.username,
+        password: await encryptCredential(acc.password, vaultKey),
+        favorite: acc.favorite,
+        tag: acc.tag,
+        customFields: await encryptCustomFields(acc.customFields, vaultKey),
+      }))
+    );
+
+    // 2. Persist in bulk to backend database
+    if (backendOnline) {
+      const response = await secureFetch(`${API_BASE_URL}/bulk`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ passwords: encryptedRecords }),
+      });
+      if (!response.ok) {
+        throw new Error(`Bulk import failed with status ${response.status}`);
+      }
+    }
+
+    // 3. Update local state with plaintext for instant UI display
+    setPasswordArray(prev => [...prev, ...localCandidates]);
+  };
+
+  const getPasswordStrength = (pwd) => {
+    if (!pwd) return { score: 0, label: "None", width: "w-0", color: "bg-slate-700" }
+    let score = 0
+    if (pwd.length >= 8) score++
+    if (pwd.length >= 12) score++
+    if (/[A-Z]/.test(pwd) && /[a-z]/.test(pwd)) score++
+    if (/[0-9]/.test(pwd)) score++
+    if (/[^A-Za-z0-9]/.test(pwd)) score++
+
+    if (score <= 2) return { score: 1, label: "Basic", width: "w-1/4", color: "bg-rose-500" }
+    if (score <= 3) return { score: 2, label: "Moderate", width: "w-2/4", color: "bg-amber-500" }
+    if (score === 4) return { score: 3, label: "Strong", width: "w-3/4", color: "bg-emerald-500" }
+    return { score: 4, label: "Fortified", width: "w-full", color: "bg-emerald-400" }
+  }
+
+  const copyToClipboard = (text, keyIdentifier, label) => {
+    navigator.clipboard.writeText(text)
+    setCopiedKey(keyIdentifier)
+    toast.success(`${label} copied to clipboard`, {
+      theme: "dark",
+      autoClose: 1800,
+    })
+    setTimeout(() => {
+      setCopiedKey(prev => (prev === keyIdentifier ? null : prev))
+    }, 1600)
+  }
+
+  const togglePasswordReveal = (id) => {
+    setRevealedIds(prev => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  const savePassword = async () => {
+    const existingAccount = form.id
+      ? passwordArray.find(item => item.id === form.id)
+      : null
+    const isChangingExistingPassword = Boolean(
+      existingAccount && existingAccount.password !== form.password
+    )
+
+    if (
+      isChangingExistingPassword &&
+      currentPasswordConfirmation !== existingAccount.password
+    ) {
+      toast.error("Enter this account's current password to save a password change.", {
+        theme: "dark",
+      })
+      return
+    }
+    if (isChangingExistingPassword && newPasswordConfirmation !== form.password) {
+      toast.error("Confirm the new password before saving this change.", {
+        theme: "dark",
+      })
+      return
+    }
+
+    if (form.site.trim().length >= 3 && form.username.trim().length >= 3 && form.password.length >= 3) {
+      const isEditing = Boolean(form.id)
+      const generatedId = form.id || uuidv4()
+
+      let updatedHistoryPlain = [];
+      let updatedHistoryEncrypted = [];
+
+      if (isEditing) {
+        const existingRecord = passwordArray.find(item => item.id === form.id);
+        const prevHistory = existingRecord?.history || [];
+
+        // If password was edited and differs from previous password, record to history
+        if (existingRecord && existingRecord.password && existingRecord.password !== form.password) {
+          const newEntry = {
+            password: existingRecord.password,
+            changedAt: new Date().toISOString(),
+          };
+          updatedHistoryPlain = [newEntry, ...prevHistory].slice(0, 5);
+        } else {
+          updatedHistoryPlain = prevHistory;
+        }
+
+        updatedHistoryEncrypted = await Promise.all(
+          updatedHistoryPlain.map(async (h) => ({
+            password: await encryptCredential(h.password, vaultKey),
+            changedAt: h.changedAt,
+          }))
+        );
+      }
+
+      // Zero-Knowledge Client-Side Encryption:
+      // The secret is encrypted inside the browser with AES-256-GCM before transmission.
+      const encryptedPassword = await encryptCredential(form.password, vaultKey)
+      const encryptedCustomFields = await encryptCustomFields(form.customFields, vaultKey)
+      const passwordToSave = {
+        site: form.site.trim(),
+        username: form.username.trim(),
+        password: encryptedPassword,
+        favorite: Boolean(form.favorite),
+        tag: form.tag || "Personal",
+        id: generatedId,
+        history: updatedHistoryEncrypted,
+        customFields: encryptedCustomFields,
+      }
+
+      // Local state retains plaintext for instantaneous user display & copy
+      const localPasswordRecord = {
+        site: form.site.trim(),
+        username: form.username.trim(),
+        password: form.password,
+        favorite: Boolean(form.favorite),
+        tag: form.tag || "Personal",
+        id: generatedId,
+        history: updatedHistoryPlain,
+        customFields: form.customFields || [],
+      }
+
+      try {
+        if (backendOnline) {
+          const response = await secureFetch(
+            isEditing ? `${API_BASE_URL}/${generatedId}` : API_BASE_URL,
+            {
+              method: isEditing ? "PUT" : "POST",
+              headers: authHeaders(),
+              body: JSON.stringify(passwordToSave),
+            }
+          )
+          if (!response.ok) throw new Error(`Backend status ${response.status}`)
+        }
+
+        setPasswordArray(previousPasswords =>
+          isEditing
+            ? previousPasswords.map(item =>
+              item.id === generatedId ? localPasswordRecord : item
+            )
+            : [...previousPasswords, localPasswordRecord]
+        )
+
+        toast.success(isEditing ? 'Credential updated!' : 'Credential secured in vault!', {
+          theme: "dark",
+          transition: Bounce,
+          autoClose: 2000,
+        })
+        setForm({ site: "", username: "", password: "", favorite: false, tag: "Personal", customFields: [] })
+        setCurrentPasswordConfirmation("")
+        setNewPasswordConfirmation("")
+        setCredentialFormOpen(false)
+      } catch (error) {
+        console.error("Error saving password:", error)
+        toast.error("Could not sync with backend", { theme: "dark" })
+      }
+    } else {
+      toast.warn('Please enter at least 3 characters for site, user, and password.', {
+        theme: "dark",
+        autoClose: 3000,
+      })
+    }
+  }
+
+  const handleRestorePassword = (accountId, oldPassword) => {
+    const account = passwordArray.find(item => item.id === accountId);
+    if (account) {
+      setForm({
+        site: account.site,
+        username: account.username,
+        password: oldPassword,
+        favorite: Boolean(account.favorite),
+        tag: account.tag || "Personal",
+        id: account.id,
+        customFields: Array.isArray(account.customFields)
+          ? account.customFields.map(field => ({ ...field }))
+          : [],
+      });
+      setCurrentPasswordConfirmation("")
+      setNewPasswordConfirmation("")
+      setShowPassword(true);
+      setCredentialFormOpen(true)
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      toast.info('Restored previous password into form! Click "Update account" to save.', {
+        theme: 'dark',
+        autoClose: 3500,
+      });
+    }
+  };
+
+  const handleClearHistory = async (accountId) => {
+    try {
+      const account = passwordArray.find(item => item.id === accountId);
+      if (!account) return;
+
+      const updatedAccount = { ...account, history: [] };
+
+      if (backendOnline) {
+        const response = await secureFetch(`${API_BASE_URL}/${accountId}`, {
+          method: 'PUT',
+          headers: authHeaders(),
+          body: JSON.stringify({
+            id: account.id,
+            site: account.site,
+            username: account.username,
+            password: await encryptCredential(account.password, vaultKey),
+            history: [],
+          }),
+        });
+        if (response.status === 401) onUnauthorized();
+        if (!response.ok) throw new Error(`Backend status ${response.status}`);
+      }
+
+      setPasswordArray(prev => prev.map(p => p.id === accountId ? updatedAccount : p));
+      setSelectedHistoryAccount(updatedAccount);
+      toast.success('Password history cleared for this account', { theme: 'dark', autoClose: 2000 });
+    } catch (err) {
+      console.error('Failed to clear password history:', err);
+      toast.error('Failed to clear history', { theme: 'dark' });
+    }
+  };
+
+  const initiateDeletePassword = (account) => {
+    setDeleteConfirmAccount(account)
+  }
+
+  const executeDeletePassword = async () => {
+    if (!deleteConfirmAccount) return
+    const id = deleteConfirmAccount.id
+    try {
+      if (backendOnline) {
+        const response = await secureFetch(`${API_BASE_URL}/${id}`, {
+          method: "DELETE",
+          headers: authHeaders(),
+        })
+        if (response.status === 401) onUnauthorized()
+        if (!response.ok) throw new Error(`Backend status ${response.status}`)
+      }
+
+      setPasswordArray(previousPasswords =>
+        previousPasswords.filter(item => item.id !== id)
+      )
+      toast.info('Credential removed from vault', {
+        theme: "dark",
+        transition: Bounce,
+        autoClose: 2000,
+      })
+    } catch (error) {
+      console.error("Error deleting password:", error)
+      toast.error("Could not delete credential from backend", { theme: "dark" })
+    } finally {
+      setDeleteConfirmAccount(null)
+    }
+  }
+
+  const EditPassword = (id) => {
+    const passwordToEdit = passwordArray.find(item => item.id === id)
+    if (passwordToEdit) {
+      setForm({
+        site: passwordToEdit.site,
+        username: passwordToEdit.username,
+        password: passwordToEdit.password,
+        favorite: Boolean(passwordToEdit.favorite),
+        tag: passwordToEdit.tag || "Personal",
+        id: passwordToEdit.id,
+        customFields: Array.isArray(passwordToEdit.customFields)
+          ? passwordToEdit.customFields.map(f => ({ ...f }))
+          : [],
+      })
+      setCurrentPasswordConfirmation("")
+      setNewPasswordConfirmation("")
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      setCredentialFormOpen(true)
+    }
+  }
+
+  const cancelEditing = () => {
+    setForm({ site: "", username: "", password: "", favorite: false, tag: "Personal", customFields: [] })
+    setCurrentPasswordConfirmation("")
+    setNewPasswordConfirmation("")
+    setShowPassword(false)
+  }
+
+  const toggleFavorite = async (id, e) => {
+    if (e) e.stopPropagation();
+    const account = passwordArray.find(item => item.id === id);
+    if (!account) return;
+
+    const newFavStatus = !account.favorite;
+    // Optimistic local state update
+    setPasswordArray(prev =>
+      prev.map(item => (item.id === id ? { ...item, favorite: newFavStatus } : item))
+    );
+
+    toast.success(newFavStatus ? `Pinned ${account.site} to Favorites` : `Removed ${account.site} from Favorites`, {
+      theme: "dark",
+      autoClose: 1800,
+    });
+
+    if (backendOnline) {
+      try {
+        const response = await secureFetch(`${API_BASE_URL}/${id}`, {
+          method: "PUT",
+          headers: authHeaders(),
+          body: JSON.stringify({
+            ...account,
+            password: await encryptCredential(account.password, vaultKey),
+            customFields: await encryptCustomFields(account.customFields, vaultKey),
+            favorite: newFavStatus,
+          }),
+        });
+        if (response.status === 401) onUnauthorized();
+        if (!response.ok) throw new Error(`Backend status ${response.status}`);
+      } catch (err) {
+        console.warn("Failed to sync favorite status to backend:", err);
+        setPasswordArray(prev => prev.map(item =>
+          item.id === id ? { ...item, favorite: account.favorite } : item
+        ));
+        toast.error("Could not update favorite status", { theme: "dark" });
+      }
+    }
+  };
+
+  const addCustomField = (presetLabel = "", isSecret = false) => {
+    const newField = {
+      id: uuidv4().slice(0, 8),
+      label: presetLabel || "",
+      value: "",
+      isSecret: Boolean(isSecret),
+    };
+    setForm(prev => ({
+      ...prev,
+      customFields: [...(prev.customFields || []), newField],
+    }));
+  };
+
+  const updateCustomField = (id, key, val) => {
+    setForm(prev => ({
+      ...prev,
+      customFields: (prev.customFields || []).map(f =>
+        f.id === id ? { ...f, [key]: val } : f
+      ),
+    }));
+  };
+
+  const removeCustomField = (id) => {
+    setForm(prev => ({
+      ...prev,
+      customFields: (prev.customFields || []).filter(f => f.id !== id),
+    }));
+  };
+
+  const toggleCustomFieldReveal = (fieldId) => {
+    setRevealedCustomFieldIds(prev => ({ ...prev, [fieldId]: !prev[fieldId] }));
+  };
+
+  const toggleAccountCustomFields = (accountId) => {
+    setExpandedCustomFieldAccounts(prev => ({ ...prev, [accountId]: !prev[accountId] }));
+  };
+
+  const auditData = useMemo(() => {
+    return auditVaultSecurity(passwordArray, breachResults);
+  }, [passwordArray, breachResults]);
+
+  const handleScanBreaches = async () => {
+    if (!passwordArray.length) {
+      toast.info("No credentials in vault to scan.", { theme: "dark" });
+      return;
+    }
+    setIsScanningBreaches(true);
+    toast.info("Checking vault passwords with HaveIBeenPwned k-Anonymity...", {
+      theme: "dark",
+      autoClose: 2000,
+    });
+
+    try {
+      const newMap = new Map(breachResults);
+      const uniquePasswords = Array.from(new Set(passwordArray.map(p => p.password).filter(Boolean)));
+
+      for (const pwd of uniquePasswords) {
+        if (!newMap.has(pwd)) {
+          const res = await checkPasswordBreach(pwd);
+          newMap.set(pwd, res);
+        }
+      }
+
+      setBreachResults(newMap);
+      const updatedAudit = auditVaultSecurity(passwordArray, newMap);
+
+      if (updatedAudit.breachedCount > 0) {
+        toast.error(`Security Alert: ${updatedAudit.breachedCount} account(s) match known public data breaches!`, {
+          theme: "dark",
+          transition: Bounce,
+          autoClose: 5000,
+        });
+      } else {
+        toast.success("Zero compromised credentials found! Your vault is clean.", {
+          theme: "dark",
+          transition: Bounce,
+          autoClose: 3000,
+        });
+      }
+    } catch (err) {
+      console.error("Breach scan error:", err);
+      toast.error("Could not complete breach scan. Check network connection.", { theme: "dark" });
+    } finally {
+      setIsScanningBreaches(false);
+    }
+  };
+
+  const tagCounts = useMemo(() => {
+    const counts = {
+      All: passwordArray.length,
+      Favorites: passwordArray.filter(p => p.favorite).length,
+    };
+    PRESET_TAGS.forEach(t => {
+      counts[t] = passwordArray.filter(p => (p.tag || 'Personal').toLowerCase() === t.toLowerCase()).length;
+    });
+    return counts;
+  }, [passwordArray]);
+
+  const filteredPasswords = useMemo(() => {
+    return passwordArray.filter(item => {
+      // 1. Audit status filter
+      if (auditFilter === 'breached' && !auditData.breachedIds.has(item.id)) return false;
+      if (auditFilter === 'reused' && !auditData.reusedIds.has(item.id)) return false;
+      if (auditFilter === 'weak' && !auditData.weakIds.has(item.id)) return false;
+      if (auditFilter === 'fortified' && (
+        auditData.breachedIds.has(item.id) ||
+        auditData.reusedIds.has(item.id) ||
+        auditData.weakIds.has(item.id)
+      )) return false;
+
+      // 2. Tag / Favorites filter
+      if (selectedTag === 'Favorites') {
+        if (!item.favorite) return false;
+      } else if (selectedTag !== 'All') {
+        if ((item.tag || 'Personal').toLowerCase() !== selectedTag.toLowerCase()) return false;
+      }
+
+      // 3. Text search query
+      const q = searchQuery.toLowerCase().trim();
+      if (!q) return true;
+      const siteLower = (item.site || '').toLowerCase();
+      const userLower = (item.username || '').toLowerCase();
+      const domainLower = extractDomain(item.site).toLowerCase();
+      const brand = getFamousBrand(item.site);
+      const brandLower = brand ? brand.name.toLowerCase() : '';
+      const categoryLower = brand && brand.category ? brand.category.toLowerCase() : '';
+      const tagLower = (item.tag || '').toLowerCase();
+
+      const matchesCustomFields = Array.isArray(item.customFields) && item.customFields.some(f =>
+        (f.label && f.label.toLowerCase().includes(q)) ||
+        (!f.isSecret && f.value && f.value.toLowerCase().includes(q))
+      );
+
+      return (
+        siteLower.includes(q) ||
+        userLower.includes(q) ||
+        domainLower.includes(q) ||
+        brandLower.includes(q) ||
+        categoryLower.includes(q) ||
+        tagLower.includes(q) ||
+        matchesCustomFields
+      );
+    }).sort((a, b) => {
+      // Pinned favorites come first!
+      if (a.favorite && !b.favorite) return -1;
+      if (!a.favorite && b.favorite) return 1;
+      return 0;
+    });
+  }, [passwordArray, auditFilter, auditData, selectedTag, searchQuery]);
+
+  const strength = getPasswordStrength(form.password)
+  const editingAccount = form.id
+    ? passwordArray.find(item => item.id === form.id)
+    : null
+  const isChangingExistingPassword = Boolean(
+    editingAccount && editingAccount.password !== form.password
+  )
+  const isAnyRevealed = Boolean(showPassword || Object.values(revealedIds).some(Boolean))
+
+  return (
+    <div className="vault-workspace reference-vault relative min-h-screen w-full pb-20 pt-10 selection:bg-[#cce7ed] selection:text-[#14566d]">
+      <ToastContainer position="top-right" autoClose={2000} theme={theme} />
+
+      <main className="page-enter mx-auto max-w-6xl px-4 sm:px-6">
+        {/* Header / Hero Section */}
+        <section className="hero-composition mb-8 flex flex-col justify-between gap-7 border-b border-[#ddd8d0] pb-8 sm:flex-row sm:items-end dark:border-[#2a2d33]">
+          <div className="hero-copy">
+            <div className="hero-eyebrow mb-3 inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#64748b] dark:text-slate-400">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
+              Vault workspace
+            </div>
+            <h1 className="hero-title font-['Space_Grotesk'] text-3xl font-semibold tracking-tight text-[#111827] sm:text-5xl dark:text-white">
+              Your saved accounts
+            </h1>
+            <p className="hero-support mt-3 max-w-xl text-sm leading-relaxed text-[#64748b] sm:text-base dark:text-slate-400">
+              Personal credentials and login records kept safely on this device.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button type="button" className="reference-add" onClick={() => { setForm({ site: "", username: "", password: "", favorite: false, tag: "Personal", customFields: [] }); setCurrentPasswordConfirmation(""); setNewPasswordConfirmation(""); setCredentialFormOpen(true) }}>Add credential <span>＋</span></button>
+            <div
+              className={`vault-security-status group inline-flex w-fit cursor-pointer items-center gap-3 rounded-lg border px-3.5 py-2.5 transition-all duration-200 ${isAnyRevealed
+                  ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800/70 dark:bg-emerald-950/30 dark:text-emerald-400"
+                  : "border-[#dbe2e8] bg-white text-[#475569] hover:border-[#94a3b8] dark:border-[#303640] dark:bg-[#17191d] dark:text-slate-300"
+                }`}
+              onClick={() => setShowPassword(prev => !prev)}
+              title={
+                isAnyRevealed
+                  ? "Password visible • Click to lock vault"
+                  : "Vault locked • Click to unlock & show password"
+              }
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault()
+                  setShowPassword(prev => !prev)
+                }
+              }}
+              aria-label={isAnyRevealed ? "Lock vault" : "Unlock vault"}
+            >
+              <span className={`h-2 w-2 rounded-full ${isAnyRevealed ? "bg-emerald-500" : "bg-slate-400"}`} />
+              <span className="text-left">
+                <span className="block text-[11px] font-semibold uppercase tracking-wider">Vault {isAnyRevealed ? "unlocked" : "secured"}</span>
+                <span className="mt-0.5 block text-[10px] opacity-70">{isAnyRevealed ? "Click to hide passwords" : "Click to reveal passwords"}</span>
+              </span>
+            </div>
+          </div>
+        </section>
+
+        {/* Input Panel Card */}
+        {credentialFormOpen && <div className="credential-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) { setCredentialFormOpen(false); if (form.id) cancelEditing() } }}><section className="vault-panel credential-dialog panel-reveal rounded-xl border border-[#e2e8f0] bg-white p-6 shadow-[0_18px_50px_-34px_rgba(15,23,42,0.45)] sm:p-8 dark:border-[#2a2d33] dark:bg-[#17191d] dark:shadow-none">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-[#ebe7e1] pb-4">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[#f1f5f9] text-[#475569] dark:bg-[#22262d] dark:text-slate-300">
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+              </div>
+              <h2 className="text-base font-semibold text-[#1f2933] sm:text-lg">
+                {form.id ? "Edit account" : "Add an account"}
+              </h2>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button type="button" aria-label="Close credential form" onClick={() => { setCredentialFormOpen(false); if (form.id) cancelEditing() }} className="rounded-md border border-[#d5d0c8] px-2 py-1 text-xs">×</button>
+              {/* Favorite Toggle Button in Form */}
+              <button
+                type="button"
+                onClick={() => setForm(prev => ({ ...prev, favorite: !prev.favorite }))}
+                className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-semibold transition-all active:scale-95 ${form.favorite
+                    ? "border-amber-300 bg-amber-50 text-amber-800 shadow-2xs"
+                    : "border-[#d5d0c8] bg-white text-[#6f6a63] hover:border-amber-300 hover:text-amber-700"
+                  }`}
+                title={form.favorite ? "Favorited (Pinned to top)" : "Click to mark as favorite"}
+              >
+                <span>{form.favorite ? "★ Favorited" : "☆ Add to Favorites"}</span>
+              </button>
+
+              {form.id && (
+                <button
+                  type="button"
+                  onClick={() => { cancelEditing(); setCredentialFormOpen(false) }}
+                  className="rounded-md border border-[#d5d0c8] bg-white px-3 py-1.5 text-xs font-medium text-[#6f6a63] transition-all hover:bg-[#f4f1ec] hover:text-[#1f2933]"
+                >
+                  Cancel Editing
+                </button>
+              )}
+            </div>
+          </div>
+
+          <form onSubmit={(e) => { e.preventDefault(); void savePassword(); }} className="space-y-5">
+            {/* Website URL Field */}
+            <div>
+              <label htmlFor={siteInputId} className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6f6a63]">
+                Website or service
+              </label>
+              <div className="relative">
+                <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
+                  {form.site.trim() ? (
+                    <SiteLogo site={form.site} size="sm" />
+                  ) : (
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                    </svg>
+                  )}
+                </span>
+                <input
+                  id={siteInputId}
+                  type="text"
+                  name="site"
+                  value={form.site}
+                  onChange={handleChange}
+                  placeholder="https://youtube.com, github.com, or google.com"
+                  className="w-full rounded-md border border-[#d5d0c8] bg-[#faf9f7] py-2.5 pl-11 pr-4 text-sm text-[#1f2933] placeholder:text-[#aaa39a] transition-all focus:border-[#176b87] focus:outline-none focus:ring-1 focus:ring-[#176b87]/30"
+                  required
+                />
+              </div>
+
+              {/* Quick Brand Autofill Chips */}
+              <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-medium text-[#8c857b] mr-0.5">Quick fill:</span>
+                {POPULAR_SERVICES.slice(0, 10).map((srv) => (
+                  <button
+                    key={srv.domain}
+                    type="button"
+                    onClick={() => setForm(prev => ({ ...prev, site: srv.defaultUrl }))}
+                    className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium border transition-all ${extractDomain(form.site) === srv.domain
+                        ? 'bg-[#176b87] text-white border-[#176b87] shadow-xs'
+                        : 'bg-white text-[#4b5563] border-[#d5d0c8] hover:border-[#176b87] hover:bg-[#f5fbfc]'
+                      }`}
+                  >
+                    <SiteLogo site={srv.domain} size="xs" />
+                    <span>{srv.name}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Category / Folder Selection */}
+            <div>
+              <div className="mb-1.5 flex items-center justify-between">
+                <label className="text-xs font-semibold uppercase tracking-wider text-[#6f6a63]">
+                  Category / Folder
+                </label>
+                <span className="text-[11px] text-[#8c857b]">
+                  Selected: <strong className="text-[#176b87]">{form.tag || "Personal"}</strong>
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {PRESET_TAGS.map((tagOption) => {
+                  const isSelected = (form.tag || "Personal").toLowerCase() === tagOption.toLowerCase();
+                  return (
+                    <button
+                      key={tagOption}
+                      type="button"
+                      onClick={() => setForm(prev => ({ ...prev, tag: tagOption }))}
+                      className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-all ${isSelected
+                          ? "bg-[#176b87] text-white shadow-xs"
+                          : "border border-[#d5d0c8] bg-white text-[#6f6a63] hover:border-[#176b87] hover:bg-[#f0f8fa] hover:text-[#176b87]"
+                        }`}
+                    >
+                      <span>{tagOption}</span>
+                    </button>
+                  );
+                })}
+
+                {/* Custom Tag input */}
+                <div className="relative inline-flex items-center">
+                  <input
+                    type="text"
+                    placeholder="+ Custom folder"
+                    value={!PRESET_TAGS.some(t => t.toLowerCase() === (form.tag || "").toLowerCase()) ? form.tag || "" : ""}
+                    onChange={(e) => setForm(prev => ({ ...prev, tag: e.target.value }))}
+                    className="h-7 w-28 rounded-md border border-[#d5d0c8] bg-[#faf9f7] px-2 text-xs text-[#1f2933] placeholder:text-[#aaa39a] focus:border-[#176b87] focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Username & Password Grid */}
+            <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+              {/* Username Field */}
+              <div>
+                <label htmlFor={usernameInputId} className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6f6a63]">
+                  Username or email
+                </label>
+                <div className="relative">
+                  <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 text-slate-500">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                  </span>
+                  <input
+                    id={usernameInputId}
+                    type="text"
+                    name="username"
+                    value={form.username}
+                    onChange={handleChange}
+                    placeholder="user@example.com or @admin"
+                    className="w-full rounded-md border border-[#d5d0c8] bg-[#faf9f7] py-2.5 pl-10 pr-4 text-sm text-[#1f2933] placeholder:text-[#aaa39a] transition-all focus:border-[#176b87] focus:outline-none focus:ring-1 focus:ring-[#176b87]/30"
+                    required
+                  />
+                </div>
+              </div>
+
+              {/* Password Field */}
+              <div>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label htmlFor={passwordInputId} className="text-xs font-semibold uppercase tracking-wider text-[#6f6a63]">
+                    Password
+                  </label>
+                  {form.password && (
+                    <span className="text-[11px] text-[#958e85]">
+                      Strength: <span className="font-semibold text-[#176b65]">{strength.label}</span>
+                    </span>
+                  )}
+                </div>
+                <div className="relative">
+                  <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5 transition-colors">
+                    {showPassword ? (
+                      /* Open lock icon when password is shown */
+                      <svg className="h-4 w-4 text-emerald-600 transition-colors animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 017.6-1.8M5 11h14a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7a2 2 0 012-2z" />
+                      </svg>
+                    ) : (
+                      /* Key icon when locked */
+                      <svg className="h-4 w-4 text-slate-500 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                      </svg>
+                    )}
+                  </span>
+                  <input
+                    id={passwordInputId}
+                    type={showPassword ? "text" : "password"}
+                    enterKeyHint="done"
+                    name="password"
+                    value={form.password}
+                    onChange={handleChange}
+                    placeholder="Enter or generate secret"
+                    className={`w-full rounded-md border bg-[#faf9f7] py-2.5 pl-10 pr-24 text-sm text-[#1f2933] placeholder:text-[#aaa39a] transition-all focus:outline-none focus:ring-1 ${showPassword
+                        ? "border-emerald-400 focus:border-emerald-500 focus:ring-emerald-500/30"
+                        : "border-[#d5d0c8] focus:border-[#176b87] focus:ring-[#176b87]/30"
+                      }`}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(prev => !prev)}
+                    className={`absolute inset-y-1 right-1 my-auto flex h-8 items-center gap-1.5 rounded px-2.5 text-xs font-semibold transition-all ${showPassword
+                        ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300"
+                        : "text-[#7b746b] hover:bg-[#ebe7e1] hover:text-[#176b87]"
+                      }`}
+                    title={showPassword ? "Lock and hide password" : "Open lock and show password"}
+                  >
+                    {showPassword ? (
+                      <>
+                        <svg className="h-3.5 w-3.5 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 11V7a4 4 0 017.6-1.8M5 11h14a2 2 0 012 2v7a2 2 0 01-2 2H5a2 2 0 01-2-2v-7a2 2 0 012-2z" />
+                        </svg>
+                        <span>Hide</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="h-3.5 w-3.5 text-[#7b746b]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                        </svg>
+                        <span>Show</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Strength Meter Bar */}
+                {form.password && (
+                  <div className="mt-2.5 flex h-1.5 w-full overflow-hidden rounded-full bg-[#e8e4de] dark:bg-slate-700/60">
+                    <div className={`h-full transition-all duration-300 ${strength.color} ${strength.width}`}></div>
+                  </div>
+                )}
+                {isChangingExistingPassword && (
+                  <div className="mt-4">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label htmlFor="current-password-confirmation" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6f6a63]">
+                          Current password
+                        </label>
+                        <input
+                          id="current-password-confirmation"
+                          type="password"
+                          autoComplete="current-password"
+                          value={currentPasswordConfirmation}
+                          onChange={(event) => setCurrentPasswordConfirmation(event.target.value)}
+                          placeholder="Enter the account's current password"
+                          className="w-full rounded-md border border-[#d5d0c8] bg-[#faf9f7] px-3 py-2.5 text-sm text-[#1f2933] placeholder:text-[#aaa39a] focus:border-[#176b87] focus:outline-none focus:ring-1 focus:ring-[#176b87]/30"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="new-password-confirmation" className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#6f6a63]">
+                          Confirm new password
+                        </label>
+                        <input
+                          id="new-password-confirmation"
+                          type="password"
+                          autoComplete="new-password"
+                          value={newPasswordConfirmation}
+                          onChange={(event) => setNewPasswordConfirmation(event.target.value)}
+                          placeholder="Re-enter the new password"
+                          className="w-full rounded-md border border-[#d5d0c8] bg-[#faf9f7] px-3 py-2.5 text-sm text-[#1f2933] placeholder:text-[#aaa39a] focus:border-[#176b87] focus:outline-none focus:ring-1 focus:ring-[#176b87]/30"
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Custom Fields & Dynamic Secrets Section */}
+            <div className="border-t border-[#ebe7e1] pt-4">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-xs font-semibold uppercase tracking-wider text-[#6f6a63]">
+                    Custom Fields & Additional Secrets (Optional)
+                  </h3>
+                  <p className="text-[11px] text-[#8c857b]">
+                    Store PINs, security questions, recovery codes, or API keys — zero-knowledge encrypted.
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => addCustomField("PIN", true)}
+                    className="inline-flex items-center gap-1 rounded-md border border-[#d5d0c8] bg-white px-2 py-1 text-[11px] font-medium text-[#4b5563] transition hover:border-[#176b87] hover:bg-[#f0f8fa] hover:text-[#176b87]"
+                  >
+                    <span>+ PIN</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => addCustomField("Security Question", false)}
+                    className="inline-flex items-center gap-1 rounded-md border border-[#d5d0c8] bg-white px-2 py-1 text-[11px] font-medium text-[#4b5563] transition hover:border-[#176b87] hover:bg-[#f0f8fa] hover:text-[#176b87]"
+                  >
+                    <span>+ Security Q</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => addCustomField("Recovery Code", true)}
+                    className="inline-flex items-center gap-1 rounded-md border border-[#d5d0c8] bg-white px-2 py-1 text-[11px] font-medium text-[#4b5563] transition hover:border-[#176b87] hover:bg-[#f0f8fa] hover:text-[#176b87]"
+                  >
+                    <span>+ Recovery Code</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => addCustomField("", false)}
+                    className="inline-flex items-center gap-1 rounded-md border border-[#176b87]/40 bg-[#f0f8fa] px-2 py-1 text-[11px] font-semibold text-[#176b87] transition hover:bg-[#176b87] hover:text-white"
+                  >
+                    <span>+ Custom Field</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Custom Fields List */}
+              {form.customFields && form.customFields.length > 0 && (
+                <div className="space-y-2.5 rounded-lg border border-[#e8e4de] bg-[#faf9f7] p-3">
+                  {form.customFields.map((field, idx) => (
+                    <div
+                      key={field.id || idx}
+                      className="flex flex-col gap-2 rounded-md border border-[#ebe7e1] bg-white p-2.5 sm:flex-row sm:items-center"
+                    >
+                      {/* Label input */}
+                      <div className="w-full sm:w-1/3">
+                        <input
+                          type="text"
+                          value={field.label}
+                          onChange={(e) => updateCustomField(field.id, "label", e.target.value)}
+                          placeholder="Field name (e.g. PIN, Question)"
+                          className="w-full rounded border border-[#d5d0c8] bg-[#faf9f7] px-2.5 py-1.5 text-xs text-[#1f2933] placeholder:text-[#aaa39a] focus:border-[#176b87] focus:outline-none"
+                        />
+                      </div>
+
+                      {/* Value input */}
+                      <div className="relative w-full sm:flex-1">
+                        <input
+                          type={field.isSecret && !revealedCustomFieldIds[`form-${field.id}`] ? "password" : "text"}
+                          value={field.value}
+                          onChange={(e) => updateCustomField(field.id, "value", e.target.value)}
+                          placeholder="Value or secret answer"
+                          className="w-full rounded border border-[#d5d0c8] bg-[#faf9f7] px-2.5 py-1.5 pr-8 text-xs text-[#1f2933] placeholder:text-[#aaa39a] focus:border-[#176b87] focus:outline-none"
+                        />
+                        {field.isSecret && (
+                          <button
+                            type="button"
+                            onClick={() => toggleCustomFieldReveal(`form-${field.id}`)}
+                            className="absolute inset-y-0 right-1 my-auto flex h-6 w-6 items-center justify-center text-[#aaa39a] hover:text-[#176b87]"
+                            title="Toggle reveal"
+                          >
+                            {revealedCustomFieldIds[`form-${field.id}`] ? "🙈" : "👁️"}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Toggle Secret & Delete */}
+                      <div className="flex items-center justify-between sm:justify-end gap-2">
+                        <label className="flex cursor-pointer items-center gap-1.5 text-[11px] text-[#6f6a63]">
+                          <input
+                            type="checkbox"
+                            checked={field.isSecret}
+                            onChange={(e) => updateCustomField(field.id, "isSecret", e.target.checked)}
+                            className="rounded border-[#d5d0c8] text-[#176b87] focus:ring-0"
+                          />
+                          <span>Mask secret</span>
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={() => removeCustomField(field.id)}
+                          className="rounded p-1 text-[#aaa39a] hover:bg-rose-50 hover:text-rose-600 transition"
+                          title="Remove field"
+                        >
+                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Action Buttons Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsGeneratorOpen(true)}
+                  className="flex items-center gap-2 rounded-md border border-[#176b87]/40 bg-[#f0f8fa] px-3.5 py-2.5 text-xs font-semibold text-[#176b87] transition-all hover:bg-[#176b87] hover:text-white active:scale-[0.98]"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+                  </svg>
+                  <span>Customize & Generate</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={generateStrongPassword}
+                  title="Generate 16-character password immediately"
+                  className="flex items-center gap-1.5 rounded-md border border-[#d5d0c8] bg-white px-3 py-2.5 text-xs font-medium text-[#4b5563] transition-all hover:bg-[#f4f1ec] active:scale-[0.98]"
+                >
+                  <span>Generate 16 characters</span>
+                </button>
+              </div>
+
+              <button
+                type="submit"
+                className="flex items-center gap-2 rounded-md bg-[#176b87] px-6 py-2.5 text-xs font-bold text-white shadow-sm transition-all hover:bg-[#145d74] active:scale-[0.98]"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                <span>{form.id ? "Update account" : "Save account"}</span>
+              </button>
+            </div>
+          </form>
+        </section></div>}
+
+        {/* Vault Security Audit & HaveIBeenPwned Breach Scanner */}
+        <VaultSecurityAudit
+          auditData={auditData}
+          onScanBreaches={handleScanBreaches}
+          isScanning={isScanningBreaches}
+          activeFilter={auditFilter}
+          onSelectFilter={setAuditFilter}
+          onFixPassword={EditPassword}
+        />
+
+        {/* Stored Credentials Section */}
+        <section className="credential-section section-reveal space-y-4">
+          {/* Active Audit Filter Notice */}
+          {auditFilter !== 'all' && (
+            <div className="flex items-center justify-between rounded-lg border border-[#176b87]/30 bg-[#f0f8fa] px-4 py-2.5 text-xs text-[#176b87]">
+              <div className="flex items-center gap-2">
+                <span className="rounded bg-[#176b87] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                  Filter Active
+                </span>
+                <span>
+                  Displaying only <strong>{auditFilter}</strong> credentials ({filteredPasswords.length} items)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAuditFilter('all')}
+                className="font-bold underline hover:text-[#145d74]"
+              >
+                Show All Accounts ✕
+              </button>
+            </div>
+          )}
+
+          <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+            <div>
+              <h2 className="font-['Space_Grotesk'] text-xl font-bold tracking-tight text-[#1f2933] sm:text-2xl">
+                Saved accounts
+              </h2>
+              <p className="mt-0.5 text-xs text-[#7b746b]">
+                {passwordArray.length} {passwordArray.length === 1 ? "account" : "accounts"} saved
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              {/* PassVault Send Button */}
+              {onOpenSend && (
+                <button
+                  type="button"
+                  onClick={() => onOpenSend()}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-50/70 px-3 py-2 text-xs font-semibold text-emerald-700 transition-all hover:bg-emerald-100 hover:border-emerald-500 active:scale-95 dark:border-emerald-500/40 dark:bg-emerald-950/40 dark:text-emerald-400 dark:hover:bg-emerald-900/50"
+                  title="PassVault Send: Share an encrypted one-time secret link"
+                >
+                  <svg className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                  </svg>
+                  <span>PassVault Send</span>
+                </button>
+              )}
+
+              {/* Import & Export Migration Button */}
+              <button
+                type="button"
+                onClick={() => setIsMigrationOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-[#d5d0c8] bg-white px-3 py-2 text-xs font-semibold text-[#4b5563] transition-all hover:border-[#176b87] hover:bg-[#f0f8fa] hover:text-[#176b87] active:scale-95"
+                title="Import from Chrome/Firefox/Bitwarden or export vault"
+              >
+                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                <span>Import / Export</span>
+              </button>
+
+              {/* Search Input Filter with Ctrl+K shortcut badge */}
+              {passwordArray.length > 0 && (
+                <div className="relative w-full sm:w-72">
+                  <span className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500">
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                    </svg>
+                  </span>
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => {
+                      setSearchQuery(e.target.value)
+                      setActiveSuggestion(0)
+                    }}
+                    onKeyDown={handleSearchKeyDown}
+                    placeholder="Search site, user, or field..."
+                    role="combobox"
+                    aria-expanded={searchSuggestions.length > 0}
+                    aria-controls="vault-search-suggestions"
+                    aria-autocomplete="list"
+                    className="w-full rounded-md border border-[#d5d0c8] bg-white py-2 pl-9 pr-16 text-xs text-[#1f2933] placeholder:text-[#aaa39a] transition-all focus:border-[#176b87] focus:outline-none focus:ring-1 focus:ring-[#176b87]/30"
+                  />
+                  <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
+                    <kbd className="rounded border border-[#ddd8d0] bg-[#faf9f7] px-1.5 py-0.5 text-[10px] font-mono font-semibold text-[#8c857b]">
+                      Ctrl K
+                    </kbd>
+                  </div>
+                  {searchSuggestions.length > 0 && (
+                    <div
+                      id="vault-search-suggestions"
+                      role="listbox"
+                      className="absolute left-0 right-0 top-full z-30 mt-1 overflow-hidden rounded-md border border-[#d5d0c8] bg-white py-1 shadow-xl dark:border-[#303640] dark:bg-[#17191d]"
+                    >
+                      <p className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-[#8c857b] dark:text-slate-500">
+                        Matching accounts
+                      </p>
+                      {searchSuggestions.map((item, index) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          role="option"
+                          aria-selected={index === activeSuggestion}
+                          onMouseEnter={() => setActiveSuggestion(index)}
+                          onClick={() => {
+                            setSearchQuery(item.site || item.username)
+                            searchInputRef.current?.focus()
+                          }}
+                          className={`flex w-full items-center gap-2 px-3 py-2 text-left transition-colors ${index === activeSuggestion
+                              ? "bg-[#f0f8fa] text-[#176b87] dark:bg-[#222b31] dark:text-cyan-300"
+                              : "text-[#1f2933] hover:bg-[#faf9f7] dark:text-slate-200 dark:hover:bg-[#22262d]"
+                            }`}
+                        >
+                          <SiteLogo site={item.site} size="sm" />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-xs font-semibold">{item.site || "Untitled account"}</span>
+                            <span className="block truncate text-[10px] opacity-65">{item.username || "No username"}</span>
+                          </span>
+                          <span className="text-[10px] opacity-60">Password saved</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Folder & Favorites Filter Pills Bar */}
+          {passwordArray.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5 border-b border-[#ebe7e1] pb-3">
+              {/* All filter pill */}
+              <button
+                type="button"
+                onClick={() => setSelectedTag("All")}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all ${selectedTag === "All"
+                    ? "bg-[#176b87] text-white shadow-xs"
+                    : "border border-[#d5d0c8] bg-white text-[#6f6a63] hover:border-[#176b87] hover:bg-[#f0f8fa] hover:text-[#176b87]"
+                  }`}
+              >
+                <span>All</span>
+                <span className={`rounded-full px-1.5 py-0.2 text-[10px] ${selectedTag === "All" ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                  }`}>
+                  {tagCounts.All}
+                </span>
+              </button>
+
+              {/* Favorites filter pill */}
+              <button
+                type="button"
+                onClick={() => setSelectedTag("Favorites")}
+                className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all ${selectedTag === "Favorites"
+                    ? "bg-amber-500 text-white shadow-xs"
+                    : "border border-[#d5d0c8] bg-white text-amber-700 hover:border-amber-400 hover:bg-amber-50"
+                  }`}
+              >
+                <span>★ Favorites</span>
+                <span className={`rounded-full px-1.5 py-0.2 text-[10px] ${selectedTag === "Favorites" ? "bg-white/20 text-white" : "bg-amber-100 text-amber-800"
+                  }`}>
+                  {tagCounts.Favorites}
+                </span>
+              </button>
+
+              <div className="h-4 w-px bg-[#d5d0c8] mx-1"></div>
+
+              {/* Preset tags pills */}
+              {PRESET_TAGS.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  onClick={() => setSelectedTag(tag)}
+                  className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold transition-all ${selectedTag === tag
+                      ? "bg-[#176b87] text-white shadow-xs"
+                      : "border border-[#d5d0c8] bg-white text-[#6f6a63] hover:border-[#176b87] hover:bg-[#f0f8fa] hover:text-[#176b87]"
+                    }`}
+                >
+                  <span>{tag}</span>
+                  {tagCounts[tag] > 0 && (
+                    <span className={`rounded-full px-1.5 py-0.2 text-[10px] ${selectedTag === tag ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                      }`}>
+                      {tagCounts[tag]}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Credentials Display List / Table */}
+          {passwordArray.length === 0 ? (
+            <div className="accounts-empty rounded-xl border border-[#d5d0c8] bg-white p-12 text-center dark:border-white/10 dark:bg-[#151b23]">
+              <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#176b87]/20 bg-[#f0f8fa] text-[#176b87] shadow-inner dark:border-cyan-500/20 dark:bg-cyan-950/30 dark:text-cyan-400">
+                <svg className="h-7 w-7 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <h3 className="font-['Space_Grotesk'] text-lg font-bold text-[#1f2933] dark:text-white">
+                Your vault is empty and secure
+              </h3>
+              <p className="mx-auto mt-2 max-w-sm text-xs leading-relaxed text-[#6f6a63] dark:text-slate-400">
+                No credentials stored yet. Every account you add is client-side encrypted before reaching the database.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setForm({ site: "", username: "", password: "", favorite: false, tag: "Personal", customFields: [] })
+                  setCredentialFormOpen(true)
+                }}
+                className="tactile-btn mt-6 inline-flex items-center gap-2 rounded-xl bg-[#176b87] px-5 py-2.5 text-xs font-bold text-white shadow-sm transition hover:bg-[#145d74] hover:scale-[1.02] active:scale-[0.98] dark:bg-cyan-600 dark:hover:bg-cyan-500"
+              >
+                <span>＋ Add your first credential</span>
+              </button>
+            </div>
+          ) : filteredPasswords.length === 0 ? (
+            <div className="rounded-lg border border-[#ddd8d0] bg-white py-10 text-center">
+              <p className="text-sm text-[#6f6a63]">
+                {selectedTag !== 'All' ? `No accounts in folder "${selectedTag}"` : `No accounts match "${searchQuery}"`}
+              </p>
+              <button
+                type="button"
+                onClick={() => { setSearchQuery(""); setSelectedTag("All"); }}
+                className="mt-2 text-xs font-semibold text-[#176b87] hover:underline"
+              >
+                Clear all filters
+              </button>
+            </div>
+          ) : (
+            <div className="overflow-hidden rounded-lg border border-[#ddd8d0] bg-white shadow-[0_10px_35px_rgba(56,45,32,0.06)]">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b border-[#ebe7e1] bg-[#faf9f7] text-[11px] uppercase tracking-wider text-[#7b746b]">
+                    <tr>
+                      <th className="px-5 py-3.5 font-semibold" title="Saved service name, brand logo, folder, and security alerts">Website</th>
+                      <th className="px-5 py-3.5 font-semibold" title="Username or email saved for this service">Username</th>
+                      <th className="px-5 py-3.5 font-semibold" title="Password is hidden until you choose to reveal it">Password</th>
+                      <th className="px-5 py-3.5 text-right font-semibold" title="Send, view history, edit, or delete this credential">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#ebe7e1] text-xs">
+                    {filteredPasswords.map((item) => {
+                      const isRevealed = Boolean(revealedIds[item.id])
+                      const isCopiedSite = copiedKey === `${item.id}-site`
+                      const isCopiedUser = copiedKey === `${item.id}-user`
+                      const isCopiedPass = copiedKey === `${item.id}-pass`
+
+                      return (
+                        <Fragment key={item.id}>
+                          <tr
+                            className={`row-enter transition-colors hover:bg-[#faf9f7] ${item.favorite ? "bg-amber-50/20" : ""
+                              }`}
+                            style={{ animationDelay: `${filteredPasswords.indexOf(item) * 45}ms` }}
+                          >
+                            {/* Domain Column */}
+                            <td className="px-5 py-4">
+                              <div className="flex items-center gap-2.5">
+                                {/* 1-Click Star / Favorite Button */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => toggleFavorite(item.id, e)}
+                                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-all active:scale-90 ${item.favorite
+                                      ? "border border-amber-300 bg-amber-50 text-amber-500 shadow-2xs hover:bg-amber-100"
+                                      : "text-[#c2bab0] hover:border hover:border-[#d5d0c8] hover:bg-white hover:text-amber-500"
+                                    }`}
+                                  title={item.favorite ? "Favorited: pinned to Favorites. Click to remove the pin." : "Favorite: click to pin this account to Favorites."}
+                                  aria-label={item.favorite ? "Remove account from Favorites" : "Pin account to Favorites"}
+                                >
+                                  <span className="text-sm leading-none">{item.favorite ? "★" : "☆"}</span>
+                                </button>
+
+                                <HoverHint text={`Brand logo for ${item.site || "this service"}. The logo is detected from the website domain.`}>
+                                  <SiteLogo site={item.site} size="md" />
+                                </HoverHint>
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    {(() => {
+                                      const brand = getFamousBrand(item.site);
+                                      const domain = extractDomain(item.site);
+                                      return (
+                                        <>
+                                          {brand ? (
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="font-semibold text-[#1f2933] text-xs">
+                                                {brand.name}
+                                              </span>
+                                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                                Official
+                                              </span>
+                                              {brand.category && (
+                                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
+                                                  {brand.category}
+                                                </span>
+                                              )}
+                                            </div>
+                                          ) : (
+                                            <span className="font-semibold text-[#1f2933] text-xs">
+                                              {domain || item.site}
+                                            </span>
+                                          )}
+                                        </>
+                                      );
+                                    })()}
+
+                                    {/* Category / Folder Badge */}
+                                    <span
+                                      title={`Folder: ${item.tag || 'Personal'}`}
+                                      className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${getTagBadgeStyle(item.tag || 'Personal')}`}
+                                    >
+                                      {item.tag || 'Personal'}
+                                    </span>
+                                    {/* Security Status Badges */}
+                                    {auditData.breachedIds.has(item.id) && (
+                                      <span
+                                        className="inline-flex items-center gap-1 rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-700 border border-rose-200"
+                                        title="Leaked: this password was found in a public data breach. Change it immediately."
+                                      >
+                                        🚨 Leaked
+                                      </span>
+                                    )}
+                                    {auditData.reusedIds.has(item.id) && (
+                                      <span
+                                        className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 border border-amber-200"
+                                        title="Reused: this password is used on multiple accounts. Use a unique password."
+                                      >
+                                        🔁 Reused
+                                      </span>
+                                    )}
+                                    {auditData.weakIds.has(item.id) && (
+                                      <span
+                                        className="inline-flex items-center gap-1 rounded bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold text-orange-800 border border-orange-200"
+                                        title="Weak: this password is short or lacks uppercase letters/numbers."
+                                      >
+                                        ⚠️ Weak
+                                      </span>
+                                    )}
+
+                                    {/* Custom Fields Indicator Pill */}
+                                    {item.customFields && item.customFields.length > 0 && (
+                                      <button
+                                        type="button"
+                                        onClick={() => toggleAccountCustomFields(item.id)}
+                                        className="inline-flex items-center gap-1 rounded border border-[#bfe7df] bg-[#e8f6f3] px-1.5 py-0.5 text-[10px] font-semibold text-[#0d7369] transition hover:bg-[#d4f0eb]"
+                                        title="Toggle custom fields display"
+                                      >
+                                        <span>{item.customFields.length} extra field{item.customFields.length > 1 ? 's' : ''}</span>
+                                        <span>{expandedCustomFieldAccounts[item.id] ? '▴' : '▾'}</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <HoverHint text="Open the saved website in a new browser tab.">
+                                      <a
+                                        href={item.site.startsWith('http') ? item.site : `https://${item.site}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        title={item.site}
+                                        className="max-w-60 truncate text-[11px] text-[#7b746b] hover:text-[#176b87] hover:underline"
+                                      >
+                                        {item.site}
+                                      </a>
+                                    </HoverHint>
+                                    <button
+                                      type="button"
+                                      onClick={() => copyToClipboard(item.site, `${item.id}-site`, "Website")}
+                                      title="Copy URL"
+                                      className="rounded p-0.5 text-[#aaa39a] transition-colors hover:bg-[#ebe7e1] hover:text-[#176b87]"
+                                    >
+                                      {isCopiedSite ? (
+                                        <span className="text-[10px] font-bold text-emerald-500">✓</span>
+                                      ) : (
+                                        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                        </svg>
+                                      )}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Username Column */}
+                            <td className="px-5 py-4 text-slate-300">
+                              <div className="flex items-center gap-1.5 text-[#4b5563]">
+                                <HoverHint text="Saved username or email. Use the copy button to place it on your clipboard.">
+                                  <span className="max-w-45 truncate">{item.username}</span>
+                                </HoverHint>
+                                <button
+                                  type="button"
+                                  onClick={() => copyToClipboard(item.username, `${item.id}-user`, "Username")}
+                                  title="Copy username"
+                                  aria-label="Copy username or email"
+                                  className="rounded p-1 text-[#aaa39a] transition-colors hover:bg-[#ebe7e1] hover:text-[#176b87]"
+                                >
+                                  {isCopiedUser ? (
+                                    <span className="text-[10px] font-bold text-emerald-400">✓</span>
+                                  ) : (
+                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                    </svg>
+                                  )}
+                                </button>
+                              </div>
+                            </td>
+
+                            {/* Password Column */}
+                            <td className="px-5 py-4">
+                              <div className="flex items-center gap-2">
+                                {/* Plaintext or masked password display */}
+                                <div className="flex items-center gap-1.5">
+                                  <HoverHint text={isRevealed ? "Password is visible. Use the eye button to hide it." : "Password is hidden. Use the eye button to reveal it or the copy button to copy it."}>
+                                    <span
+                                      title={isRevealed ? "Password visible. Click the eye icon to hide it." : "Password hidden. Click the eye icon to reveal it."}
+                                      className={`text-xs font-mono transition-all ${isRevealed
+                                          ? "font-semibold text-emerald-900 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200"
+                                          : "text-[#4b5563] tracking-widest"
+                                        }`}
+                                    >
+                                      {isRevealed ? item.password : "••••••••••••"}
+                                    </span>
+                                  </HoverHint>
+                                </div>
+
+                                <button
+                                  type="button"
+                                  onClick={() => togglePasswordReveal(item.id)}
+                                  title={isRevealed ? "Hide password" : "Reveal password"}
+                                  aria-label={isRevealed ? "Hide password" : "Reveal password"}
+                                  className={`rounded p-1.5 transition-all ${isRevealed
+                                      ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 border border-emerald-300"
+                                      : "text-[#aaa39a] hover:bg-[#ebe7e1] hover:text-[#176b87]"
+                                    }`}
+                                >
+                                  {isRevealed ? (
+                                    /* Eye-slash icon when revealed */
+                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                                    </svg>
+                                  ) : (
+                                    /* Eye icon when hidden */
+                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                  )}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => copyToClipboard(item.password, `${item.id}-pass`, "Password")}
+                                  title="Copy password"
+                                  aria-label="Copy password"
+                                  className="rounded p-1 text-[#aaa39a] transition-colors hover:bg-[#ebe7e1] hover:text-[#176b87]"
+                                >
+                                  {isCopiedPass ? (
+                                    <span className="text-[10px] font-bold text-emerald-400">✓</span>
+                                  ) : (
+                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                    </svg>
+                                  )}
+                                </button>
+                              </div>
+                            </td>
+
+                            {/* Operations Column */}
+                            <td className="px-5 py-4 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                {onOpenSend && (
+                                  <button
+                                    type="button"
+                                    onClick={() => onOpenSend({
+                                      title: `${item.site} (${item.username})`,
+                                      text: item.password,
+                                      type: "password",
+                                    })}
+                                    title="Send this password securely via one-time encrypted link"
+                                    className="rounded-md border border-emerald-500/30 bg-emerald-50/50 p-1.5 text-emerald-700 transition-all hover:bg-emerald-100 hover:border-emerald-500 active:scale-95 dark:border-emerald-500/40 dark:bg-emerald-950/40 dark:text-emerald-400"
+                                  >
+                                    <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                    </svg>
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedHistoryAccount(item)}
+                                  title={item.history && item.history.length > 0 ? `View ${item.history.length} previous version${item.history.length > 1 ? 's' : ''}` : "View password history"}
+                                  className={`rounded-md border p-1.5 transition-all active:scale-95 ${item.history && item.history.length > 0
+                                      ? "border-[#176b87]/40 bg-[#f0f8fa] text-[#176b87] hover:bg-[#176b87] hover:text-white"
+                                      : "border-[#d5d0c8] bg-white text-[#aaa39a] hover:border-[#9ec8d2] hover:text-[#176b87]"
+                                    }`}
+                                >
+                                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => EditPassword(item.id)}
+                                  title="Edit credential"
+                                  className="rounded-md border border-[#d5d0c8] bg-white p-1.5 text-[#7b746b] transition-all hover:border-[#9ec8d2] hover:bg-[#f5fbfc] hover:text-[#176b87] active:scale-95"
+                                >
+                                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => initiateDeletePassword(item)}
+                                  title="Delete credential"
+                                  className="rounded-md border border-[#ead2ce] bg-[#fff8f6] p-1.5 text-[#b85c50] transition-all hover:border-[#d99d95] hover:bg-[#fff1ee] hover:text-[#963f35] active:scale-95"
+                                >
+                                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+
+                          {/* Expandable Custom Fields Subrow */}
+                          {expandedCustomFieldAccounts[item.id] && item.customFields && item.customFields.length > 0 && (
+                            <tr className="bg-[#faf9f7]/80 transition-colors">
+                              <td colSpan={4} className="border-t border-dashed border-[#ebe7e1] px-5 py-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider text-[#8c857b] mr-1">
+                                    Extra Secrets:
+                                  </span>
+                                  {item.customFields.map((field) => {
+                                    const fieldKey = `${item.id}-${field.id}`;
+                                    const isSecretRevealed = Boolean(revealedCustomFieldIds[fieldKey]);
+                                    const isCopied = copiedKey === fieldKey;
+
+                                    return (
+                                      <div
+                                        key={field.id}
+                                        className="inline-flex items-center gap-2 rounded-md border border-[#d5d0c8] bg-white px-2.5 py-1 text-xs shadow-2xs"
+                                      >
+                                        <span className="font-semibold text-[#6f6a63]">
+                                          {field.label}:
+                                        </span>
+                                        <span className="font-mono text-[#1f2933]">
+                                          {field.isSecret && !isSecretRevealed ? "••••••••" : field.value}
+                                        </span>
+
+                                        {field.isSecret && (
+                                          <button
+                                            type="button"
+                                            onClick={() => toggleCustomFieldReveal(fieldKey)}
+                                            className="text-xs text-[#8c857b] hover:text-[#176b87]"
+                                            title={isSecretRevealed ? "Hide secret" : "Reveal secret"}
+                                          >
+                                            {isSecretRevealed ? "🙈" : "👁️"}
+                                          </button>
+                                        )}
+
+                                        <button
+                                          type="button"
+                                          onClick={() => copyToClipboard(field.value, fieldKey, field.label)}
+                                          className="rounded p-0.5 text-[#aaa39a] hover:text-[#176b87]"
+                                          title={`Copy ${field.label}`}
+                                        >
+                                          {isCopied ? (
+                                            <span className="text-[10px] font-bold text-emerald-500">✓</span>
+                                          ) : (
+                                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                            </svg>
+                                          )}
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </Fragment>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* Cryptographic Password & Passphrase Generator Modal */}
+        <PasswordGeneratorModal
+          isOpen={isGeneratorOpen}
+          onClose={() => setIsGeneratorOpen(false)}
+          onApplyPassword={handleApplyGeneratedPassword}
+        />
+
+        {/* Vault Migration & Backup Modal (CSV / JSON) */}
+        <VaultMigrationModal
+          isOpen={isMigrationOpen}
+          onClose={() => setIsMigrationOpen(false)}
+          passwordArray={passwordArray}
+          onBulkImportSuccess={handleBulkImport}
+          vaultKey={vaultKey}
+          token={token}
+        />
+
+        {/* Password Version History Modal */}
+        <PasswordHistoryModal
+          isOpen={Boolean(selectedHistoryAccount)}
+          onClose={() => setSelectedHistoryAccount(null)}
+          account={selectedHistoryAccount}
+          onRestorePassword={handleRestorePassword}
+          onClearHistory={handleClearHistory}
+        />
+
+        {/* Custom Accessible Delete Confirmation Dialog */}
+        {deleteConfirmAccount && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in"
+            onMouseDown={(e) => {
+              if (e.target === e.currentTarget) setDeleteConfirmAccount(null)
+            }}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-dialog-title"
+          >
+            <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-[#d5d0c8] bg-white p-6 shadow-2xl transition-all dark:border-white/10 dark:bg-[#12161f]">
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-950/40 dark:text-rose-400">
+                  <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <h3 id="delete-dialog-title" className="font-['Space_Grotesk'] text-lg font-bold text-[#1f2933] dark:text-white">
+                    Delete credential?
+                  </h3>
+                  <p className="mt-1 text-xs leading-relaxed text-[#6f6a63] dark:text-slate-400">
+                    Are you sure you want to remove this record from your vault? This cryptographic envelope will be permanently erased.
+                  </p>
+
+                  <div className="mt-3.5 flex items-center gap-2.5 rounded-lg border border-[#e2e8f0] bg-[#faf9f7] px-3 py-2 text-xs dark:border-slate-800 dark:bg-[#171d27]">
+                    <SiteLogo site={deleteConfirmAccount.site} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <div className="font-semibold text-[#1f2933] truncate dark:text-white">
+                        {deleteConfirmAccount.site}
+                      </div>
+                      <div className="text-[11px] text-[#7b746b] truncate dark:text-slate-400">
+                        {deleteConfirmAccount.username}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-3 border-t border-[#f0ede6] pt-4 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setDeleteConfirmAccount(null)}
+                  className="tactile-btn rounded-xl border border-[#d5d0c8] bg-white px-4 py-2 text-xs font-semibold text-[#6f6a63] transition hover:bg-[#f4f1ec] dark:border-slate-700 dark:bg-[#1a212c] dark:text-slate-300 dark:hover:bg-[#222c3b]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={executeDeletePassword}
+                  className="tactile-btn inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-rose-600 to-rose-700 px-4 py-2 text-xs font-bold text-white shadow-md transition hover:from-rose-500 hover:to-rose-600 hover:scale-[1.02] active:scale-[0.98]"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                  <span>Delete Credential</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
+  )
+}
+
+export default Manager

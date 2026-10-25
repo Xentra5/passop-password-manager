@@ -39,47 +39,59 @@ export default function VaultSendModal({
   // Initialize or reset when modal opens or initialData changes
   useEffect(() => {
     if (isOpen) {
-      setErrorMsg("");
-      setGeneratedLink("");
-      setCreatedMeta(null);
-      setIsCopied(false);
+      const timer = setTimeout(() => {
+        setErrorMsg("");
+        setGeneratedLink("");
+        setCreatedMeta(null);
+        setIsCopied(false);
 
-      if (initialData) {
-        setTitle(initialData.title || "");
-        setSecretText(initialData.text || "");
-        setSecretType(initialData.type || "password");
-      } else {
-        setTitle("");
-        setSecretText("");
-        setSecretType("text");
-      }
-      setActiveTab("create");
+        if (initialData) {
+          setTitle(initialData.title || "");
+          setSecretText(initialData.text || "");
+          setSecretType(initialData.type || "password");
+        } else {
+          setTitle("");
+          setSecretText("");
+          setSecretType("text");
+        }
+        setActiveTab("create");
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [isOpen, initialData]);
 
   // Load user's active sends when switching to 'manage' tab
-  const loadMySends = async () => {
-    setIsLoadingSends(true);
-    try {
-      const res = await secureFetch(`${SENDS_API_URL}/my`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setMySends(data.sends || []);
-      }
-    } catch {
-      // Backend error or offline
-    } finally {
-      setIsLoadingSends(false);
-    }
-  };
-
   useEffect(() => {
+    let isCancelled = false;
+    const fetchSends = async () => {
+      setIsLoadingSends(true);
+      try {
+        const res = await secureFetch(`${SENDS_API_URL}/my`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (!isCancelled) {
+            setMySends(data.sends || []);
+          }
+        }
+      } catch {
+        // Backend error or offline
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingSends(false);
+        }
+      }
+    };
+
     if (isOpen && activeTab === "manage") {
-      void loadMySends();
+      void fetchSends();
     }
-  }, [isOpen, activeTab]);
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isOpen, activeTab, token]);
 
   const handleCreateSend = async (e) => {
     e.preventDefault();

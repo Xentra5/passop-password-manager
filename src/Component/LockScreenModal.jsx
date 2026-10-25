@@ -56,19 +56,20 @@ export default function LockScreenModal({
   // Check if PIN is configured whenever modal opens
   useEffect(() => {
     if (isOpen) {
-      const pinExists = hasUserPin(userEmail);
-      setHasExistingPin(pinExists);
-      setIsSettingUpPin(!pinExists);
-      setPin('');
-      setConfirmPin('');
-      setMasterPassword('');
-      // A refresh clears the in-memory encryption key by design. PIN unlock
-      // is only valid for an auto-lock within the current session.
-      setUsePasswordMode(!hasVaultKey);
-      setLockoutSeconds(0);
-      setRemainingAttempts(5);
-      setTimeoutSetting(getAutoLockTimeoutMinutes());
-      setTimeout(() => inputRef.current?.focus(), 150);
+      const timer = setTimeout(() => {
+        const pinExists = hasUserPin(userEmail);
+        setHasExistingPin(pinExists);
+        setIsSettingUpPin(!pinExists);
+        setPin('');
+        setConfirmPin('');
+        setMasterPassword('');
+        setUsePasswordMode(!hasVaultKey);
+        setLockoutSeconds(0);
+        setRemainingAttempts(5);
+        setTimeoutSetting(getAutoLockTimeoutMinutes());
+        inputRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
     }
   }, [hasVaultKey, isOpen, userEmail]);
 

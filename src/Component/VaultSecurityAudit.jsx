@@ -49,7 +49,7 @@ export default function VaultSecurityAudit({
     <section className="vault-health mb-8 overflow-hidden rounded-xl border border-[#ddd8d0] bg-white p-5 shadow-[0_4px_20px_rgba(31,41,51,0.04)] sm:p-6">
       {/* Header & Quick Summary */}
       <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-        
+
         {/* Left: Circular Gauge & Health Level */}
         <div className="flex items-center gap-5">
           <div className="relative flex h-24 w-24 shrink-0 items-center justify-center">
@@ -100,10 +100,10 @@ export default function VaultSecurityAudit({
               {total === 0
                 ? "Your saved passwords will be checked for reuse, weak choices, and known breaches."
                 : breachedCount > 0
-                ? `Alert: ${breachedCount} ${breachedCount === 1 ? 'account has' : 'accounts have'} appeared in known data breaches!`
-                : reusedCount > 0
-                ? "Warning: Some passwords are reused across multiple services."
-                : "Excellent: Zero known breaches and high cryptographic entropy."}
+                  ? `Alert: ${breachedCount} ${breachedCount === 1 ? 'account has' : 'accounts have'} appeared in known data breaches!`
+                  : reusedCount > 0
+                    ? "Warning: Some passwords are reused across multiple services."
+                    : "Excellent: Zero known breaches and high cryptographic entropy."}
             </p>
           </div>
         </div>
@@ -153,11 +153,10 @@ export default function VaultSecurityAudit({
         <button
           type="button"
           onClick={() => onSelectFilter(activeFilter === 'breached' ? 'all' : 'breached')}
-          className={`vault-health-metric flex items-center justify-between rounded-lg border p-3 text-left transition-all ${
-            activeFilter === 'breached'
+          className={`vault-health-metric flex items-center justify-between rounded-lg border p-3 text-left transition-all ${activeFilter === 'breached'
               ? 'border-rose-400 bg-rose-50 ring-2 ring-rose-200'
               : 'border-[#ddd8d0] bg-[#faf8f5] hover:border-rose-300'
-          }`}
+            }`}
         >
           <div>
             <div className="flex items-center gap-1.5 text-xs font-semibold text-rose-700">
@@ -175,11 +174,10 @@ export default function VaultSecurityAudit({
         <button
           type="button"
           onClick={() => onSelectFilter(activeFilter === 'reused' ? 'all' : 'reused')}
-          className={`vault-health-metric flex items-center justify-between rounded-lg border p-3 text-left transition-all ${
-            activeFilter === 'reused'
+          className={`vault-health-metric flex items-center justify-between rounded-lg border p-3 text-left transition-all ${activeFilter === 'reused'
               ? 'border-amber-400 bg-amber-50 ring-2 ring-amber-200'
               : 'border-[#ddd8d0] bg-[#faf8f5] hover:border-amber-300'
-          }`}
+            }`}
         >
           <div>
             <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700">
@@ -197,11 +195,10 @@ export default function VaultSecurityAudit({
         <button
           type="button"
           onClick={() => onSelectFilter(activeFilter === 'weak' ? 'all' : 'weak')}
-          className={`vault-health-metric flex items-center justify-between rounded-lg border p-3 text-left transition-all ${
-            activeFilter === 'weak'
+          className={`vault-health-metric flex items-center justify-between rounded-lg border p-3 text-left transition-all ${activeFilter === 'weak'
               ? 'border-orange-400 bg-orange-50 ring-2 ring-orange-200'
               : 'border-[#ddd8d0] bg-[#faf8f5] hover:border-orange-300'
-          }`}
+            }`}
         >
           <div>
             <div className="flex items-center gap-1.5 text-xs font-semibold text-orange-700">
@@ -219,11 +216,10 @@ export default function VaultSecurityAudit({
         <button
           type="button"
           onClick={() => onSelectFilter(activeFilter === 'fortified' ? 'all' : 'fortified')}
-          className={`vault-health-metric flex items-center justify-between rounded-lg border p-3 text-left transition-all ${
-            activeFilter === 'fortified'
+          className={`vault-health-metric flex items-center justify-between rounded-lg border p-3 text-left transition-all ${activeFilter === 'fortified'
               ? 'border-emerald-400 bg-emerald-50 ring-2 ring-emerald-200'
               : 'border-[#ddd8d0] bg-[#faf8f5] hover:border-emerald-300'
-          }`}
+            }`}
         >
           <div>
             <div className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700">

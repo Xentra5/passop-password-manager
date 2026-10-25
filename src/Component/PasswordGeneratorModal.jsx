@@ -52,7 +52,10 @@ export default function PasswordGeneratorModal({ isOpen, onClose, onApplyPasswor
   // Regenerate whenever options change
   useEffect(() => {
     if (isOpen) {
-      regenerate();
+      const timer = setTimeout(() => {
+        regenerate();
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [isOpen, regenerate]);
 

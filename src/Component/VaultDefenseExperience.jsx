@@ -134,7 +134,6 @@ export default function VaultDefenseExperience({ onOpenAuth }) {
     try {
       renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: "low-power" });
     } catch {
-      setSceneReady(false);
       return undefined;
     }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
@@ -276,7 +275,7 @@ export default function VaultDefenseExperience({ onOpenAuth }) {
     const observer = new ResizeObserver(resize);
     observer.observe(host);
     resize();
-    setSceneReady(true);
+    const readyTimer = setTimeout(() => setSceneReady(true), 0);
 
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const clock = new THREE.Clock();
@@ -342,6 +341,7 @@ export default function VaultDefenseExperience({ onOpenAuth }) {
     animate();
 
     return () => {
+      clearTimeout(readyTimer);
       window.cancelAnimationFrame(animationId);
       observer.disconnect();
       host.removeEventListener("pointermove", onPointerMove);

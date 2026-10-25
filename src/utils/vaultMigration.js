@@ -27,6 +27,7 @@ function sanitizeField(value) {
   if (value === null || value === undefined) return '';
   return String(value)
     .replace(/<[^>]*>/g, '')           // strip HTML tags
+    // eslint-disable-next-line no-control-regex
     .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // strip control chars
     .trim()
     .slice(0, 2048); // hard cap per field
@@ -239,7 +240,7 @@ export function parseImportFile(fileContent, fileName = '', fileSize = 0) {
       if (!parsed.length) throw new Error('No valid credential records found in JSON file.');
       return parsed;
     } catch (err) {
-      throw new Error(`Failed to parse JSON backup: ${err.message}`);
+      throw new Error(`Failed to parse JSON backup: ${err.message}`, { cause: err });
     }
   }
 
