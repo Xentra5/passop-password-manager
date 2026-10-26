@@ -53,7 +53,6 @@ import {
 import { useSpotlight, useTilt, useScrollReveal, useMagnetic } from "../hooks/useMotion";
 import CryptographicNetworkGlobe from "./CryptographicNetworkGlobe";
 import HeroVault from "./HeroVault";
-import VaultDefenseExperience from "./VaultDefenseExperience";
 
 // Sample test passwords for the interactive Entropy Analyzer
 const SAMPLE_SEEDS = [
@@ -406,11 +405,35 @@ const LandingPage = ({ onOpenAuth }) => {
           className="pointer-events-none absolute top-1/2 right-1/4 -translate-y-1/2 translate-x-1/2 h-80 w-80 rounded-full bg-violet-500/12 blur-[100px]"
           aria-hidden="true"
         />
-        <HeroVault />
+        <div className="hero-vault-heading">
+          <span>PRIVATE BY DESIGN</span>
+          <h2>Your password is sealed before it leaves<br className="hidden sm:block" /> your device.</h2>
+          <p>Encryption happens locally, before anything reaches your vault.</p>
+        </div>
+        <div className="hero-vault-layout">
+          <HeroVault />
+          <aside className="hero-vault-info">
+            <span className="hero-vault-info-kicker">THE IMPORTANT PART</span>
+            <h3>Your database never gets<br /> the key.</h3>
+            <p>PassVault encrypts each saved password in your browser. The database stores an encrypted value; the decryption key is derived from your master password and held in browser memory.</p>
+            <div className="hero-vault-flow">
+              <div><b>01</b><strong>Your device</strong><small>Derive key locally</small></div>
+              <i aria-hidden="true">&rarr;</i>
+              <div><b>02</b><strong>Encrypted</strong><small>Unreadable payload</small></div>
+              <i aria-hidden="true">&rarr;</i>
+              <div><b>03</b><strong>Your vault</strong><small>Store ciphertext</small></div>
+            </div>
+            <div className="hero-vault-callout">
+              <span aria-hidden="true">&#8599;</span>
+              <p><b>A database copy alone is not your password.</b><br />Your master password is still needed to unlock credentials.</p>
+            </div>
+            <button type="button" onClick={() => onOpenAuth("register")}>Protect my vault <span aria-hidden="true">&rarr;</span></button>
+            <small className="hero-vault-disclaimer">Encryption protects stored data. It cannot protect a device already infected with malware or a vault left unlocked.</small>
+          </aside>
+        </div>
       </div>
 
       {/* SECTION: 3D VAULT DEFENSE INTERACTIVE EXPERIENCE (#features anchor) */}
-      <VaultDefenseExperience onOpenAuth={onOpenAuth} />
 
       {/* =====================================================================
           SECTION 4: INTERACTIVE LIVE CIPHER SANDBOX (Type & Scramble)

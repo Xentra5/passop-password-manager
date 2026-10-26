@@ -187,7 +187,7 @@ export default function LockScreenModal({
   const isLockedOut = lockoutSeconds > 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#141b22]/75 p-4 backdrop-blur-md animate-fadeIn">
+    <div className="lock-screen-overlay fixed inset-0 z-50 flex items-center justify-center bg-[#0b1016]/80 p-4 backdrop-blur-md animate-fadeIn">
       {/* BUG #12 FIX: Keyboard PIN input — respects lockout via handlePinVerification */}
       <input
         ref={inputRef}
@@ -220,17 +220,17 @@ export default function LockScreenModal({
       />
 
       <div
-        className={`relative w-full max-w-sm rounded-2xl border border-[#303846] bg-[#1a232e] p-6 shadow-2xl text-white transition-all ${
+        className={`lock-screen-card relative w-full max-w-sm rounded-2xl border border-[#303846] bg-[#1a232e] p-6 shadow-2xl text-white transition-all ${
           shake ? 'animate-shake ring-2 ring-rose-500/50' : ''
         }`}
       >
         {/* Top Lock Icon & Header */}
         <div className="flex flex-col items-center text-center">
-          <div className="relative mb-3 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#2b3949] bg-[#222d3b] text-emerald-400 shadow-inner">
+          <div className="relative mb-3 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#2b3949] bg-[#222d3b] text-slate-300 shadow-inner">
             <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
-            <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-emerald-500 animate-pulse"></div>
+            <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-slate-400"></div>
           </div>
 
           <h3 className="font-['Space_Grotesk'] text-xl font-bold tracking-tight text-white">
@@ -261,7 +261,7 @@ export default function LockScreenModal({
                     key={idx}
                     className={`h-4 w-4 rounded-full border-2 transition-all duration-200 ${
                       filled
-                        ? 'border-emerald-400 bg-emerald-400 scale-110 shadow-[0_0_10px_rgba(52,211,153,0.5)]'
+                        ? 'border-slate-200 bg-slate-200 scale-110 shadow-[0_0_10px_rgba(226,232,240,0.35)]'
                         : 'border-slate-600 bg-transparent'
                     }`}
                   />
@@ -320,7 +320,7 @@ export default function LockScreenModal({
               <button
                 type="button"
                 onClick={() => setUsePasswordMode(true)}
-                className="text-emerald-400 hover:underline"
+                className="text-slate-200 hover:underline"
               >
                 Unlock with Master Password instead
               </button>
@@ -351,7 +351,7 @@ export default function LockScreenModal({
                 value={pin}
                 onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
                 placeholder="4 digits (e.g. 1234)"
-                className="mt-1 w-full rounded-md border border-slate-700 bg-[#141b22] px-3 py-2 text-center font-mono text-sm tracking-widest text-white focus:border-emerald-400 focus:outline-none"
+                className="mt-1 w-full rounded-md border border-slate-700 bg-[#141b22] px-3 py-2 text-center font-mono text-sm tracking-widest text-white focus:border-slate-300 focus:outline-none"
                 required
               />
             </div>
@@ -364,7 +364,7 @@ export default function LockScreenModal({
                 value={confirmPin}
                 onChange={(e) => setConfirmPin(e.target.value.replace(/\D/g, ''))}
                 placeholder="Confirm digits"
-                className="mt-1 w-full rounded-md border border-slate-700 bg-[#141b22] px-3 py-2 text-center font-mono text-sm tracking-widest text-white focus:border-emerald-400 focus:outline-none"
+                className="mt-1 w-full rounded-md border border-slate-700 bg-[#141b22] px-3 py-2 text-center font-mono text-sm tracking-widest text-white focus:border-slate-300 focus:outline-none"
                 required
               />
             </div>
@@ -381,7 +381,7 @@ export default function LockScreenModal({
               )}
               <button
                 type="submit"
-                className="w-full rounded-md bg-emerald-600 py-2 text-xs font-bold text-white shadow transition-all hover:bg-emerald-500 active:scale-95"
+                className="w-full rounded-md bg-white py-2 text-xs font-bold text-black shadow transition-all hover:bg-slate-200 active:scale-95"
               >
                 Save PIN & Unlock
               </button>
@@ -405,7 +405,7 @@ export default function LockScreenModal({
                 value={masterPassword}
                 onChange={(e) => setMasterPassword(e.target.value)}
                 placeholder="Master password"
-                className="mt-1.5 w-full rounded-md border border-slate-700 bg-[#141b22] px-3 py-2.5 text-sm text-white focus:border-emerald-400 focus:outline-none"
+                className="mt-1.5 w-full rounded-md border border-slate-700 bg-[#141b22] px-3 py-2.5 text-sm text-white focus:border-slate-300 focus:outline-none"
                 required
                 autoFocus
               />
@@ -413,7 +413,7 @@ export default function LockScreenModal({
 
             <button
               type="submit"
-              className="w-full rounded-md bg-emerald-600 py-2.5 text-xs font-bold text-white shadow transition-all hover:bg-emerald-500 active:scale-95"
+              className="w-full rounded-md bg-white py-2.5 text-xs font-bold text-black shadow transition-all hover:bg-slate-200 active:scale-95"
             >
               Unlock Vault
             </button>
@@ -431,7 +431,7 @@ export default function LockScreenModal({
         )}
 
         {/* Footer Actions: Settings & Logout */}
-        <div className="mt-6 flex items-center justify-between border-t border-slate-800 pt-4 text-xs">
+        <div className="lock-screen-footer mt-6 flex items-center justify-between border-t border-slate-800 pt-4 text-xs">
           <button
             type="button"
             onClick={() => setShowSettings(!showSettings)}
@@ -461,7 +461,7 @@ export default function LockScreenModal({
                   onClick={() => handleTimeoutChange(mins)}
                   className={`rounded py-1 font-semibold ${
                     timeoutSetting === mins
-                      ? 'bg-emerald-600 text-white'
+                      ? 'bg-white text-black'
                       : 'bg-[#141b22] text-slate-400 hover:bg-slate-700'
                   }`}
                 >

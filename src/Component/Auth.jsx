@@ -159,11 +159,11 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
   // Whenever isRegistering or form changes, React re-renders this entire section!
   // ==========================================================================
   return (
-    <div className="auth-composition flex items-center justify-center py-2">
+    <div className="auth-composition compact-auth-composition flex items-center justify-center py-2">
       <div className="auth-signal" aria-hidden="true"></div>
 
       {/* Main Auth Card */}
-      <section className="auth-panel relative z-10 w-full max-w-md rounded-2xl border border-white/20 bg-black p-6 text-white shadow-2xl sm:p-8">
+      <section className="auth-panel compact-auth-panel relative z-10 w-full max-w-md rounded-2xl border border-white/20 bg-black p-6 text-white shadow-2xl sm:p-8">
 
         {/* Close Button ('X' icon) */}
         {onClose && (

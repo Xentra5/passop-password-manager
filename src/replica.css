@@ -137,6 +137,113 @@ kbd { min-width:13px; padding:1px 3px; border:1px solid #343434; border-radius:3
 .auth-overlay { position:fixed; inset:0; z-index:100; display:grid; place-items:center; overflow:auto; padding:18px; background:#000c; backdrop-filter:blur(5px); animation:scrim-in .25s ease both; }
 .auth-overlay-card { width:min(100%,480px); animation:modal-in .42s cubic-bezier(.22,1,.36,1) both; }
 .auth-overlay-card .auth-panel { animation:none; }
+.auth-overlay-card .compact-auth-panel {
+  width: min(100%, 300px);
+  max-width: 300px;
+  padding: 21px 22px 20px;
+  border-color: #292929;
+  border-radius: 12px;
+  box-shadow: 0 22px 60px #000b;
+}
+.auth-overlay-card .compact-auth-panel h1 {
+  font-size: 17px;
+  line-height: 1.15;
+  letter-spacing: -.025em;
+}
+.auth-overlay-card .compact-auth-panel > div:first-of-type {
+  margin-bottom: 17px;
+}
+.auth-overlay-card .compact-auth-panel p {
+  font-size: 10px;
+  line-height: 1.4;
+}
+.auth-overlay-card .compact-auth-panel form {
+  gap: 14px;
+}
+.auth-overlay-card .compact-auth-panel label {
+  margin-bottom: 5px;
+  font-size: 9px;
+  letter-spacing: .08em;
+}
+.auth-overlay-card .compact-auth-panel .auth-field {
+  height: 31px;
+  padding: 7px 9px;
+  border-color: #363636;
+  border-radius: 5px;
+  font-size: 10px;
+}
+.auth-overlay-card .compact-auth-panel .auth-submit {
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 5px;
+  font-size: 11px;
+}
+.auth-overlay-card .compact-auth-panel .auth-password-toggle {
+  right: 8px;
+  width: 18px;
+}
+.auth-overlay-card .compact-auth-panel .auth-password-toggle svg {
+  width: 13px;
+  height: 13px;
+}
+.auth-overlay-card .compact-auth-panel > button:last-child {
+  margin-top: 14px;
+  font-size: 10px;
+}
+.lock-screen-overlay {
+  background: rgba(11, 16, 22, .82);
+}
+.lock-screen-card {
+  width: min(100%, 300px);
+  max-width: 300px;
+  padding: 16px;
+  border-color: #303b49;
+  border-radius: 10px;
+  box-shadow: 0 22px 60px #000b;
+}
+.lock-screen-card h3 {
+  font-size: 16px;
+}
+.lock-screen-card > div:first-of-type > div:first-child {
+  width: 38px;
+  height: 38px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+}
+.lock-screen-card > div:first-of-type > div:first-child svg {
+  width: 19px;
+  height: 19px;
+}
+.lock-screen-card > div:first-of-type > div:first-child > div {
+  width: 7px;
+  height: 7px;
+}
+.lock-screen-card form {
+  margin-top: 14px;
+  gap: 11px;
+}
+.lock-screen-card form label {
+  font-size: 9px;
+}
+.lock-screen-card form input {
+  height: 29px;
+  padding: 6px 8px;
+  font-size: 10px;
+}
+.lock-screen-card form button[type="submit"] {
+  height: 29px;
+  padding: 0 8px;
+  font-size: 10px;
+  color: #000 !important;
+}
+.lock-screen-card .lock-screen-footer {
+  margin-top: 14px;
+  padding-top: 11px;
+  font-size: 9px;
+}
+.lock-screen-card .lock-screen-footer button {
+  font-size: 9px;
+}
 .logout-button:focus-visible,.landing-toggle:focus-visible { outline:2px solid #fff; outline-offset:2px; }
 @keyframes scrim-in { from { opacity:0; } to { opacity:1; } }
 @keyframes modal-in { from { opacity:0; transform:translateY(14px) scale(.97); } to { opacity:1; transform:translateY(0) scale(1); } }
