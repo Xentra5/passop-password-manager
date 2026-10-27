@@ -444,13 +444,13 @@ const LandingPage = ({ onOpenAuth }) => {
             <div className="cipher-lab-heading">
               <div className="cipher-lab-kicker">
                 <span className="cipher-lab-kicker-dot" />
-                Live cryptographic instrument
+                Interactive demo <span aria-hidden="true">·</span> runs locally
               </div>
               <h2 className="mt-3 font-['Space_Grotesk'] text-3xl font-bold tracking-tight text-[#1f2933] dark:text-white sm:text-4xl">
-                Watch plaintext become <em>unreadable.</em>
+                A closer look at <em>ciphertext.</em>
               </h2>
               <p className="mt-4 max-w-xl text-base text-[#6f6a63] dark:text-slate-300">
-                A small, live view of the same client-side boundary that protects every credential in your vault.
+                Explore a sample transformation in your browser. This visual demo is separate from the encryption used by your vault.
               </p>
             </div>
           </ScrollRevealSection>
@@ -477,7 +477,7 @@ const LandingPage = ({ onOpenAuth }) => {
                     >
                       Source payload
                     </label>
-                    <span className="cipher-lab-counter">{String(inputText.length).padStart(2, "0")} bytes</span>
+                    <span className="cipher-lab-counter">{String(inputText.length).padStart(2, "0")} characters</span>
                   </div>
 
                   <div className="cipher-lab-input-row">
@@ -500,7 +500,7 @@ const LandingPage = ({ onOpenAuth }) => {
                         weight="fill"
                         className={isScrambling ? "animate-pulse" : ""}
                       />
-                      <span>{isScrambling ? "Encrypting Cycle..." : "Simulate Cycle"}</span>
+                      <span>{isScrambling ? "Running preview…" : "Run preview"}</span>
                     </button>
                   </div>
                 </div>
@@ -516,7 +516,7 @@ const LandingPage = ({ onOpenAuth }) => {
                   <div className="cipher-lab-output-head flex items-center justify-between border-b border-slate-700/80 pb-3">
                     <div className="flex items-center gap-2.5 text-xs text-slate-300">
                       <span className="cipher-lab-live-dot h-2 w-2 rounded-full bg-emerald-400"></span>
-                      <span className="font-mono font-medium">Simulated output</span>
+                      <span className="font-mono font-medium">Simulated hash output</span>
                     </div>
 
                     <button
@@ -552,13 +552,13 @@ const LandingPage = ({ onOpenAuth }) => {
                   <div className="cipher-lab-meta mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-slate-800/80 pt-3 text-[11px] text-slate-400">
                     <div className="flex items-center gap-1.5">
                       <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
-                      <span>Illustrative preview · not production encryption</span>
+                      <span>Illustrative only · this output does not encrypt your payload</span>
                     </div>
                   </div>
                 </div>
 
                 <div className="cipher-lab-footer flex flex-wrap items-center justify-between gap-2 pt-1 text-xs text-[#6f6a63]">
-                  <span><span className="cipher-lab-footer-mark">↗</span> Visual preview only</span>
+                  <span><span className="cipher-lab-footer-mark">↗</span> Demo only · no vault data is changed</span>
                   <button
                     type="button"
                     onClick={() => onOpenAuth("register")}

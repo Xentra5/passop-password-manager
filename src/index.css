@@ -2898,6 +2898,75 @@ html.dark ::-webkit-scrollbar-thumb:hover,
 .landing-page-view .landing-page [class*="hover:bg-teal-"]:hover,
 .landing-page-view .landing-page [class*="hover:bg-cyan-"]:hover { background-color: #343052 !important; }
 
+/* Cipher preview: quiet, editorial hierarchy with compact controls. */
+.landing-page-view .cipher-lab-section {
+  padding-block: clamp(3.25rem, 6vw, 5rem) !important;
+  background: #09090a !important;
+}
+.landing-page-view .cipher-lab-heading h2 {
+  font-size: clamp(1.55rem, 2.5vw, 2rem) !important;
+  letter-spacing: -.04em !important;
+}
+.landing-page-view .cipher-lab-heading p {
+  font-size: .9rem !important;
+  color: #a1a1aa !important;
+}
+.landing-page-view .cipher-lab-shell {
+  max-width: 48rem;
+  margin-top: 1.75rem !important;
+}
+.landing-page-view .cipher-lab-panel {
+  padding: 1rem !important;
+  border-color: #242428 !important;
+  border-radius: .7rem !important;
+  background: #111113 !important;
+}
+.landing-page-view .cipher-lab-panel-intro {
+  padding-bottom: .7rem !important;
+  font-size: .72rem !important;
+}
+.landing-page-view .cipher-lab-workspace { gap: .55rem; }
+.landing-page-view .cipher-lab-label-row label { font-size: .68rem !important; }
+.landing-page-view .cipher-lab-input-field {
+  min-height: 2.45rem;
+  border-color: #303036 !important;
+  border-radius: .55rem !important;
+  background: #151518 !important;
+  font-size: .82rem !important;
+}
+.landing-page-view .cipher-lab-trigger {
+  min-height: 2.45rem;
+  padding-inline: 1rem !important;
+  border-color: #e4e4e7 !important;
+  border-radius: .55rem !important;
+  background: #e4e4e7 !important;
+  color: #171719 !important;
+  font-size: .75rem !important;
+}
+.landing-page-view .cipher-lab-trigger:hover {
+  border-color: #fff !important;
+  background: #fff !important;
+}
+.landing-page-view .cipher-lab-output {
+  padding: .8rem !important;
+  border-color: #29292e !important;
+  border-radius: .55rem !important;
+  background: #151517 !important;
+}
+.landing-page-view .cipher-lab-output-head { padding-bottom: .6rem; }
+.landing-page-view .cipher-lab-hash {
+  min-height: 2rem;
+  margin-top: .65rem !important;
+  font-size: .72rem !important;
+  letter-spacing: .01em !important;
+}
+.landing-page-view .cipher-lab-hash span { color: #a99aff !important; }
+.landing-page-view .cipher-lab-footer {
+  padding-top: .1rem !important;
+  font-size: .68rem !important;
+}
+.landing-page-view .cipher-lab-footer button { font-size: .68rem !important; }
+
 /* Vault defense: monochrome shield with a clear red attacker signal. */
 .landing-page-view .landing-page .defense-canvas-host {
   background: radial-gradient(ellipse at 50% 52%, #202020 0, #111 39%, #090909 72%, #060606 100%) !important;
@@ -2969,6 +3038,189 @@ html.dark ::-webkit-scrollbar-thumb:hover,
 
 .pipeline-dash {
   animation: pipeline-flow 1.8s linear infinite;
+}
+
+/* Focused cipher demo refresh. */
+.landing-page-view .cipher-lab-section {
+  border-top: 1px solid #1d1d22 !important;
+  border-bottom: 1px solid #1d1d22 !important;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(133, 111, 255, .075), transparent 42%),
+    #09090a !important;
+}
+.landing-page-view .cipher-lab-heading { max-width: 48rem; margin-inline: auto; }
+.landing-page-view .cipher-lab-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: .55rem;
+  padding: .38rem .7rem;
+  border: 1px solid #2b2935;
+  border-radius: 999px;
+  background: #111014;
+  color: #c4bddf !important;
+  font-size: .7rem !important;
+  letter-spacing: .025em !important;
+}
+.landing-page-view .cipher-lab-kicker-dot {
+  width: .38rem;
+  height: .38rem;
+  background: #aa98ff !important;
+  box-shadow: 0 0 10px rgba(170,152,255,.55) !important;
+}
+.landing-page-view .cipher-lab-heading h2 {
+  margin-top: 1rem !important;
+  font-size: clamp(2rem, 4vw, 3rem) !important;
+  line-height: 1.04 !important;
+  letter-spacing: -.055em !important;
+}
+.landing-page-view .cipher-lab-heading h2 em {
+  color: #b7a8ff !important;
+  font-style: normal;
+}
+.landing-page-view .cipher-lab-heading p {
+  max-width: 42rem;
+  margin-top: .9rem !important;
+  font-size: .94rem !important;
+  line-height: 1.65 !important;
+}
+.landing-page-view .cipher-lab-shell { margin-top: 2rem !important; }
+.landing-page-view .cipher-lab-panel {
+  position: relative;
+  padding: clamp(1rem, 2.5vw, 1.4rem) !important;
+  border: 1px solid #2a2931 !important;
+  border-radius: 1rem !important;
+  background: linear-gradient(145deg, #141417 0%, #101012 72%) !important;
+  box-shadow: 0 24px 70px rgba(0,0,0,.28), inset 0 1px rgba(255,255,255,.035) !important;
+}
+.landing-page-view .cipher-lab-panel-intro {
+  padding: .1rem .1rem .9rem !important;
+  border-bottom: 1px solid #29282f !important;
+}
+.landing-page-view .cipher-lab-index {
+  color: #eeeef2 !important;
+  font-size: .78rem;
+  letter-spacing: -.01em;
+}
+.landing-page-view .cipher-lab-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  color: #a7a5af !important;
+  font-size: .7rem;
+}
+.landing-page-view .cipher-lab-mode::before {
+  width: .35rem;
+  height: .35rem;
+  border-radius: 50%;
+  background: #9b8be8;
+  content: "";
+}
+.landing-page-view .cipher-lab-workspace { gap: .9rem; padding-top: 1rem; }
+.landing-page-view .cipher-lab-label-row { margin-bottom: .45rem; }
+.landing-page-view .cipher-lab-label-row label {
+  color: #c4c1cc !important;
+  font-size: .72rem !important;
+  font-weight: 600 !important;
+  letter-spacing: .015em !important;
+}
+.landing-page-view .cipher-lab-counter {
+  color: #85828d !important;
+  font-size: .68rem;
+  font-variant-numeric: tabular-nums;
+}
+.landing-page-view .cipher-lab-input-row { gap: .65rem; }
+.landing-page-view .cipher-lab-input-field {
+  min-height: 3rem;
+  padding-inline: .9rem !important;
+  border-color: #34333a !important;
+  border-radius: .7rem !important;
+  background: #0d0d0f !important;
+  font-family: "JetBrains Mono", ui-monospace, monospace !important;
+  font-size: .8rem !important;
+  letter-spacing: -.015em;
+}
+.landing-page-view .cipher-lab-input-field:focus {
+  border-color: #8270d5 !important;
+  box-shadow: 0 0 0 3px rgba(130,112,213,.15) !important;
+}
+.landing-page-view .cipher-lab-trigger {
+  min-height: 3rem;
+  padding-inline: 1.05rem !important;
+  border: 1px solid #f0eff3 !important;
+  border-radius: .7rem !important;
+  background: #eeedf1 !important;
+  color: #17161b !important;
+  font-size: .74rem !important;
+  font-weight: 650 !important;
+}
+.landing-page-view .cipher-lab-trigger:hover {
+  background: #fff !important;
+  transform: translateY(-1px);
+}
+.landing-page-view .cipher-lab-output {
+  padding: 1rem !important;
+  border-color: #2b2a31 !important;
+  border-radius: .75rem !important;
+  background: #111113 !important;
+}
+.landing-page-view .cipher-lab-output-head {
+  padding-bottom: .75rem;
+  color: #c7c4cf !important;
+}
+.landing-page-view .cipher-lab-output-head > div:first-child {
+  color: #c7c4cf !important;
+  font-family: var(--font-sans, system-ui, sans-serif) !important;
+  font-size: .74rem !important;
+}
+.landing-page-view .cipher-lab-output-head button {
+  min-height: 2rem;
+  border-color: #393744 !important;
+  border-radius: .55rem !important;
+  background: #1c1a25 !important;
+  color: #e0dcf2 !important;
+  transition: background-color .16s ease, border-color .16s ease, transform .16s ease;
+}
+.landing-page-view .cipher-lab-output-head button:hover {
+  border-color: #625784 !important;
+  background: #252132 !important;
+  transform: translateY(-1px);
+}
+.landing-page-view .cipher-lab-hash {
+  display: flex;
+  align-items: center;
+  min-height: 2.4rem;
+  margin-top: .7rem !important;
+  overflow-x: auto;
+  border-radius: .4rem;
+  color: #b9aaff !important;
+  font-family: "JetBrains Mono", ui-monospace, monospace !important;
+  font-size: .75rem !important;
+  line-height: 1.6;
+  scrollbar-width: thin;
+}
+.landing-page-view .cipher-lab-hash span { color: #b9aaff !important; }
+.landing-page-view .cipher-lab-meta {
+  margin-top: .55rem !important;
+  padding-top: .65rem !important;
+  color: #85828d !important;
+  font-size: .66rem !important;
+}
+.landing-page-view .cipher-lab-footer {
+  margin-top: .15rem;
+  color: #8f8c97 !important;
+  font-size: .69rem !important;
+}
+.landing-page-view .cipher-lab-footer button {
+  color: #d0c9ef !important;
+  font-size: .7rem !important;
+  text-decoration: none;
+}
+.landing-page-view .cipher-lab-footer button:hover { color: #fff !important; }
+@media (max-width: 560px) {
+  .landing-page-view .cipher-lab-heading h2 { font-size: clamp(1.9rem, 9vw, 2.5rem) !important; }
+  .landing-page-view .cipher-lab-panel { border-radius: .8rem !important; }
+  .landing-page-view .cipher-lab-mode { font-size: 0; }
+  .landing-page-view .cipher-lab-mode::before { width: .42rem; height: .42rem; }
 }
 
 @keyframes pipeline-flow {
