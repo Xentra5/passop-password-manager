@@ -216,7 +216,7 @@ PasswordProject/
 │   │   ├── Footer.jsx            # App footer with telemetry status signals
 │   │   ├── LandingPage.jsx       # Linear-style interactive showcase & live cipher sandbox
 │   │   ├── LockScreenModal.jsx   # Inactivity lock screen with 4-digit PIN unlock
-│   │   ├── Manger.jsx            # Vault manager (CRUD, search, tags, custom fields, logos)
+│   │   ├── Manager.jsx           # Vault manager (CRUD, search, tags, custom fields, logos)
 │   │   ├── NavBar.jsx            # Responsive navigation, theme toggle & session controls
 │   │   ├── PassVaultLogo.jsx     # Geometric brand monogram and wordmark
 │   │   ├── PasswordGeneratorModal.jsx # Passphrase & custom entropy generator modal
@@ -251,10 +251,29 @@ PasswordProject/
 
 ## ⚡ Getting Started
 
+The project has separate frontend and backend applications. Run them in two terminals during local development.
+
 ### Prerequisites
 - **Node.js**: v18.0.0 or later (v20+ recommended)
 - **MongoDB**: Local MongoDB instance (`mongodb://127.0.0.1:27017`) or MongoDB Atlas URI
 - A modern browser with **Web Crypto API** support
+
+### Install the project
+
+From the repository root:
+
+```bash
+cd PasswordProject
+npm install
+cd backend
+npm install
+```
+
+Return to the frontend directory before running frontend commands:
+
+```bash
+cd ..
+```
 
 ---
 
@@ -318,6 +337,9 @@ PasswordProject/
    VITE_SENDS_API_URL=http://localhost:3000/api/sends
    ```
 
+   These variables are read by the browser at build time. Update all three
+   values to the HTTPS API origin when deploying the frontend.
+
 4. Launch the Vite development server:
    ```bash
    npm run dev
@@ -339,7 +361,7 @@ Run these commands from the frontend directory:
 | `npm run preview` | Serve the production build locally |
 | `npm run lint` | Run ESLint across the frontend |
 
-The backend uses `npm start` and `npm run dev` to start `backend/server.js`.
+The backend uses `npm start` or `npm run dev` to start `backend/server.js`.
 
 ---
 
