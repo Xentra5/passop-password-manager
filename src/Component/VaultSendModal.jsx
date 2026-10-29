@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { secureFetch } from "../utils/csrf";
 import {
   generateSendSecretKey,
@@ -36,6 +36,26 @@ export default function VaultSendModal({
   const [mySends, setMySends] = useState([]);
   const [isLoadingSends, setIsLoadingSends] = useState(false);
 
+  const loadMySends = useCallback(async () => {
+    setIsLoadingSends(true);
+    setErrorMsg("");
+    try {
+      const res = await secureFetch(`${SENDS_API_URL}/my`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        throw new Error(`Could not load active sends (${res.status}).`);
+      }
+      const data = await res.json();
+      setMySends(Array.isArray(data.sends) ? data.sends : []);
+    } catch (error) {
+      console.error("Failed to load PassVault Sends:", error);
+      setErrorMsg(error.message || "Could not load active sends.");
+    } finally {
+      setIsLoadingSends(false);
+    }
+  }, [token]);
+
   // Initialize or reset when modal opens or initialData changes
   useEffect(() => {
     if (isOpen) {
@@ -62,36 +82,34 @@ export default function VaultSendModal({
 
   // Load user's active sends when switching to 'manage' tab
   useEffect(() => {
-    let isCancelled = false;
-    const fetchSends = async () => {
-      setIsLoadingSends(true);
-      try {
-        const res = await secureFetch(`${SENDS_API_URL}/my`, {
+    /* legacy fetch implementation removed */
+    /*
+      const fetchSends = async () => {
+        setIsLoadingSends(true);
+        try {
+          const res = await secureFetch(`${SENDS_API_URL}/my`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (!isCancelled) {
+          });
+          if (res.ok) {
+            const data = await res.json();
             setMySends(data.sends || []);
           }
-        }
-      } catch {
-        // Backend error or offline
-      } finally {
-        if (!isCancelled) {
+        } catch (error) {
+          console.error("Failed to load PassVault Sends:", error);
+          setErrorMsg(error.message || "Could not load active sends.");
+        } finally {
           setIsLoadingSends(false);
         }
       }
-    };
+    */
 
     if (isOpen && activeTab === "manage") {
-      void fetchSends();
+      const timer = setTimeout(() => {
+        void loadMySends();
+      }, 0);
+      return () => clearTimeout(timer);
     }
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [isOpen, activeTab, token]);
+  }, [isOpen, activeTab, loadMySends]);
 
   const handleCreateSend = async (e) => {
     e.preventDefault();

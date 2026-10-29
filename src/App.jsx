@@ -186,23 +186,37 @@ function App() {
 
   const lockVault = useCallback(() => {
     if (!session.user) return;
-    clearCachedVaultKey();
-    setVaultKey(null);
-    setCredentials([]);
+    // Keep the in-memory key and decrypted records available for the
+    // configured quick PIN. A PIN is only a local gate; it cannot recreate
+    // a key that has already been discarded. A page refresh still clears
+    // the key and correctly requires the master password.
     setRevealed({});
     setQuery("");
     setHealthOpen(false);
     setIsVaultLocked(true);
   }, [session.user]);
 
-  // Called by LockScreenModal when user re-enters their master password after a page refresh.
-  // Re-derives the vault key so the vault can be decrypted again without a full re-login.
+  // Called by LockScreenModal when user re-enters their master password after
+  // a page refresh. Validate the derived key against stored ciphertext before
+  // unlocking; PBKDF2 can derive a key from any input, including a wrong one.
   const handleUnlockWithMasterPassword = useCallback(async (masterPassword) => {
     const { deriveVaultKey } = await import("./utils/cryptoVault");
     const key = await deriveVaultKey(masterPassword, session.user.email);
+    const response = await secureFetch(API_BASE_URL, { headers: authHeaders() });
+    if (!response.ok) {
+      throw new Error(`Could not verify your vault (${response.status}).`);
+    }
+    const items = await response.json();
+    const encryptedItem = items.find((item) => typeof item.password === "string" && item.password.startsWith("enc:v2:"));
+    if (encryptedItem) {
+      const decryptedPassword = await decryptCredential(encryptedItem.password, key);
+      if (decryptedPassword === "[Decryption Failed]") {
+        throw new Error("Incorrect master password.");
+      }
+    }
     setVaultKey(key);
     setIsVaultLocked(false);
-  }, [session.user]);
+  }, [session.user, session.token]);
 
   // Called by LockScreenModal when user unlocks with PIN (vault key already in RAM).
   const handlePinUnlock = useCallback(() => {

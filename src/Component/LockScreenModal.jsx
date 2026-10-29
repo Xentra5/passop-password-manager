@@ -59,11 +59,13 @@ export default function LockScreenModal({
       const timer = setTimeout(() => {
         const pinExists = hasUserPin(userEmail);
         setHasExistingPin(pinExists);
-        setIsSettingUpPin(!pinExists);
+        // A missing PIN must not block access to the master-password flow.
+        // PIN setup is optional and can be started from that flow.
+        setIsSettingUpPin(false);
         setPin('');
         setConfirmPin('');
         setMasterPassword('');
-        setUsePasswordMode(!hasVaultKey);
+        setUsePasswordMode(!pinExists || !hasVaultKey);
         setLockoutSeconds(0);
         setRemainingAttempts(5);
         setTimeoutSetting(getAutoLockTimeoutMinutes());
@@ -187,8 +189,8 @@ export default function LockScreenModal({
   const isLockedOut = lockoutSeconds > 0;
 
   return (
-    <div className="lock-screen-overlay fixed inset-0 z-50 flex items-center justify-center bg-[#0b1016]/80 p-4 backdrop-blur-md animate-fadeIn">
-      {/* BUG #12 FIX: Keyboard PIN input — respects lockout via handlePinVerification */}
+    <div className="lock-screen-overlay fixed inset-0 z-50 flex items-center justify-center bg-[#0b1016]/80 p-4 backdrop-blur-md animate-fadeIn" role="dialog" aria-modal="true" aria-labelledby="lock-screen-title">
+      {/* Keyboard PIN input — respects lockout via handlePinVerification */}
       <input
         ref={inputRef}
         type="password"
@@ -215,8 +217,8 @@ export default function LockScreenModal({
             }
           }
         }}
-        className="opacity-0 absolute pointer-events-none"
-        aria-hidden="true"
+        className="sr-only"
+        aria-label="Four digit vault PIN"
       />
 
       <div
@@ -233,7 +235,7 @@ export default function LockScreenModal({
             <div className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-slate-400"></div>
           </div>
 
-          <h3 className="font-['Space_Grotesk'] text-xl font-bold tracking-tight text-white">
+          <h3 id="lock-screen-title" className="font-['Space_Grotesk'] text-xl font-bold tracking-tight text-white">
             Vault Locked
           </h3>
           <p className="mt-1 text-xs text-slate-400">
@@ -327,10 +329,10 @@ export default function LockScreenModal({
 
               <button
                 type="button"
-                onClick={() => setIsSettingUpPin(true)}
+                onClick={() => { setUsePasswordMode(false); setIsSettingUpPin(true); setPin(''); setConfirmPin(''); }}
                 className="text-slate-400 hover:text-slate-200"
               >
-                Change 4-Digit PIN
+                {hasExistingPin ? 'Change 4-Digit PIN' : 'Set up a 4-Digit Quick PIN'}
               </button>
             </div>
           </div>
@@ -370,10 +372,10 @@ export default function LockScreenModal({
             </div>
 
             <div className="flex gap-2">
-              {hasExistingPin && (
+              {(hasExistingPin || hasVaultKey) && (
                 <button
                   type="button"
-                  onClick={() => setIsSettingUpPin(false)}
+                  onClick={() => { setIsSettingUpPin(false); setUsePasswordMode(true); setPin(''); setConfirmPin(''); }}
                   className="w-1/2 rounded-md border border-slate-700 py-2 text-xs font-semibold text-slate-400 hover:bg-slate-800"
                 >
                   Cancel
@@ -425,6 +427,15 @@ export default function LockScreenModal({
                 className="w-full text-center text-xs text-slate-400 hover:text-white"
               >
                 ← Back to 4-Digit PIN
+              </button>
+            )}
+            {!hasExistingPin && hasVaultKey && (
+              <button
+                type="button"
+                onClick={() => { setUsePasswordMode(false); setIsSettingUpPin(true); setMasterPassword(''); }}
+                className="w-full text-center text-xs text-slate-400 hover:text-white"
+              >
+                Set up a 4-Digit Quick PIN
               </button>
             )}
           </form>
