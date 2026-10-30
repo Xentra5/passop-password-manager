@@ -26,6 +26,7 @@ export default function LockScreenModal({
   onUnlock,
   onLogout,
   onUnlockWithMasterPassword,
+  onTimeoutChange,
 }) {
   const [pin, setPin] = useState('');
   const [hasExistingPin, setHasExistingPin] = useState(false);
@@ -33,6 +34,8 @@ export default function LockScreenModal({
   const [confirmPin, setConfirmPin] = useState('');
   const [shake, setShake] = useState(false);
   const [masterPassword, setMasterPassword] = useState('');
+  const [masterPasswordError, setMasterPasswordError] = useState('');
+  const [isUnlocking, setIsUnlocking] = useState(false);
   const [usePasswordMode, setUsePasswordMode] = useState(false);
   const [timeoutSetting, setTimeoutSetting] = useState(5);
   const [showSettings, setShowSettings] = useState(false);
@@ -41,6 +44,7 @@ export default function LockScreenModal({
   const [remainingAttempts, setRemainingAttempts] = useState(5);
   const lockoutTimerRef = useRef(null);
   const inputRef = useRef(null);
+  const masterPasswordInputRef = useRef(null);
   const pinVerificationInFlightRef = useRef(false);
 
   const userEmail = user?.email || 'user';
@@ -65,11 +69,16 @@ export default function LockScreenModal({
         setPin('');
         setConfirmPin('');
         setMasterPassword('');
+        setMasterPasswordError('');
+        setIsUnlocking(false);
         setUsePasswordMode(!pinExists || !hasVaultKey);
         setLockoutSeconds(0);
         setRemainingAttempts(5);
         setTimeoutSetting(getAutoLockTimeoutMinutes());
-        inputRef.current?.focus();
+        // Keep Chrome's password manager away from the hidden PIN field. Focus
+        // the visible master-password field when the vault key is unavailable.
+        if (pinExists && hasVaultKey) inputRef.current?.focus();
+        else masterPasswordInputRef.current?.focus();
       }, 50);
       return () => clearTimeout(timer);
     }
@@ -162,8 +171,10 @@ export default function LockScreenModal({
 
   const handleMasterPasswordSubmit = async (e) => {
     e.preventDefault();
-    if (!masterPassword) return;
+    if (!masterPassword || isUnlocking) return;
 
+    setIsUnlocking(true);
+    setMasterPasswordError('');
     try {
       // BUG #13 FIX: Guard against undefined callback — it MUST be provided by App.jsx
       if (!onUnlockWithMasterPassword) {
@@ -172,14 +183,19 @@ export default function LockScreenModal({
       await onUnlockWithMasterPassword(masterPassword);
       onUnlock();
     } catch (err) {
-      toast.error(err.message || 'Incorrect master password', { theme: 'dark' });
+      const message = err.message || 'Could not unlock the vault. Please try again.';
+      setMasterPasswordError(message);
+      toast.error(message, { theme: 'dark' });
       triggerErrorShake();
+    } finally {
+      setIsUnlocking(false);
     }
   };
 
   const handleTimeoutChange = (minutes) => {
     setAutoLockTimeoutMinutes(minutes);
     setTimeoutSetting(minutes);
+    onTimeoutChange?.(minutes);
     toast.info(`Auto-lock set to ${minutes === 0 ? 'Never' : `${minutes} minutes`}`, {
       theme: 'dark',
       autoClose: 1500,
@@ -193,11 +209,15 @@ export default function LockScreenModal({
       {/* Keyboard PIN input — respects lockout via handlePinVerification */}
       <input
         ref={inputRef}
-        type="password"
+        type="text"
+        inputMode="numeric"
         pattern="[0-9]*"
         maxLength={4}
         value={pin}
         disabled={isLockedOut}
+        autoComplete="off"
+        autoCapitalize="off"
+        spellCheck={false}
         enterKeyHint="done"
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
@@ -261,7 +281,7 @@ export default function LockScreenModal({
                 return (
                   <div
                     key={idx}
-                    className={`h-4 w-4 rounded-full border-2 transition-all duration-200 ${
+                    className={`lock-pin-slot h-4 w-4 rounded-md border-2 transition-all duration-200 ${
                       filled
                         ? 'border-slate-200 bg-slate-200 scale-110 shadow-[0_0_10px_rgba(226,232,240,0.35)]'
                         : 'border-slate-600 bg-transparent'
@@ -393,7 +413,7 @@ export default function LockScreenModal({
 
         {/* PASSWORD MODE: Unlock with Full Master Password */}
         {usePasswordMode && (
-          <form onSubmit={handleMasterPasswordSubmit} className="mt-5 space-y-4">
+          <form onSubmit={handleMasterPasswordSubmit} className="mt-5 space-y-4" aria-busy={isUnlocking}>
             <div>
               <label className="text-xs font-semibold text-slate-300">Enter Master Password</label>
               {!hasVaultKey && (
@@ -402,22 +422,34 @@ export default function LockScreenModal({
                 </p>
               )}
               <input
+                ref={masterPasswordInputRef}
                 type="password"
                 enterKeyHint="done"
+                autoComplete="new-password"
                 value={masterPassword}
-                onChange={(e) => setMasterPassword(e.target.value)}
+                onChange={(e) => {
+                  setMasterPassword(e.target.value);
+                  if (masterPasswordError) setMasterPasswordError('');
+                }}
                 placeholder="Master password"
-                className="mt-1.5 w-full rounded-md border border-slate-700 bg-[#141b22] px-3 py-2.5 text-sm text-white focus:border-slate-300 focus:outline-none"
+                className="lock-master-password mt-1.5 w-full rounded-md border border-slate-700 bg-[#141b22] px-3 py-2.5 text-sm text-white focus:border-slate-300 focus:outline-none"
+                disabled={isUnlocking}
                 required
-                autoFocus
               />
             </div>
 
+            {masterPasswordError && (
+              <p className="rounded-md border border-rose-800/70 bg-rose-950/40 px-3 py-2 text-xs leading-relaxed text-rose-300" role="alert">
+                {masterPasswordError}
+              </p>
+            )}
+
             <button
               type="submit"
-              className="w-full rounded-md bg-white py-2.5 text-xs font-bold text-black shadow transition-all hover:bg-slate-200 active:scale-95"
+              disabled={isUnlocking}
+              className="w-full rounded-md bg-white py-2.5 text-xs font-bold text-black shadow transition-all hover:bg-slate-200 active:scale-95 disabled:cursor-wait disabled:opacity-70"
             >
-              Unlock Vault
+              {isUnlocking ? 'Unlocking vault…' : 'Unlock Vault'}
             </button>
 
             {hasExistingPin && hasVaultKey && (

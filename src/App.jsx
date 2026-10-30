@@ -202,11 +202,35 @@ function App() {
   const handleUnlockWithMasterPassword = useCallback(async (masterPassword) => {
     const { deriveVaultKey } = await import("./utils/cryptoVault");
     const key = await deriveVaultKey(masterPassword, session.user.email);
-    const response = await secureFetch(API_BASE_URL, { headers: authHeaders() });
+    let response;
+    try {
+      response = await secureFetch(API_BASE_URL, {
+        headers: authHeaders(),
+        signal: AbortSignal.timeout(15000),
+      });
+    } catch (error) {
+      if (error.name === "TimeoutError" || error.name === "AbortError") {
+        throw new Error("The vault API did not respond within 15 seconds. Check that the backend is running, then try again.", { cause: error });
+      }
+      throw new Error("Could not connect to the vault API. Check that the backend is running.", { cause: error });
+    }
     if (!response.ok) {
-      throw new Error(`Could not verify your vault (${response.status}).`);
+      let detail = "";
+      try {
+        const body = await response.json();
+        detail = typeof body?.message === "string" ? body.message : "";
+      } catch {
+        // Keep the status based message when the server did not return JSON.
+      }
+      if (response.status === 401) {
+        throw new Error("Your session expired. Log out and sign in again.");
+      }
+      throw new Error(detail || `Could not verify your vault (API ${response.status}).`);
     }
     const items = await response.json();
+    if (!Array.isArray(items)) {
+      throw new Error("The vault API returned an unexpected response. Check the backend and try again.");
+    }
     const encryptedItem = items.find((item) => typeof item.password === "string" && item.password.startsWith("enc:v2:"));
     if (encryptedItem) {
       const decryptedPassword = await decryptCredential(encryptedItem.password, key);
@@ -266,7 +290,23 @@ function App() {
           : [];
         const customFields = Array.isArray(item.customFields) ? await decryptCustomFields(item.customFields, vaultKey) : [];
         const note = customFields.find((field) => field.label === "Note")?.value || "";
-        return { ...item, service: item.site, password, history, category: item.tag === "Development" ? "Developer" : (item.tag || "Personal"), note, customFields };
+        // Older records may omit `site`, username, or password. Normalize them
+        // before rendering so one incomplete record cannot crash the list.
+        const service = typeof item.site === "string" && item.site.trim()
+          ? item.site.trim()
+          : typeof item.service === "string" && item.service.trim()
+            ? item.service.trim()
+            : "Untitled account";
+        return {
+          ...item,
+          service,
+          username: typeof item.username === "string" ? item.username : "",
+          password: typeof password === "string" ? password : "",
+          history,
+          category: item.tag === "Development" ? "Developer" : (item.tag || "Personal"),
+          note,
+          customFields,
+        };
       })))
       .then((items) => { if (!cancelled) setCredentials(items); })
       .catch((error) => { if (!cancelled) setVaultError(error.message); })
@@ -664,6 +704,7 @@ function App() {
         onUnlock={handlePinUnlock}
         onUnlockWithMasterPassword={handleUnlockWithMasterPassword}
         onLogout={handleLogout}
+        onTimeoutChange={updateAutoLockMinutes}
       />
       <AuthOverlay open={authModalOpen && !isVaultLocked} mode={authModalMode} onClose={() => { if (!isVaultLocked) setAuthModalOpen(false); }} onAuthenticated={handleAuthenticated} />
     </div>
