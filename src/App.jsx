@@ -6,6 +6,7 @@ import LockScreenModal from "./Component/LockScreenModal";
 import { encryptCredential, decryptCredential, encryptCustomFields, decryptCustomFields, clearCachedVaultKey } from "./utils/cryptoVault";
 import { secureFetch, setCsrfToken } from "./utils/csrf";
 import { getAutoLockTimeoutMinutes, setAutoLockTimeoutMinutes } from "./utils/pinAuth";
+import { checkPasswordBreach } from "./utils/breachCheck";
 
 const CATEGORIES = ["Personal", "Finance", "Work", "Developer"];
 const initialForm = { service: "", category: "Personal", username: "", password: "", note: "" };
@@ -17,6 +18,20 @@ function passwordStrength(value) {
   if (!value) return "";
   if (value.length < 10 || !/[A-Z]/.test(value) || !/[0-9]/.test(value)) return "Weak";
   return "Strong";
+}
+
+function getServicePresentation(value = "") {
+  const raw = value.trim();
+  try {
+    const url = new URL(/^[a-z][a-z\d+.-]*:\/\//i.test(raw) ? raw : `https://${raw}`);
+    if (url.hostname.includes(".")) {
+      const host = url.hostname.replace(/^www\./i, "").toLowerCase();
+      const brands = { "youtube.com": "YouTube", "youtu.be": "YouTube", "google.com": "Google", "github.com": "GitHub", "netflix.com": "Netflix", "amazon.com": "Amazon", "notion.so": "Notion", "notion.site": "Notion", "stripe.com": "Stripe" };
+      const label = brands[host] || host.split(".")[0].replace(/[-_]/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+      return { label, detail: host };
+    }
+  } catch { /* Keep non-URL service names as entered. */ }
+  return { label: raw || "Untitled account", detail: "Saved login" };
 }
 
 function AuthOverlay({ open, mode, onClose, onAuthenticated }) {
@@ -48,6 +63,8 @@ function App() {
   const [showLanding, setShowLanding] = useState(true);
   const [isVaultLocked, setIsVaultLocked] = useState(false);
   const [healthOpen, setHealthOpen] = useState(false);
+  const [breachScan, setBreachScan] = useState(null);
+  const [isScanningBreaches, setIsScanningBreaches] = useState(false);
   const [selectedHistoryAccount, setSelectedHistoryAccount] = useState(null);
   const [autoLockMinutes, setAutoLockMinutes] = useState(() => getAutoLockTimeoutMinutes());
   // BUG #2 FIX: Track whether we are still checking the session cookie on mount.
@@ -113,6 +130,25 @@ function App() {
   const healthScore = credentials.length
     ? Math.max(0, Math.round(100 - (weakCount / credentials.length) * 45 - (reusedCount / credentials.length) * 35))
     : 100;
+  const credentialFingerprint = credentials.map(({ id, password }) => `${id}:${password}`).join("\u0000");
+  const breachScanComplete = breachScan?.fingerprint === credentialFingerprint;
+  const breachResults = breachScanComplete ? breachScan.results : {};
+  const breachedCount = Object.values(breachResults).filter((result) => result.pwned).length;
+  const breachCheckHadErrors = Object.values(breachResults).some((result) => result.error);
+
+  async function scanVaultForBreaches() {
+    if (!credentials.length || isScanningBreaches) return;
+    setIsScanningBreaches(true);
+    setVaultError("");
+    try {
+      const results = await Promise.all(credentials.map(async (item) => [item.id, await checkPasswordBreach(item.password)]));
+      setBreachScan({ fingerprint: credentialFingerprint, results: Object.fromEntries(results) });
+    } catch {
+      setVaultError("The breach check could not finish. Please try again.");
+    } finally {
+      setIsScanningBreaches(false);
+    }
+  }
 
   function authHeaders(json = false) {
     return {
@@ -555,7 +591,7 @@ function App() {
             <button className="landing-toggle" onClick={() => setShowLanding(true)}>Landing page</button>
             <button className="add-credential-button" onClick={openNewCredential}>Add credential <kbd>A</kbd></button>
             <button className="lock-vault-button" onClick={lockVault} title="Lock vault now">Lock</button>
-            <span className="profile-button" aria-label="Signed-in account"><span className="profile-dot">●</span>{session.user?.name || session.user?.email}</span>
+            <span className="profile-button" aria-label={`Signed in as ${session.user?.name || session.user?.email}`} title={session.user?.email}><span className="profile-dot" aria-hidden="true">●</span><span className="profile-label">{session.user?.name || session.user?.email}</span></span>
             <button className="logout-button" onClick={handleLogout}>Log out</button>
           </div>
         </div>
@@ -564,14 +600,15 @@ function App() {
       <main id="vault" className="replica-main">
         <section className="replica-intro">
           <h1>Your saved accounts</h1>
-          <p>Personal credentials and login records kept safely on this device.</p>
+          <p>Passwords are encrypted in your browser before sync. Service names and usernames help organize your vault.</p>
         </section>
 
         <section className="vault-summary" aria-label="Vault password summary">
-          <div className="summary-counts"><span>{strongCount} strong</span><b>•</b><span className="weak-count">{weakCount} weak</span><b>•</b><span className="breached-count">0 breached</span></div>
+          <div className="summary-counts"><span className="strong-count">{strongCount} strong</span><b>·</b><span className="weak-count">{weakCount} weak</span><b>·</b><span className={`breached-count${breachedCount ? " has-breaches" : ""}`}>{breachScanComplete && !breachCheckHadErrors ? `${breachedCount} breached` : breachScanComplete ? "Some checks failed" : "Breach check not run"}</span></div>
           <div className="summary-actions">
-            <button className="summary-review" onClick={() => setHealthOpen((value) => !value)}>Security score {healthScore}% <span aria-hidden="true">›</span></button>
-            <button className="summary-review" disabled={!weakCount} onClick={() => setWeakOnly((value) => !value)}>{weakOnly ? "Show all passwords" : weakCount ? `Review ${weakCount} vulnerable password${weakCount === 1 ? "" : "s"}` : "All passwords look good"}<span aria-hidden="true">›</span></button>
+            <button className="summary-review" onClick={() => setHealthOpen((value) => !value)} title="Score based on password strength and reuse">Strength &amp; reuse {healthScore}% <span aria-hidden="true">›</span></button>
+            <button className="summary-review breach-scan-button" disabled={isScanningBreaches || !credentials.length} onClick={scanVaultForBreaches}>{isScanningBreaches ? "Scanning…" : breachScanComplete ? "Rescan breaches" : "Scan for breaches"}</button>
+            <button className="summary-review" disabled={!weakCount} onClick={() => setWeakOnly((value) => !value)}>{weakOnly ? "Show all" : weakCount ? `Review ${weakCount} weak` : "No weak passwords"}<span aria-hidden="true">›</span></button>
           </div>
         </section>
         {healthOpen && (
@@ -579,6 +616,7 @@ function App() {
             <div><strong>{healthScore}%</strong><span>Overall health</span></div>
             <div><strong>{weakCount}</strong><span>Weak passwords</span></div>
             <div><strong>{reusedCount}</strong><span>Reused passwords</span></div>
+            <div><strong>{breachScanComplete && !breachCheckHadErrors ? breachedCount : "—"}</strong><span>{breachScanComplete && !breachCheckHadErrors ? "Known breaches" : "Breach status · scan to check"}</span></div>
             <label>Auto-lock
               <select value={autoLockMinutes} onChange={(event) => updateAutoLockMinutes(event.target.value)}>
                 <option value="0">Off</option>
@@ -615,7 +653,7 @@ function App() {
             )}
           </div>
           <nav className="category-tabs" aria-label="Filter by category">
-            {["All", "Finance", "Work", "Personal"].map((value) => <button key={value} className={category === value && !weakOnly ? "active" : ""} onClick={() => { setCategory(value); setWeakOnly(false); }}>{value}{value === "All" && <span>({credentials.length})</span>}</button>)}
+            {["All", "Finance", "Work", "Personal", "Developer"].map((value) => <button key={value} className={category === value && !weakOnly ? "active" : ""} onClick={() => { setCategory(value); setWeakOnly(false); }}>{value}{value === "All" && <span>({credentials.length})</span>}</button>)}
           </nav>
         </div>
 
@@ -623,14 +661,16 @@ function App() {
           <div className="credential-list-head"><span>Service &amp; name</span><span>Username or email</span><span>Password</span><span>Status</span><span>Actions</span></div>
           {vaultError && <div className="vault-message" role="alert">{vaultError}{vaultError.includes("session expired") && <button onClick={() => { void handleLogout(); }}>Sign in again</button>}</div>}
           {isLoading && <div className="empty-list">Loading credentials from your account…</div>}
-          {!isLoading && filtered.length === 0 ? <div className="empty-list">{credentials.length ? "No credentials match your search." : "No credentials saved yet. Select Add credential to get started."}</div> : !isLoading && filtered.map((item) => {
+          {!isLoading && filtered.length === 0 ? credentials.length ? <div className="empty-list">No credentials match these filters. <button className="clear-filters-button" onClick={() => { setQuery(""); setCategory("All"); setWeakOnly(false); }}>Clear filters</button></div> : <div className="empty-state"><div className="empty-state-icon" aria-hidden="true">✳</div><h2>Your vault starts here</h2><p>Add a login to get started. Passwords are encrypted in your browser before they sync to your account.</p><button className="add-credential-button" onClick={openNewCredential}>Add your first credential <span aria-hidden="true">→</span></button></div> : !isLoading && filtered.map((item) => {
             const strength = passwordStrength(item.password);
+            const service = getServicePresentation(item.service);
+            const breachResult = breachResults[item.id];
             return <article className="credential-row" key={item.id}>
-              <div className="service-cell"><span className={`service-icon tone-${(item.service.charCodeAt(0) || 0) % 5}`}>{item.service.trim().charAt(0).toUpperCase() || "•"}</span><div><strong>{item.service}</strong><small>{item.category} · {item.service.toLowerCase().replace(/\s+/g, "")}</small></div></div>
-              <div className="username-cell"><span>{item.username}</span><button className="icon-action inline-copy" aria-label="Copy username" onClick={() => copyValue(item.username, `${item.id}-user`)}>{copied === `${item.id}-user` ? "✓" : "▢"}</button></div>
-              <div className="password-cell"><span>{revealed[item.id] ? item.password : "•".repeat(Math.min(Math.max(item.password.length, 8), 16))}</span><button className="icon-action" aria-label={revealed[item.id] ? "Hide password" : "Reveal password"} onClick={() => setRevealed((value) => ({ ...value, [item.id]: !value[item.id] }))}>{revealed[item.id] ? "◉" : "◌"}</button><button className="icon-action" aria-label="Copy password" onClick={() => copyValue(item.password, `${item.id}-password`)}>{copied === `${item.id}-password` ? "✓" : "▢"}</button></div>
-              <div><span className={`strength-tag ${strength.toLowerCase()}`}>{strength}</span></div>
-              <div className="row-actions"><button className="icon-action" aria-label={`View password history${item.history?.length ? ` (${item.history.length} previous versions)` : ""}`} title={`${item.history?.length || 0} previous password changes`} onClick={() => openHistory(item)}>↺{item.history?.length ? <sup>{item.history.length}</sup> : null}</button><button className="icon-action" aria-label="Edit credential" onClick={() => openEdit(item)}>✎</button><button className="icon-action delete-action" aria-label="Delete credential" onClick={() => removeCredential(item.id)}>×</button></div>
+              <div className="service-cell"><span className={`service-icon tone-${(service.label.charCodeAt(0) || 0) % 5}`}>{service.label.charAt(0).toUpperCase()}</span><div><strong title={item.service}>{service.label}</strong><small>{item.category} · {service.detail}</small></div></div>
+              <div className="username-cell"><span title={item.username}>{item.username}</span><button className="icon-action inline-copy" aria-label="Copy username" title="Copy username" onClick={() => copyValue(item.username, `${item.id}-user`)}>{copied === `${item.id}-user` ? "✓" : "▢"}</button></div>
+              <div className="password-cell"><span>{revealed[item.id] ? item.password : "•".repeat(Math.min(Math.max(item.password.length, 8), 16))}</span><button className="icon-action" aria-label={revealed[item.id] ? "Hide password" : "Reveal password"} title={revealed[item.id] ? "Hide password" : "Reveal password"} onClick={() => setRevealed((value) => ({ ...value, [item.id]: !value[item.id] }))}>{revealed[item.id] ? "◉" : "◌"}</button><button className="icon-action" aria-label="Copy password" title="Copy password" onClick={() => copyValue(item.password, `${item.id}-password`)}>{copied === `${item.id}-password` ? "✓" : "▢"}</button></div>
+              <div className="credential-status"><span className={`strength-tag ${strength.toLowerCase()}`}>{strength}</span><span className={`breach-tag${breachResult?.pwned ? " breached" : ""}`}>{breachResult?.error ? "Check failed" : breachResult ? breachResult.pwned ? "Breached" : "No match" : "Not checked"}</span></div>
+              <div className="row-actions"><button className="icon-action" aria-label={`View password history${item.history?.length ? ` (${item.history.length} previous versions)` : ""}`} title={`${item.history?.length || 0} previous versions`} onClick={() => openHistory(item)}>↺{item.history?.length ? <sup>{item.history.length}</sup> : null}</button><button className="icon-action" aria-label="Edit credential" title="Edit credential" onClick={() => openEdit(item)}>✎</button><button className="icon-action delete-action" aria-label="Delete credential" title="Delete credential" onClick={() => removeCredential(item.id)}>×</button></div>
             </article>;
           })}
         </section>

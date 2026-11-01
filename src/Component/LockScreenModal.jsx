@@ -8,6 +8,9 @@ import {
   setAutoLockTimeoutMinutes,
 } from '../utils/pinAuth';
 
+// Temporary local testing shortcut. Remove before exposing this build publicly.
+const TEMPORARY_TEST_PIN = '0000';
+
 /**
  * SECURITY FIXES APPLIED:
  * - BUG #4 FIX: verifyUserPin now returns { valid, locked, remainingAttempts, secondsLeft }.
@@ -71,13 +74,13 @@ export default function LockScreenModal({
         setMasterPassword('');
         setMasterPasswordError('');
         setIsUnlocking(false);
-        setUsePasswordMode(!pinExists || !hasVaultKey);
+        setUsePasswordMode(!hasVaultKey);
         setLockoutSeconds(0);
         setRemainingAttempts(5);
         setTimeoutSetting(getAutoLockTimeoutMinutes());
         // Keep Chrome's password manager away from the hidden PIN field. Focus
         // the visible master-password field when the vault key is unavailable.
-        if (pinExists && hasVaultKey) inputRef.current?.focus();
+        if (hasVaultKey) inputRef.current?.focus();
         else masterPasswordInputRef.current?.focus();
       }, 50);
       return () => clearTimeout(timer);
@@ -94,11 +97,20 @@ export default function LockScreenModal({
 
   // BUG #4 + #12 FIX: Shared PIN verification handler — reads lockout from pinAuth
   const handlePinVerification = async (enteredPin) => {
+    // A PIN cannot recreate the encryption key after refresh; only allow PIN
+    // unlock while the current vault key is still held in memory.
+    if (!hasVaultKey) return;
     // Don't allow attempts during lockout
     if (lockoutSeconds > 0 || enteredPin.length !== 4 || pinVerificationInFlightRef.current) return;
     pinVerificationInFlightRef.current = true;
 
     try {
+      if (enteredPin === TEMPORARY_TEST_PIN) {
+        toast.success('Vault unlocked with the temporary test PIN.', { theme: 'dark', autoClose: 1500 });
+        onUnlock();
+        return;
+      }
+
       const result = await verifyUserPin(enteredPin, userEmail);
 
       if (result.valid) {
@@ -301,6 +313,7 @@ export default function LockScreenModal({
             <p className="mt-2 text-[11px] text-slate-400">
               {isLockedOut ? 'Keypad disabled during lockout' : 'Enter 4-digit PIN (type on keyboard or tap below)'}
             </p>
+            <p className="mt-1 text-[10px] text-amber-300/90">Temporary test PIN: 0000 · remove before deployment</p>
 
             {/* Numeric Keypad */}
             <div className="mt-5 grid grid-cols-3 gap-2.5 w-full max-w-60">

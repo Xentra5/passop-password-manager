@@ -27,8 +27,8 @@
 //    - Stage 02: AES-256-GCM individual credential envelopes
 //    - Stage 03: Blind document storage in MongoDB
 //
-// 6. TESTIMONIALS:
-//    - Verified security practitioner quotes
+// 6. PRODUCT CAPABILITIES:
+//    - Password health, secret sharing, and vault portability
 //
 // 7. CLOSING CTA BANNER:
 //    - Final call-to-action to register or sign in
@@ -254,8 +254,8 @@ const LandingPage = ({ onOpenAuth }) => {
 
               <ScrollRevealSection delayClass="stagger-3">
                 <p className="mt-6 max-w-[48ch] text-[17px] leading-[1.65] text-[#4a5568] dark:text-slate-300">
-                  Zero-knowledge credential vaulting with client-side 256-bit envelope encryption.
-                  Your master key is derived strictly in memory and never leaves this device.
+                  Save credentials in a vault that encrypts them in your browser with AES-256-GCM.
+                  Your vault key is derived in your browser and kept in memory while the vault is unlocked.
                 </p>
               </ScrollRevealSection>
 
@@ -292,11 +292,11 @@ const LandingPage = ({ onOpenAuth }) => {
                   </div>
                   <div className="flex items-center gap-1.5">
                     <Lightning size={15} className="text-[#176b87] dark:text-cyan-400" weight="fill" />
-                    <span>Zero Plaintext Logs</span>
+                    <span>Encrypted Before Sync</span>
                   </div>
                   <div className="flex items-center gap-1.5">
                     <CheckCircle size={15} className="text-[#26968a]" weight="fill" />
-                    <span>PBKDF2 Salted Auth</span>
+                    <span>PBKDF2 Key Derivation</span>
                   </div>
                 </div>
               </ScrollRevealSection>
@@ -319,15 +319,15 @@ const LandingPage = ({ onOpenAuth }) => {
                     <div className="globe-hud-row">
                       <div className="globe-hud-metric">
                         <span className="globe-hud-metric-dot active" />
-                        <span>Global Mesh: Active</span>
+                        <span>Key derivation: Local</span>
                       </div>
                       <div className="globe-hud-metric">
                         <span className="globe-hud-metric-dot secure" />
-                        <span>Enclaves: 4,096</span>
+                        <span>Encryption: AES-GCM</span>
                       </div>
                       <div className="globe-hud-metric">
                         <span className="globe-hud-metric-dot" style={{ background: "#34d399" }} />
-                        <span>ZK-Bus: Locked</span>
+                        <span>Sync: Ciphertext</span>
                       </div>
                     </div>
                   </div>
@@ -694,51 +694,35 @@ const LandingPage = ({ onOpenAuth }) => {
       </section>
 
       {/* =====================================================================
-          SECTION 6: VERIFIED PRACTITIONER TESTIMONIALS
+          SECTION 6: PRODUCT CAPABILITIES
           ===================================================================== */}
       <section className="border-t border-[#ddd8d0] bg-[#eae6df]/35 dark:border-white/10 dark:bg-[#0a0e16]/40 py-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <ScrollRevealSection>
             <div className="text-center">
               <span className="inline-block text-[11px] font-semibold uppercase tracking-[0.18em] text-[#176b87] dark:text-cyan-400">
-                Trusted Endorsements
+                Included with PassVault
               </span>
               <h2 className="mt-2 font-['Space_Grotesk'] text-2xl font-bold text-[#1f2933] dark:text-white sm:text-3xl">
-                Verified by Security Practitioners
+                More than a place to store passwords
               </h2>
             </div>
           </ScrollRevealSection>
 
-          <div className="mt-12 grid grid-cols-1 gap-6 md:grid-cols-2">
-            <ScrollRevealSection delayClass="stagger-1">
-              <SpotlightCard className="p-7">
-                <p className="text-sm leading-relaxed text-[#4b5563] dark:text-slate-300">
-                  "PassVault implements client-side encryption cleanly. Storing encrypted envelopes rather than raw credentials makes external audit compliance straightforward."
-                </p>
-                <div className="mt-5 flex items-center justify-between border-t border-[#f0ede6] dark:border-slate-800 pt-4">
-                  <div>
-                    <div className="font-semibold text-sm text-[#1f2933] dark:text-white">Elena Vance</div>
-                    <div className="text-xs text-[#7b746b] dark:text-slate-400">Security Architect, Distributed Labs</div>
-                  </div>
-                  <ShieldCheck size={22} className="text-[#26968a]" weight="bold" />
-                </div>
-              </SpotlightCard>
-            </ScrollRevealSection>
-
-            <ScrollRevealSection delayClass="stagger-2">
-              <SpotlightCard className="p-7">
-                <p className="text-sm leading-relaxed text-[#4b5563] dark:text-slate-300">
-                  "The fast interface and zero-knowledge model give our engineering team peace of mind. Credentials stay completely private without overhead."
-                </p>
-                <div className="mt-5 flex items-center justify-between border-t border-[#f0ede6] dark:border-slate-800 pt-4">
-                  <div>
-                    <div className="font-semibold text-sm text-[#1f2933] dark:text-white">Marcus Thorne</div>
-                    <div className="text-xs text-[#7b746b] dark:text-slate-400">Lead Systems Engineer, CloudStack</div>
-                  </div>
-                  <ShieldCheck size={22} className="text-[#26968a]" weight="bold" />
-                </div>
-              </SpotlightCard>
-            </ScrollRevealSection>
+          <div className="mt-12 grid grid-cols-1 gap-5 md:grid-cols-3">
+            {[
+              ["01", "Check password health", "Review password strength, reuse, age, and known breaches with the vault health tools."],
+              ["02", "Share a secret safely", "Create an encrypted share link with an expiry, view limit, and optional passphrase."],
+              ["03", "Bring your vault with you", "Import supported password manager exports and create encrypted JSON backups."],
+            ].map(([number, title, description], index) => (
+              <ScrollRevealSection key={number} delayClass={index ? "stagger-2" : "stagger-1"}>
+                <SpotlightCard className="h-full p-7">
+                  <span className="font-mono text-xs font-semibold text-cyan-300">{number} / PASSVAULT</span>
+                  <h3 className="mt-5 text-lg font-semibold text-white">{title}</h3>
+                  <p className="mt-3 text-sm leading-relaxed text-slate-300">{description}</p>
+                </SpotlightCard>
+              </ScrollRevealSection>
+            ))}
           </div>
         </div>
       </section>
@@ -757,14 +741,14 @@ const LandingPage = ({ onOpenAuth }) => {
 
             <span className="inline-flex items-center gap-2 rounded-full border border-[#b8d9d4] bg-[#e6f2ef] dark:border-cyan-800/40 dark:bg-cyan-950/40 dark:text-cyan-300 px-3.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#176b87]">
               <span className="beacon-dot h-1.5 w-1.5 rounded-full bg-[#26968a]"></span>
-              Instant Deployment
+              PRIVATE BY DESIGN
             </span>
 
             <h2 className="mt-5 font-['Space_Grotesk'] text-3xl font-bold tracking-tight text-[#1f2933] dark:text-white sm:text-4xl">
               Take custody of your passwords today.
             </h2>
             <p className="mt-4 max-w-xl mx-auto text-base text-[#6f6a63] dark:text-slate-300">
-              Create a sovereign vault in seconds. Zero analytics trackers, zero third-party telemetry, pure cryptographic protection.
+              Encrypt credentials in your browser, organize accounts, and keep an encrypted backup under your control.
             </p>
 
             <div className="mt-9 flex flex-wrap items-center justify-center gap-4">

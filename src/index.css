@@ -3231,3 +3231,74 @@ html.dark ::-webkit-scrollbar-thumb:hover,
     stroke-dashoffset: 0;
   }
 }
+
+/* PassVault public landing page: near-black surfaces with indigo details and teal actions. */
+.landing-page-view {
+  background: #080809 !important;
+  color: #f4f4f5 !important;
+}
+.landing-page-view > .landing-return-header {
+  background: rgba(8, 8, 9, .94) !important;
+  border-color: #24232b !important;
+}
+.landing-page-view .hero-full-bleed,
+.landing-page-view .landing-page section:not(.vault-defense-section) {
+  background-color: #080809 !important;
+  border-color: #24232b !important;
+}
+.landing-page-view .hero-full-bleed {
+  background: #080809 !important;
+  background-image: none !important;
+}
+.landing-page-view .hero-dot-grid {
+  opacity: .22 !important;
+  background-image: radial-gradient(circle, rgba(255, 255, 255, .16) .7px, transparent .9px) !important;
+}
+.landing-page-view .hero-bloom-left,
+.landing-page-view .hero-bloom-right { display: none !important; }
+.landing-page-view .hero-gradient-text {
+  background: linear-gradient(110deg, #b5a8f5, #66d3c5 85%) !important;
+  background-clip: text !important;
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
+}
+.landing-page-view .hero-cta-primary,
+.landing-page-view .cipher-lab-trigger {
+  border: 1px solid #25a99e !important;
+  background: linear-gradient(110deg, #147e9c, #219b8d) !important;
+  color: #f7fffe !important;
+  box-shadow: 0 8px 28px rgba(24, 153, 148, .16) !important;
+}
+.landing-page-view .hero-cta-primary:hover,
+.landing-page-view .cipher-lab-trigger:hover {
+  background: linear-gradient(110deg, #188eaa, #29ad9d) !important;
+}
+.landing-page-view .hero-cta-secondary {
+  border-color: #353342 !important;
+  background: #111114 !important;
+  color: #e4e2ec !important;
+}
+.landing-page-view .hero-cta-secondary:hover { border-color: #6a5e91 !important; background: #17151d !important; }
+.landing-page-view .spotlight-card,
+.landing-page-view .hero-globe-wrapper,
+.landing-page-view .cipher-lab-panel,
+.landing-page-view section > div > .relative.rounded-3xl {
+  border-color: #373247 !important;
+  background-color: #121216 !important;
+}
+.landing-page-view .globe-hud { border-color: #39344b !important; background: rgba(13, 13, 17, .88) !important; }
+.landing-page-view .cipher-lab-input-field { border-color: #343240 !important; background: #0c0c0e !important; color: #f4f4f5 !important; }
+.landing-page-view .cipher-lab-output { border-color: #363246 !important; background: #101014 !important; }
+.landing-page-view .cipher-lab-hash,
+.landing-page-view .cipher-lab-hash span { color: #77d7c9 !important; }
+.landing-page-view .hero-vault-info button { background: linear-gradient(110deg, #147e9c, #219b8d) !important; }
+.landing-page-view .hero-vault-info button:hover { filter: brightness(1.12); }
+.landing-page-view .landing-page [class*="text-[#176b87]"],
+.landing-page-view .landing-page [class*="text-[#26968a]"],
+.landing-page-view .landing-page [class*="text-cyan-400"],
+.landing-page-view .landing-page [class*="text-cyan-300"] { color: #8f83ca !important; }
+.landing-page-view .landing-page [class*="bg-[#e6f2ef]"],
+.landing-page-view .landing-page [class*="bg-emerald-950"],
+.landing-page-view .landing-page [class*="bg-cyan-950"] { background-color: #201d2b !important; }
+.landing-page-view .landing-page [class*="border-[#ddd8d0]"],
+.landing-page-view .landing-page [class*="border-[#d5d0c8]"] { border-color: #302d3a !important; }
