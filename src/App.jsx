@@ -36,7 +36,7 @@ function getServicePresentation(value = "") {
 
 function AuthOverlay({ open, mode, onClose, onAuthenticated }) {
   if (!open) return null;
-  return <div className="auth-overlay"><div className="auth-overlay-card"><Auth initialMode={mode} onClose={onClose} onAuthenticated={onAuthenticated} /></div></div>;
+  return <div className="auth-overlay"><div className="auth-overlay-card"><Auth key={mode} initialMode={mode} onClose={onClose} onAuthenticated={onAuthenticated} /></div></div>;
 }
 
 function App() {
@@ -168,6 +168,7 @@ function App() {
     setAuthModalOpen(false);
     setShowLanding(false);
     setVaultError("");
+    setIsLoading(true);
     setIsVaultLocked(false);
     setIsRestoringSession(false);
     localStorage.setItem("passvault_user", JSON.stringify(data.user));
@@ -204,7 +205,7 @@ function App() {
             if (data.csrfToken) setCsrfToken(data.csrfToken);
             // Session cookie is valid — restore user identity but vault key is gone (page refresh).
             // Show vault locked screen so user re-enters master password.
-            setSession({ user: data.user, token: null });
+            setSession({ user: { ...data.user, vaultSalt: data.vaultSalt }, token: null });
             setShowLanding(false);
             setIsVaultLocked(true);
           }
@@ -237,7 +238,7 @@ function App() {
   // unlocking; PBKDF2 can derive a key from any input, including a wrong one.
   const handleUnlockWithMasterPassword = useCallback(async (masterPassword) => {
     const { deriveVaultKey } = await import("./utils/cryptoVault");
-    const key = await deriveVaultKey(masterPassword, session.user.email);
+    const key = await deriveVaultKey(masterPassword, session.user.email, session.user.vaultSalt);
     let response;
     try {
       response = await secureFetch(API_BASE_URL, {
@@ -275,6 +276,7 @@ function App() {
       }
     }
     setVaultKey(key);
+    setIsLoading(true);
     setIsVaultLocked(false);
   }, [session.user, session.token]);
 
@@ -308,8 +310,6 @@ function App() {
   useEffect(() => {
     if (!session.user || !vaultKey) return undefined;
     let cancelled = false;
-    setIsLoading(true);
-    setVaultError("");
     secureFetch(API_BASE_URL, { headers: authHeaders() })
       .then(async (response) => {
         if (response.status === 401) throw new Error("Your session expired. Please sign in again.");

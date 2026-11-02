@@ -47,7 +47,7 @@ export function hexToBuffer(hexString) {
  * Gets (or generates on first run) a 128-bit random KDF salt stored in localStorage.
  * This is per-device but is far better than a deterministic email-derived salt.
  */
-function getOrCreateKdfSalt() {
+export function getOrCreateKdfSalt() {
   const stored = localStorage.getItem(SALT_STORAGE_KEY);
   if (stored) return stored;
   // First registration on this device — generate a fresh random 128-bit salt
@@ -56,6 +56,11 @@ function getOrCreateKdfSalt() {
   const hex = bufferToHex(randomBytes);
   localStorage.setItem(SALT_STORAGE_KEY, hex);
   return hex;
+}
+
+export function getStoredKdfSalt() {
+  const stored = localStorage.getItem(SALT_STORAGE_KEY);
+  return stored && /^[a-f0-9]{32}$/i.test(stored) ? stored : null;
 }
 
 // ─── Key Derivation ──────────────────────────────────────────────────────────
@@ -71,7 +76,7 @@ function getOrCreateKdfSalt() {
  * @param {string} email - User's email address (included in salt for domain separation)
  * @returns {Promise<CryptoKey>} - Derived AES-GCM CryptoKey (non-extractable)
  */
-export async function deriveVaultKey(masterPassword, email) {
+export async function deriveVaultKey(masterPassword, email, accountSalt = null) {
   if (!masterPassword || !email) {
     throw new Error('Master password and email are required to derive vault key');
   }
@@ -87,8 +92,9 @@ export async function deriveVaultKey(masterPassword, email) {
 
   // BUG #17 FIX: Combine a random per-device salt with the email for domain separation.
   // The randomSaltHex is generated once and stored in localStorage.
-  const randomSaltHex = getOrCreateKdfSalt();
-  const combinedSalt = enc.encode(`passvault:kdf:v3:${email.toLowerCase().trim()}:${randomSaltHex}`);
+  const randomSaltHex = accountSalt || getStoredKdfSalt();
+  if (!/^[a-f0-9]{32}$/i.test(randomSaltHex)) throw new Error('Invalid vault salt.');
+  const combinedSalt = enc.encode(`passvault:kdf:v3:${email.toLowerCase().trim()}:${randomSaltHex.toLowerCase()}`);
 
   const vaultKey = await window.crypto.subtle.deriveKey(
     {
@@ -139,8 +145,7 @@ export function clearCachedVaultKey() {
 export async function encryptCredential(plainText, vaultKey) {
   if (typeof plainText !== 'string' || !plainText) return plainText;
   if (!vaultKey) {
-    // BUG #18 FIX: No leaky console output about internal crypto state
-    return plainText;
+    throw new Error('Vault is locked. Unlock it before encrypting credentials.');
   }
 
   const enc = new TextEncoder();

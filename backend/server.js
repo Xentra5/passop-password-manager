@@ -30,7 +30,7 @@ if (!MONGO_URL || !JWT_SECRET) {
 const app = express();
 const client = new MongoClient(MONGO_URL);
 
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 app.use(
   cors({
@@ -56,7 +56,13 @@ const isValidPasswordPayload = (payload) => {
     typeof payload.id === 'string' &&
     payload.site.trim().length > 0 &&
     payload.username.trim().length > 0 &&
-    payload.password.trim().length > 0
+    payload.password.length > 0 &&
+    payload.id.length <= 128 &&
+    payload.site.trim().length <= 512 &&
+    payload.username.trim().length <= 512 &&
+    payload.password.length <= 10000 &&
+    (!payload.customFields || (Array.isArray(payload.customFields) && payload.customFields.length <= 50 && payload.customFields.every((field) => field && typeof field.label === 'string' && field.label.length <= 128 && typeof field.value === 'string' && field.value.length <= 10000))) &&
+    (!payload.history || (Array.isArray(payload.history) && payload.history.length <= 50 && payload.history.every((entry) => entry && typeof entry.password === 'string' && entry.password.length <= 10000)))
   );
 };
 
@@ -240,6 +246,7 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
       success: true,
       csrfToken,
       user: { email: req.user.email },
+      vaultSalt: (await getUsersCollection().findOne({ _id: new (require('mongodb').ObjectId)(req.user.userId) }, { projection: { vaultSalt: 1 } }))?.vaultSalt || null,
     });
   } catch (error) {
     console.error('Failed to get current user:', error);
@@ -274,7 +281,9 @@ app.post('/api/auth/register', async (req, res) => {
       return res.status(409).json({ success: false, message: 'An account with that email already exists' });
     }
 
-    const user = { email, passwordHash: await bcrypt.hash(password, 12), createdAt: new Date() };
+    const vaultSalt = typeof req.body?.vaultSalt === 'string' && /^[a-f0-9]{32}$/i.test(req.body.vaultSalt) ? req.body.vaultSalt.toLowerCase() : null;
+    if (!vaultSalt) return res.status(400).json({ success: false, message: 'A valid vault salt is required' });
+    const user = { email, passwordHash: await bcrypt.hash(password, 12), vaultSalt, createdAt: new Date() };
     const result = await users.insertOne(user);
     user._id = result.insertedId;
 
@@ -288,6 +297,7 @@ app.post('/api/auth/register', async (req, res) => {
       success: true,
       token, // provided for fallback in RAM
       csrfToken,
+      vaultSalt,
       user: { email },
     });
   } catch (error) {
@@ -306,6 +316,13 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
     }
 
+    let vaultSalt = user.vaultSalt || null;
+    const suppliedSalt = typeof req.body?.vaultSalt === 'string' && /^[a-f0-9]{32}$/i.test(req.body.vaultSalt) ? req.body.vaultSalt.toLowerCase() : null;
+    if (!vaultSalt && suppliedSalt) {
+      await getUsersCollection().updateOne({ _id: user._id, vaultSalt: { $exists: false } }, { $set: { vaultSalt: suppliedSalt } });
+      vaultSalt = suppliedSalt;
+    }
+
     const token = createToken(user);
 
     // Set secure HttpOnly cookie & fresh Double-Submit CSRF cookie
@@ -316,6 +333,7 @@ app.post('/api/auth/login', async (req, res) => {
       success: true,
       token, // provided for fallback in RAM
       csrfToken,
+      vaultSalt,
       user: { email: user.email },
     });
   } catch (error) {
@@ -629,8 +647,18 @@ app.post('/api/sends', async (req, res) => {
       passphraseSalt = null,
     } = req.body || {};
 
-    if (!ciphertext || typeof ciphertext !== 'string' || !iv || typeof iv !== 'string') {
+    if (typeof ciphertext !== 'string' || !/^[a-f0-9]+$/i.test(ciphertext) || ciphertext.length > 1024 * 1024 ||
+        typeof iv !== 'string' || !/^[a-f0-9]{24}$/i.test(iv)) {
       return res.status(400).json({ success: false, message: 'Invalid payload: ciphertext and iv are required' });
+    }
+    if (title !== undefined && (typeof title !== 'string' || title.length > 100) ||
+        type !== undefined && !['text', 'password', 'note'].includes(type) ||
+        !Number.isInteger(Number(maxViews)) || Number(maxViews) < 1 || Number(maxViews) > 100 ||
+        !Number.isInteger(Number(expiresInMinutes)) || Number(expiresInMinutes) < 1 || Number(expiresInMinutes) > 10080 ||
+        (passphraseHash !== null && (typeof passphraseHash !== 'string' || !/^[a-f0-9]{64}$/i.test(passphraseHash))) ||
+        (passphraseSalt !== null && (typeof passphraseSalt !== 'string' || !/^[a-f0-9]{32}$/i.test(passphraseSalt))) ||
+        Boolean(passphraseHash) !== Boolean(passphraseSalt)) {
+      return res.status(400).json({ success: false, message: 'Invalid send options' });
     }
 
     // Optional user identification if logged in
@@ -758,7 +786,10 @@ app.post('/api/sends/reveal/:id', async (req, res) => {
     );
 
     const updatedDoc = updated?.value || updated; // MongoDB driver compat
-    const finalViews = updatedDoc ? updatedDoc.viewsCount : doc.viewsCount + 1;
+    if (!updatedDoc || typeof updatedDoc.viewsCount !== 'number') {
+      return res.status(410).json({ success: false, message: 'This secret has expired or has already been burned.' });
+    }
+    const finalViews = updatedDoc.viewsCount;
     const viewsLeft = Math.max(0, doc.maxViews - finalViews);
 
     // If maxViews reached, burn/delete immediately from DB

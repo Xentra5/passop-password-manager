@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { toast, Bounce } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
-import { deriveVaultKey } from "../utils/cryptoVault"
+import { createKdfSalt, deriveVaultKey, getStoredKdfSalt } from "../utils/cryptoVault"
 import { secureFetch, setCsrfToken, getCsrfToken } from "../utils/csrf"
 
 // BUG #6 FIX: Use env variable so production deploys use HTTPS.
@@ -47,19 +47,6 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
   const [authError, setAuthError] = useState("")
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
-
-  // --------------------------------------------------------------------------
-  // STATE 4: lastInitialMode
-  // Remembers the last mode. If the user clicks a navbar button with a new mode
-  // (e.g. clicks "Sign In" while modal was on "Register"), this syncs it up.
-  // --------------------------------------------------------------------------
-  const [lastInitialMode, setLastInitialMode] = useState(initialMode)
-
-  if (initialMode !== lastInitialMode) {
-    setLastInitialMode(initialMode)
-    setIsRegistering(initialMode === "register")
-    setForm({ email: "", password: "", confirmPassword: "" })
-  }
 
   // Warm up the CSRF token on mount so it's ready for login/registration
   useEffect(() => {
@@ -109,9 +96,13 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
       // - If isRegistering is TRUE: send email, password, AND confirmPassword
       // - If isRegistering is FALSE (login): send ONLY email and password
       // ----------------------------------------------------------------------
-      const payload = isRegistering
-        ? { email: form.email, password: form.password, confirmPassword: form.confirmPassword }
-        : { email: form.email, password: form.password }
+      const vaultSalt = isRegistering ? createKdfSalt() : getStoredKdfSalt()
+      const payload = {
+        email: form.email,
+        password: form.password,
+        ...(isRegistering ? { confirmPassword: form.confirmPassword } : {}),
+        ...(vaultSalt ? { vaultSalt } : {}),
+      }
 
       // 4. Send HTTP POST request via secureFetch with Anti-CSRF protection & HttpOnly cookie:
       const response = await secureFetch(`${AUTH_API_URL}/${isRegistering ? "register" : "login"}`, {
@@ -132,10 +123,13 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
       }
 
       // 6. Zero-Knowledge: Derive 256-bit AES vault key in the browser from master password & email
-      const vaultKey = await deriveVaultKey(form.password, form.email)
+      if (!data.vaultSalt) {
+        throw new Error("This account has no synced vault salt. Sign in on the device where the vault was created to migrate it.")
+      }
+      const vaultKey = await deriveVaultKey(form.password, form.email, data.vaultSalt)
 
       // 7. Success! Pass user, token, & vaultKey data to App.jsx to unlock the vault
-      onAuthenticated({ ...data, vaultKey })
+      onAuthenticated({ ...data, user: { ...data.user, vaultSalt: data.vaultSalt }, vaultKey })
       toast.success(isRegistering ? "Account created" : "Welcome back", {
         theme: "dark",
         transition: Bounce,
