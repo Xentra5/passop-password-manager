@@ -3,6 +3,7 @@ import LandingPage from "./Component/LandingPage";
 import Auth from "./Component/Auth";
 import PasswordHistoryModal from "./Component/PasswordHistoryModal";
 import LockScreenModal from "./Component/LockScreenModal";
+import SiteLogo from "./Component/SiteLogo";
 import { encryptCredential, decryptCredential, encryptCustomFields, decryptCustomFields, clearCachedVaultKey } from "./utils/cryptoVault";
 import { secureFetch, setCsrfToken } from "./utils/csrf";
 import { getAutoLockTimeoutMinutes, setAutoLockTimeoutMinutes } from "./utils/pinAuth";
@@ -644,7 +645,7 @@ function App() {
                     onMouseEnter={() => setActiveSuggestion(index)}
                     onClick={() => { setQuery(item.service || item.username); searchRef.current?.focus(); }}
                   >
-                    <span className="suggestion-icon">{(item.service || "?").charAt(0).toUpperCase()}</span>
+                    <SiteLogo site={item.service} size="sm" className="suggestion-icon" />
                     <span className="suggestion-copy"><strong>{item.service || "Untitled account"}</strong><small>{item.username || "No username"}</small></span>
                     <span className="suggestion-status">Saved</span>
                   </button>
@@ -666,7 +667,7 @@ function App() {
             const service = getServicePresentation(item.service);
             const breachResult = breachResults[item.id];
             return <article className="credential-row" key={item.id}>
-              <div className="service-cell"><span className={`service-icon tone-${(service.label.charCodeAt(0) || 0) % 5}`}>{service.label.charAt(0).toUpperCase()}</span><div><strong title={item.service}>{service.label}</strong><small>{item.category} · {service.detail}</small></div></div>
+              <div className="service-cell"><SiteLogo site={item.service} size="md" className="service-icon" /><div><strong title={item.service}>{service.label}</strong><small>{item.category} · {service.detail}</small></div></div>
               <div className="username-cell"><span title={item.username}>{item.username}</span><button className="icon-action inline-copy" aria-label="Copy username" title="Copy username" onClick={() => copyValue(item.username, `${item.id}-user`)}>{copied === `${item.id}-user` ? "✓" : "▢"}</button></div>
               <div className="password-cell"><span>{revealed[item.id] ? item.password : "•".repeat(Math.min(Math.max(item.password.length, 8), 16))}</span><button className="icon-action" aria-label={revealed[item.id] ? "Hide password" : "Reveal password"} title={revealed[item.id] ? "Hide password" : "Reveal password"} onClick={() => setRevealed((value) => ({ ...value, [item.id]: !value[item.id] }))}>{revealed[item.id] ? "◉" : "◌"}</button><button className="icon-action" aria-label="Copy password" title="Copy password" onClick={() => copyValue(item.password, `${item.id}-password`)}>{copied === `${item.id}-password` ? "✓" : "▢"}</button></div>
               <div className="credential-status"><span className={`strength-tag ${strength.toLowerCase()}`}>{strength}</span><span className={`breach-tag${breachResult?.pwned ? " breached" : ""}`}>{breachResult?.error ? "Check failed" : breachResult ? breachResult.pwned ? "Breached" : "No match" : "Not checked"}</span></div>
@@ -716,7 +717,7 @@ function App() {
                       onMouseEnter={() => setServiceSuggestionIndex(index)}
                       onClick={() => { setForm((value) => ({ ...value, service })); setServiceSuggestionsDismissed(true); }}
                     >
-                      <span className="suggestion-icon">{service.charAt(0)}</span>
+                      <SiteLogo site={service} size="sm" className="suggestion-icon" />
                       <span>{service}</span>
                     </button>
                   ))}

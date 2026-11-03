@@ -507,13 +507,25 @@ export const FAMOUS_BRANDS = {
  * Returns matching famous brand metadata or null
  */
 export function getFamousBrand(site) {
+  if (!site || typeof site !== 'string') return null
+  const cleaned = site.trim().toLowerCase()
   const domain = extractDomain(site)
-  if (!domain) return null
 
   for (const key of Object.keys(FAMOUS_BRANDS)) {
     const brand = FAMOUS_BRANDS[key]
-    if (brand.match.test(domain)) {
-      return { id: key, domain, ...brand }
+    const brandName = (brand.name || '').toLowerCase()
+
+    if (
+      (domain && brand.match && brand.match.test(domain)) ||
+      cleaned === key ||
+      cleaned === brandName ||
+      cleaned.startsWith(key) ||
+      cleaned.startsWith(brandName) ||
+      (domain && (domain === key || domain === brandName)) ||
+      cleaned.includes(key) ||
+      cleaned.includes(brandName)
+    ) {
+      return { id: key, domain: domain || `${key}.com`, ...brand }
     }
   }
   return null
@@ -555,21 +567,22 @@ export default function SiteLogo({ site, size = 'md', className = '', alt = '' }
   const fallbackLetter = (domain ? domain[0] : (site ? site[0] : 'W')).toUpperCase()
   const domainColor = getDomainColor(domain)
 
-  // 2. Dynamic CDN Favicon for any other website
-  const googleFaviconUrl = domain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128` : null
-  const duckDuckGoFaviconUrl = domain ? `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico` : null
+  // 2. Dynamic CDN Favicon for any other website (Google S2 API — 100% free, unlimited, no key needed)
+  const effectiveDomain = domain ? (domain.includes('.') ? domain : `${domain}.com`) : null
+  const googleFaviconUrl = effectiveDomain ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(effectiveDomain)}&sz=128` : null
+  const duckDuckGoFaviconUrl = effectiveDomain ? `https://icons.duckduckgo.com/ip3/${encodeURIComponent(effectiveDomain)}.ico` : null
 
-  if (domain && !imgError) {
+  if (effectiveDomain && !imgError) {
     const currentSrc = fallbackTried ? duckDuckGoFaviconUrl : googleFaviconUrl
 
     return (
       <div
         className={`relative inline-flex items-center justify-center shrink-0 overflow-hidden bg-white shadow-xs border border-[#ddd8d0] p-1 ${sizeClasses} ${className}`}
-        title={domain}
+        title={effectiveDomain}
       >
         <img
           src={currentSrc}
-          alt={alt || domain}
+          alt={alt || effectiveDomain}
           loading="lazy"
           className="w-full h-full object-contain transition-opacity duration-200"
           onError={() => {
