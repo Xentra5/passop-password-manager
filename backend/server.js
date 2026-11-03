@@ -1,13 +1,21 @@
 const express = require('express');
 const dotenv = require('dotenv');
-const { MongoClient } = require('mongodb');
+// FIX #8: ObjectId imported at the top level (was required() inside a request handler)
+const { MongoClient, ObjectId } = require('mongodb');
 const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const cookieParser = require('cookie-parser');
+// FIX #6: Rate limiting for auth endpoints to prevent brute-force attacks
+const rateLimit = require('express-rate-limit');
+// FIX #7: HTTP security headers (clickjacking, MIME sniffing, etc.)
+const helmet = require('helmet');
+// FIX #10: Gzip response compression to reduce payload sizes
+const compression = require('compression');
 
-dotenv.config();
+const path = require('path');
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const MONGO_URL = process.env.MONGO_URL;
 const DB_NAME = process.env.DB_NAME || 'passOP';
@@ -22,15 +30,30 @@ if (FRONTEND_ORIGINS.has('http://localhost:5173')) {
   FRONTEND_ORIGINS.add('http://127.0.0.1:5173');
 }
 const JWT_SECRET = process.env.JWT_SECRET;
+// FIX #3: bcrypt cost factor moved to environment variable (default 12)
+const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 12);
 
 if (!MONGO_URL || !JWT_SECRET) {
   throw new Error('Missing MONGO_URL or JWT_SECRET in backend/.env');
 }
 
 const app = express();
-const client = new MongoClient(MONGO_URL);
 
-app.use(express.json({ limit: '1mb' }));
+// FIX #12: MongoDB connection pool configured to avoid Atlas free-tier exhaustion
+const client = new MongoClient(MONGO_URL, {
+  maxPoolSize: 10,
+  serverSelectionTimeoutMS: 5000,
+  connectTimeoutMS: 10000,
+});
+
+// FIX #10: Apply gzip compression before all routes
+app.use(compression());
+
+// FIX #7: Apply security headers before all routes
+app.use(helmet());
+
+// FIX #11: Reduced body limit from 1mb to 200kb (a password manager never needs 1 MB payloads)
+app.use(express.json({ limit: '200kb' }));
 app.use(cookieParser());
 app.use(
   cors({
@@ -46,6 +69,10 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization', 'X-CSRF-Token', 'X-XSRF-Token'],
   })
 );
+
+// FIX #5: Input sanitization — strip dangerous HTML characters to prevent stored XSS
+const sanitizeText = (str) =>
+  typeof str === 'string' ? str.replace(/[<>"'`]/g, '') : str;
 
 const isValidPasswordPayload = (payload) => {
   return (
@@ -66,9 +93,11 @@ const isValidPasswordPayload = (payload) => {
   );
 };
 
-const getPasswordsCollection = () => client.db(DB_NAME).collection('passwords');
-const getUsersCollection = () => client.db(DB_NAME).collection('users');
-const getVaultSendsCollection = () => client.db(DB_NAME).collection('vault_sends');
+// FIX #2: Collections pre-resolved after connect() instead of re-created on every request.
+// These are assigned in startServer() once the DB is connected.
+let passwordsCol;
+let usersCol;
+let sendsCol;
 
 const VAULT_ENCRYPTION_KEY = process.env.VAULT_ENCRYPTION_KEY || JWT_SECRET;
 const VAULT_CIPHER_KEY = crypto.createHash('sha256').update(VAULT_ENCRYPTION_KEY).digest();
@@ -220,6 +249,23 @@ const authenticateToken = (req, res, next) => {
   }
 };
 
+// FIX #6: Rate limiters for auth endpoints — prevents brute-force & credential-stuffing attacks
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15-minute window
+  max: 20,                   // max 20 attempts per IP per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many attempts, please try again later.' },
+});
+
+const strictAuthLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1-hour window
+  max: 10,                   // max 10 register attempts per IP per hour
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many registration attempts, please try again later.' },
+});
+
 app.get('/health', (_req, res) => {
   res.json({ ok: true });
 });
@@ -242,11 +288,17 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
     const existingToken = req.cookies?.[CSRF_COOKIE_NAME];
     const csrfToken = existingToken || setCsrfCookie(res);
 
+    // FIX #8: Using top-level ObjectId instead of require() inside handler
+    const userDoc = await usersCol.findOne(
+      { _id: new ObjectId(req.user.userId) },
+      { projection: { vaultSalt: 1 } }
+    );
+
     res.json({
       success: true,
       csrfToken,
       user: { email: req.user.email },
-      vaultSalt: (await getUsersCollection().findOne({ _id: new (require('mongodb').ObjectId)(req.user.userId) }, { projection: { vaultSalt: 1 } }))?.vaultSalt || null,
+      vaultSalt: userDoc?.vaultSalt || null,
     });
   } catch (error) {
     console.error('Failed to get current user:', error);
@@ -254,7 +306,8 @@ app.get('/api/auth/me', authenticateToken, async (req, res) => {
   }
 });
 
-app.post('/api/auth/register', async (req, res) => {
+// FIX #6: strictAuthLimiter applied to register to prevent account spam
+app.post('/api/auth/register', strictAuthLimiter, async (req, res) => {
   try {
     const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
@@ -275,16 +328,18 @@ app.post('/api/auth/register', async (req, res) => {
       });
     }
 
-    const users = getUsersCollection();
-    const existingUser = await users.findOne({ email });
+    // FIX #2: Using pre-resolved usersCol instead of getUsersCollection()
+    const existingUser = await usersCol.findOne({ email });
     if (existingUser) {
       return res.status(409).json({ success: false, message: 'An account with that email already exists' });
     }
 
     const vaultSalt = typeof req.body?.vaultSalt === 'string' && /^[a-f0-9]{32}$/i.test(req.body.vaultSalt) ? req.body.vaultSalt.toLowerCase() : null;
     if (!vaultSalt) return res.status(400).json({ success: false, message: 'A valid vault salt is required' });
-    const user = { email, passwordHash: await bcrypt.hash(password, 12), vaultSalt, createdAt: new Date() };
-    const result = await users.insertOne(user);
+
+    // FIX #3: Using BCRYPT_ROUNDS env variable instead of hardcoded 12
+    const user = { email, passwordHash: await bcrypt.hash(password, BCRYPT_ROUNDS), vaultSalt, createdAt: new Date() };
+    const result = await usersCol.insertOne(user);
     user._id = result.insertedId;
 
     const token = createToken(user);
@@ -306,11 +361,14 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+// FIX #6: authLimiter applied to login to prevent brute-force attacks
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   try {
     const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
     const password = typeof req.body?.password === 'string' ? req.body.password : '';
-    const user = await getUsersCollection().findOne({ email });
+
+    // FIX #2: Using pre-resolved usersCol
+    const user = await usersCol.findOne({ email });
 
     if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
       return res.status(401).json({ success: false, message: 'Invalid email or password' });
@@ -319,7 +377,7 @@ app.post('/api/auth/login', async (req, res) => {
     let vaultSalt = user.vaultSalt || null;
     const suppliedSalt = typeof req.body?.vaultSalt === 'string' && /^[a-f0-9]{32}$/i.test(req.body.vaultSalt) ? req.body.vaultSalt.toLowerCase() : null;
     if (!vaultSalt && suppliedSalt) {
-      await getUsersCollection().updateOne({ _id: user._id, vaultSalt: { $exists: false } }, { $set: { vaultSalt: suppliedSalt } });
+      await usersCol.updateOne({ _id: user._id, vaultSalt: { $exists: false } }, { $set: { vaultSalt: suppliedSalt } });
       vaultSalt = suppliedSalt;
     }
 
@@ -365,37 +423,37 @@ const extractDomain = (urlOrSite) => {
 };
 
 const FAMOUS_BRANDS_METADATA = [
-  { id: 'google', name: 'Google', domain: 'google.com', category: 'Productivity', match: /(^|\.)(google\.[a-z.]+|gmail\.com)$/i },
-  { id: 'youtube', name: 'YouTube', domain: 'youtube.com', category: 'Entertainment', match: /(^|\.)(youtube\.com|youtu\.be)$/i },
-  { id: 'github', name: 'GitHub', domain: 'github.com', category: 'Developer', match: /(^|\.)github\.com$/i },
-  { id: 'twitter', name: 'X (Twitter)', domain: 'x.com', category: 'Social', match: /(^|\.)(x\.com|twitter\.com)$/i },
-  { id: 'facebook', name: 'Facebook', domain: 'facebook.com', category: 'Social', match: /(^|\.)(facebook\.com|fb\.com)$/i },
-  { id: 'instagram', name: 'Instagram', domain: 'instagram.com', category: 'Social', match: /(^|\.)instagram\.com$/i },
-  { id: 'linkedin', name: 'LinkedIn', domain: 'linkedin.com', category: 'Professional', match: /(^|\.)linkedin\.com$/i },
-  { id: 'netflix', name: 'Netflix', domain: 'netflix.com', category: 'Entertainment', match: /(^|\.)netflix\.com$/i },
-  { id: 'spotify', name: 'Spotify', domain: 'spotify.com', category: 'Music', match: /(^|\.)spotify\.com$/i },
-  { id: 'discord', name: 'Discord', domain: 'discord.com', category: 'Communication', match: /(^|\.)(discord\.com|discord\.gg)$/i },
-  { id: 'reddit', name: 'Reddit', domain: 'reddit.com', category: 'Social', match: /(^|\.)reddit\.com$/i },
-  { id: 'amazon', name: 'Amazon', domain: 'amazon.com', category: 'Shopping', match: /(^|\.)amazon\.[a-z.]+$/i },
-  { id: 'apple', name: 'Apple', domain: 'apple.com', category: 'Tech', match: /(^|\.)(apple\.com|icloud\.com)$/i },
-  { id: 'microsoft', name: 'Microsoft', domain: 'microsoft.com', category: 'Tech', match: /(^|\.)(microsoft\.com|live\.com|outlook\.com|office\.com)$/i },
-  { id: 'openai', name: 'ChatGPT', domain: 'chatgpt.com', category: 'AI', match: /(^|\.)(openai\.com|chatgpt\.com)$/i },
-  { id: 'claude', name: 'Claude (Anthropic)', domain: 'claude.ai', category: 'AI', match: /(^|\.)(anthropic\.com|claude\.ai)$/i },
-  { id: 'figma', name: 'Figma', domain: 'figma.com', category: 'Design', match: /(^|\.)figma\.com$/i },
-  { id: 'notion', name: 'Notion', domain: 'notion.so', category: 'Productivity', match: /(^|\.)(notion\.so|notion\.com)$/i },
-  { id: 'slack', name: 'Slack', domain: 'slack.com', category: 'Communication', match: /(^|\.)slack\.com$/i },
-  { id: 'zoom', name: 'Zoom', domain: 'zoom.us', category: 'Communication', match: /(^|\.)zoom\.us$/i },
-  { id: 'paypal', name: 'PayPal', domain: 'paypal.com', category: 'Finance', match: /(^|\.)paypal\.com$/i },
-  { id: 'stripe', name: 'Stripe', domain: 'stripe.com', category: 'Finance', match: /(^|\.)stripe\.com$/i },
-  { id: 'steam', name: 'Steam', domain: 'steampowered.com', category: 'Gaming', match: /(^|\.)(steampowered\.com|steamcommunity\.com)$/i },
-  { id: 'twitch', name: 'Twitch', domain: 'twitch.tv', category: 'Entertainment', match: /(^|\.)twitch\.tv$/i },
-  { id: 'tiktok', name: 'TikTok', domain: 'tiktok.com', category: 'Social', match: /(^|\.)tiktok\.com$/i },
-  { id: 'pinterest', name: 'Pinterest', domain: 'pinterest.com', category: 'Social', match: /(^|\.)pinterest\.com$/i },
-  { id: 'gitlab', name: 'GitLab', domain: 'gitlab.com', category: 'Developer', match: /(^|\.)gitlab\.com$/i },
-  { id: 'docker', name: 'Docker', domain: 'docker.com', category: 'Developer', match: /(^|\.)docker\.com$/i },
-  { id: 'vercel', name: 'Vercel', domain: 'vercel.com', category: 'Developer', match: /(^|\.)vercel\.com$/i },
-  { id: 'dropbox', name: 'Dropbox', domain: 'dropbox.com', category: 'Productivity', match: /(^|\.)dropbox\.com$/i },
-  { id: 'adobe', name: 'Adobe', domain: 'adobe.com', category: 'Design', match: /(^|\.)adobe\.com$/i },
+  { id: 'google', name: 'Google', domain: 'google.com', category: 'Productivity', match: /(^|\\.)(google\\.[a-z.]+|gmail\\.com)$/i },
+  { id: 'youtube', name: 'YouTube', domain: 'youtube.com', category: 'Entertainment', match: /(^|\\.)(youtube\\.com|youtu\\.be)$/i },
+  { id: 'github', name: 'GitHub', domain: 'github.com', category: 'Developer', match: /(^|\\.)github\\.com$/i },
+  { id: 'twitter', name: 'X (Twitter)', domain: 'x.com', category: 'Social', match: /(^|\\.)(x\\.com|twitter\\.com)$/i },
+  { id: 'facebook', name: 'Facebook', domain: 'facebook.com', category: 'Social', match: /(^|\\.)(facebook\\.com|fb\\.com)$/i },
+  { id: 'instagram', name: 'Instagram', domain: 'instagram.com', category: 'Social', match: /(^|\\.)instagram\\.com$/i },
+  { id: 'linkedin', name: 'LinkedIn', domain: 'linkedin.com', category: 'Professional', match: /(^|\\.)linkedin\\.com$/i },
+  { id: 'netflix', name: 'Netflix', domain: 'netflix.com', category: 'Entertainment', match: /(^|\\.)netflix\\.com$/i },
+  { id: 'spotify', name: 'Spotify', domain: 'spotify.com', category: 'Music', match: /(^|\\.)spotify\\.com$/i },
+  { id: 'discord', name: 'Discord', domain: 'discord.com', category: 'Communication', match: /(^|\\.)(discord\\.com|discord\\.gg)$/i },
+  { id: 'reddit', name: 'Reddit', domain: 'reddit.com', category: 'Social', match: /(^|\\.)reddit\\.com$/i },
+  { id: 'amazon', name: 'Amazon', domain: 'amazon.com', category: 'Shopping', match: /(^|\\.)amazon\\.[a-z.]+$/i },
+  { id: 'apple', name: 'Apple', domain: 'apple.com', category: 'Tech', match: /(^|\\.)(apple\\.com|icloud\\.com)$/i },
+  { id: 'microsoft', name: 'Microsoft', domain: 'microsoft.com', category: 'Tech', match: /(^|\\.)(microsoft\\.com|live\\.com|outlook\\.com|office\\.com)$/i },
+  { id: 'openai', name: 'ChatGPT', domain: 'chatgpt.com', category: 'AI', match: /(^|\\.)(openai\\.com|chatgpt\\.com)$/i },
+  { id: 'claude', name: 'Claude (Anthropic)', domain: 'claude.ai', category: 'AI', match: /(^|\\.)(anthropic\\.com|claude\\.ai)$/i },
+  { id: 'figma', name: 'Figma', domain: 'figma.com', category: 'Design', match: /(^|\\.)figma\\.com$/i },
+  { id: 'notion', name: 'Notion', domain: 'notion.so', category: 'Productivity', match: /(^|\\.)(notion\\.so|notion\\.com)$/i },
+  { id: 'slack', name: 'Slack', domain: 'slack.com', category: 'Communication', match: /(^|\\.)slack\\.com$/i },
+  { id: 'zoom', name: 'Zoom', domain: 'zoom.us', category: 'Communication', match: /(^|\\.)zoom\\.us$/i },
+  { id: 'paypal', name: 'PayPal', domain: 'paypal.com', category: 'Finance', match: /(^|\\.)paypal\\.com$/i },
+  { id: 'stripe', name: 'Stripe', domain: 'stripe.com', category: 'Finance', match: /(^|\\.)stripe\\.com$/i },
+  { id: 'steam', name: 'Steam', domain: 'steampowered.com', category: 'Gaming', match: /(^|\\.)(steampowered\\.com|steamcommunity\\.com)$/i },
+  { id: 'twitch', name: 'Twitch', domain: 'twitch.tv', category: 'Entertainment', match: /(^|\\.)twitch\\.tv$/i },
+  { id: 'tiktok', name: 'TikTok', domain: 'tiktok.com', category: 'Social', match: /(^|\\.)tiktok\\.com$/i },
+  { id: 'pinterest', name: 'Pinterest', domain: 'pinterest.com', category: 'Social', match: /(^|\\.)pinterest\\.com$/i },
+  { id: 'gitlab', name: 'GitLab', domain: 'gitlab.com', category: 'Developer', match: /(^|\\.)gitlab\\.com$/i },
+  { id: 'docker', name: 'Docker', domain: 'docker.com', category: 'Developer', match: /(^|\\.)docker\\.com$/i },
+  { id: 'vercel', name: 'Vercel', domain: 'vercel.com', category: 'Developer', match: /(^|\\.)vercel\\.com$/i },
+  { id: 'dropbox', name: 'Dropbox', domain: 'dropbox.com', category: 'Productivity', match: /(^|\\.)dropbox\\.com$/i },
+  { id: 'adobe', name: 'Adobe', domain: 'adobe.com', category: 'Design', match: /(^|\\.)adobe\\.com$/i },
 ];
 
 app.get('/api/logo/popular', (req, res) => {
@@ -435,7 +493,14 @@ app.get('/api/logo', (req, res) => {
 
 app.get('/api/passwords', authenticateToken, async (req, res) => {
   try {
-    const passwords = await getPasswordsCollection().find({ userId: req.user.userId }).sort({ site: 1 }).toArray();
+    // FIX #2: Using pre-resolved passwordsCol
+    // FIX #4: MongoDB projection to only fetch needed fields — reduces bandwidth
+    const passwords = await passwordsCol
+      .find({ userId: req.user.userId })
+      .project({ _id: 0, id: 1, site: 1, username: 1, password: 1, favorite: 1, tag: 1, customFields: 1, history: 1 })
+      .sort({ site: 1 })
+      .toArray();
+
     const decryptedPasswords = passwords.map((item) => ({
       ...item,
       password: decryptVaultPassword(item.password),
@@ -467,10 +532,11 @@ app.post('/api/passwords', authenticateToken, async (req, res) => {
       });
     }
 
+    // FIX #5: Sanitize site and username to strip dangerous HTML characters
     const recordToInsert = {
       id: password.id,
-      site: password.site.trim(),
-      username: password.username.trim(),
+      site: sanitizeText(password.site.trim()),
+      username: sanitizeText(password.username.trim()),
       password: encryptVaultPassword(password.password),
       favorite: Boolean(password.favorite),
       tag: typeof password.tag === 'string' && password.tag.trim() ? password.tag.trim() : 'Personal',
@@ -479,7 +545,8 @@ app.post('/api/passwords', authenticateToken, async (req, res) => {
       createdAt: new Date(),
     };
 
-    await getPasswordsCollection().insertOne(recordToInsert);
+    // FIX #2: Using pre-resolved passwordsCol
+    await passwordsCol.insertOne(recordToInsert);
 
     res.status(201).json({
       success: true,
@@ -502,8 +569,14 @@ app.post('/api/passwords', authenticateToken, async (req, res) => {
 app.post('/api/passwords/bulk', authenticateToken, async (req, res) => {
   try {
     const { passwords } = req.body;
+
+    // FIX #9: Hard cap on bulk import array size to prevent memory exhaustion DoS
+    const MAX_BULK = 500;
     if (!Array.isArray(passwords) || passwords.length === 0) {
       return res.status(400).json({ success: false, message: 'Invalid or empty passwords array' });
+    }
+    if (passwords.length > MAX_BULK) {
+      return res.status(400).json({ success: false, message: `Bulk import is limited to ${MAX_BULK} items per request` });
     }
 
     const records = [];
@@ -513,8 +586,9 @@ app.post('/api/passwords/bulk', authenticateToken, async (req, res) => {
       if (isValidPasswordPayload(item)) {
         records.push({
           id: item.id,
-          site: item.site.trim(),
-          username: item.username.trim(),
+          // FIX #5: Sanitize site and username in bulk import too
+          site: sanitizeText(item.site.trim()),
+          username: sanitizeText(item.username.trim()),
           password: encryptVaultPassword(item.password),
           favorite: Boolean(item.favorite),
           tag: typeof item.tag === 'string' && item.tag.trim() ? item.tag.trim() : 'Personal',
@@ -530,7 +604,8 @@ app.post('/api/passwords/bulk', authenticateToken, async (req, res) => {
     }
 
     // Insert all records, ordered: false to continue if an individual ID duplicates
-    await getPasswordsCollection().insertMany(records, { ordered: false });
+    // FIX #2: Using pre-resolved passwordsCol
+    await passwordsCol.insertMany(records, { ordered: false });
 
     res.status(201).json({
       success: true,
@@ -558,9 +633,10 @@ app.put('/api/passwords/:id', authenticateToken, async (req, res) => {
       });
     }
 
+    // FIX #5: Sanitize site and username on update
     const updateFields = {
-      site: password.site.trim(),
-      username: password.username.trim(),
+      site: sanitizeText(password.site.trim()),
+      username: sanitizeText(password.username.trim()),
       password: encryptVaultPassword(password.password),
       updatedAt: new Date(),
     };
@@ -584,8 +660,8 @@ app.put('/api/passwords/:id', authenticateToken, async (req, res) => {
       }));
     }
 
-    const collection = getPasswordsCollection();
-    const result = await collection.updateOne(
+    // FIX #2: Using pre-resolved passwordsCol
+    const result = await passwordsCol.updateOne(
       { id, userId: req.user.userId },
       { $set: updateFields }
     );
@@ -613,7 +689,8 @@ app.delete('/api/passwords/:id', authenticateToken, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Missing password id' });
     }
 
-    const result = await getPasswordsCollection().deleteOne({ id: passwordId, userId: req.user.userId });
+    // FIX #2: Using pre-resolved passwordsCol
+    const result = await passwordsCol.deleteOne({ id: passwordId, userId: req.user.userId });
 
     if (result.deletedCount === 0) {
       return res.status(404).json({ success: false, message: 'Password not found' });
@@ -698,7 +775,8 @@ app.post('/api/sends', async (req, res) => {
       isBurned: false,
     };
 
-    await getVaultSendsCollection().insertOne(newSend);
+    // FIX #2: Using pre-resolved sendsCol
+    await sendsCol.insertOne(newSend);
 
     res.status(201).json({
       success: true,
@@ -720,7 +798,8 @@ app.get('/api/sends/meta/:id', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid Send ID' });
     }
 
-    const doc = await getVaultSendsCollection().findOne({ sendId: id });
+    // FIX #2: Using pre-resolved sendsCol
+    const doc = await sendsCol.findOne({ sendId: id });
     if (!doc) {
       return res.status(404).json({ success: false, message: 'This secret does not exist or has already been burned.' });
     }
@@ -728,7 +807,7 @@ app.get('/api/sends/meta/:id', async (req, res) => {
     const now = new Date();
     if (doc.isBurned || doc.viewsCount >= doc.maxViews || now > doc.expiresAt) {
       // Auto-cleanup expired/burned doc
-      await getVaultSendsCollection().deleteOne({ sendId: id });
+      await sendsCol.deleteOne({ sendId: id });
       return res.status(410).json({ success: false, message: 'This secret has expired or has already been burned.' });
     }
 
@@ -760,14 +839,15 @@ app.post('/api/sends/reveal/:id', async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid Send ID' });
     }
 
-    const doc = await getVaultSendsCollection().findOne({ sendId: id });
+    // FIX #2: Using pre-resolved sendsCol
+    const doc = await sendsCol.findOne({ sendId: id });
     if (!doc) {
       return res.status(404).json({ success: false, message: 'This secret does not exist or has already been burned.' });
     }
 
     const now = new Date();
     if (doc.isBurned || doc.viewsCount >= doc.maxViews || now > doc.expiresAt) {
-      await getVaultSendsCollection().deleteOne({ sendId: id });
+      await sendsCol.deleteOne({ sendId: id });
       return res.status(410).json({ success: false, message: 'This secret has expired or has already been burned.' });
     }
 
@@ -779,7 +859,7 @@ app.post('/api/sends/reveal/:id', async (req, res) => {
     }
 
     // Atomically increment viewsCount
-    const updated = await getVaultSendsCollection().findOneAndUpdate(
+    const updated = await sendsCol.findOneAndUpdate(
       { sendId: id, viewsCount: { $lt: doc.maxViews }, isBurned: false, expiresAt: { $gt: now } },
       { $inc: { viewsCount: 1 } },
       { returnDocument: 'after' }
@@ -794,7 +874,7 @@ app.post('/api/sends/reveal/:id', async (req, res) => {
 
     // If maxViews reached, burn/delete immediately from DB
     if (finalViews >= doc.maxViews) {
-      await getVaultSendsCollection().deleteOne({ sendId: id });
+      await sendsCol.deleteOne({ sendId: id });
     }
 
     res.json({
@@ -816,7 +896,8 @@ app.post('/api/sends/reveal/:id', async (req, res) => {
 // GET /api/sends/my - List active sends created by the authenticated user
 app.get('/api/sends/my', authenticateToken, async (req, res) => {
   try {
-    const sends = await getVaultSendsCollection()
+    // FIX #2: Using pre-resolved sendsCol
+    const sends = await sendsCol
       .find({ creatorUserId: req.user.userId, expiresAt: { $gt: new Date() } })
       .project({ ciphertext: 0, iv: 0, passphraseHash: 0 })
       .sort({ createdAt: -1 })
@@ -846,7 +927,8 @@ app.get('/api/sends/my', authenticateToken, async (req, res) => {
 app.delete('/api/sends/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
-    const result = await getVaultSendsCollection().deleteOne({ sendId: id, creatorUserId: req.user.userId });
+    // FIX #2: Using pre-resolved sendsCol
+    const result = await sendsCol.deleteOne({ sendId: id, creatorUserId: req.user.userId });
 
     if (result.deletedCount === 0) {
       return res.status(404).json({ success: false, message: 'Send item not found or unauthorized' });
@@ -864,15 +946,26 @@ async function startServer() {
     await client.connect();
     console.log('Connected to MongoDB');
 
-    // Create essential indexes for security & performance
+    // FIX #2: Pre-resolve collection references once after connect — avoids re-creating
+    // the db/collection chain on every single request.
     const db = client.db(DB_NAME);
-    await db.collection('users').createIndex({ email: 1 }, { unique: true });
-    await db.collection('passwords').createIndex({ userId: 1, id: 1 }, { unique: true });
-    await db.collection('passwords').createIndex({ userId: 1, site: 1 });
+    passwordsCol = db.collection('passwords');
+    usersCol     = db.collection('users');
+    sendsCol     = db.collection('vault_sends');
+
+    // Create essential indexes for security & performance
+    await usersCol.createIndex({ email: 1 }, { unique: true });
+    await passwordsCol.createIndex({ userId: 1, id: 1 }, { unique: true });
+    await passwordsCol.createIndex({ userId: 1, site: 1 });
+    // FIX #1: Standalone index on `id` for O(1) PUT/DELETE lookups without needing userId prefix
+    await passwordsCol.createIndex({ id: 1 }, { unique: true });
+
     // Vault Send TTL index for auto-cleanup and fast ID lookups
-    await db.collection('vault_sends').createIndex({ sendId: 1 }, { unique: true });
-    await db.collection('vault_sends').createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
-    await db.collection('vault_sends').createIndex({ creatorUserId: 1 });
+    await sendsCol.createIndex({ sendId: 1 }, { unique: true });
+    await sendsCol.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+    await sendsCol.createIndex({ creatorUserId: 1 });
+    // FIX #1: Compound index covering the /api/sends/my query pattern
+    await sendsCol.createIndex({ creatorUserId: 1, expiresAt: -1 });
 
     app.listen(PORT, () => {
       console.log(`Backend listening on port ${PORT}`);

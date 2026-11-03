@@ -38,6 +38,7 @@ export default function LockScreenModal({
   const [shake, setShake] = useState(false);
   const [masterPassword, setMasterPassword] = useState('');
   const [masterPasswordError, setMasterPasswordError] = useState('');
+  const [showMasterPassword, setShowMasterPassword] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [usePasswordMode, setUsePasswordMode] = useState(false);
   const [timeoutSetting, setTimeoutSetting] = useState(5);
@@ -184,6 +185,15 @@ export default function LockScreenModal({
   const handleMasterPasswordSubmit = async (e) => {
     e.preventDefault();
     if (!masterPassword || isUnlocking) return;
+
+    if (masterPassword.length < 12) {
+      const msg = masterPassword.length <= 4
+        ? 'Please enter your full account Master Password (at least 12 characters), not your 4-digit PIN. After a browser refresh, the full password is required to derive your vault encryption key.'
+        : 'Master password must be at least 12 characters.';
+      setMasterPasswordError(msg);
+      triggerErrorShake();
+      return;
+    }
 
     setIsUnlocking(true);
     setMasterPasswordError('');
@@ -430,25 +440,45 @@ export default function LockScreenModal({
             <div>
               <label className="text-xs font-semibold text-slate-300">Enter Master Password</label>
               {!hasVaultKey && (
-                <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
-                  Your vault key is cleared after a refresh. Enter your master password to restore the dashboard securely.
-                </p>
+                <div className="mt-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 p-2.5 text-[11px] text-amber-200/90 leading-relaxed">
+                  <div className="font-semibold text-amber-300 mb-0.5">⚠️ Full Master Password Required</div>
+                  Your encryption key was wiped from memory during refresh for Zero-Knowledge security. Enter your full account password (12+ characters), not your 4-digit PIN.
+                </div>
               )}
-              <input
-                ref={masterPasswordInputRef}
-                type="password"
-                enterKeyHint="done"
-                autoComplete="new-password"
-                value={masterPassword}
-                onChange={(e) => {
-                  setMasterPassword(e.target.value);
-                  if (masterPasswordError) setMasterPasswordError('');
-                }}
-                placeholder="Master password"
-                className="lock-master-password mt-1.5 w-full rounded-md border border-slate-700 bg-[#141b22] px-3 py-2.5 text-sm text-white focus:border-slate-300 focus:outline-none"
-                disabled={isUnlocking}
-                required
-              />
+              <div className="relative mt-2">
+                <input
+                  ref={masterPasswordInputRef}
+                  type={showMasterPassword ? 'text' : 'password'}
+                  enterKeyHint="done"
+                  autoComplete="current-password"
+                  value={masterPassword}
+                  onChange={(e) => {
+                    setMasterPassword(e.target.value);
+                    if (masterPasswordError) setMasterPasswordError('');
+                  }}
+                  placeholder="Master password (min 12 chars)"
+                  className="lock-master-password w-full rounded-md border border-slate-700 bg-[#141b22] px-3 py-2.5 pr-10 text-sm text-white focus:border-slate-300 focus:outline-none"
+                  disabled={isUnlocking}
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowMasterPassword((prev) => !prev)}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200 focus:outline-none"
+                  title={showMasterPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showMasterPassword ? (
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l18 18" />
+                    </svg>
+                  ) : (
+                    <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </div>
 
             {masterPasswordError && (
@@ -463,6 +493,14 @@ export default function LockScreenModal({
               className="w-full rounded-md bg-white py-2.5 text-xs font-bold text-black shadow transition-all hover:bg-slate-200 active:scale-95 disabled:cursor-wait disabled:opacity-70"
             >
               {isUnlocking ? 'Unlocking vault…' : 'Unlock Vault'}
+            </button>
+
+            <button
+              type="button"
+              onClick={onLogout}
+              className="w-full text-center text-[11px] text-slate-400 hover:text-rose-300 transition-colors"
+            >
+              Don't remember your master password? <span className="underline font-semibold text-rose-400">Log Out & Sign In Fresh</span>
             </button>
 
             {hasExistingPin && hasVaultKey && (

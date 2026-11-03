@@ -43,6 +43,14 @@ export function hexToBuffer(hexString) {
   return buffer;
 }
 
+export function createKdfSalt() {
+  const randomBytes = new Uint8Array(16);
+  window.crypto.getRandomValues(randomBytes);
+  const hex = bufferToHex(randomBytes);
+  localStorage.setItem(SALT_STORAGE_KEY, hex);
+  return hex;
+}
+
 /**
  * Gets (or generates on first run) a 128-bit random KDF salt stored in localStorage.
  * This is per-device but is far better than a deterministic email-derived salt.
@@ -50,12 +58,7 @@ export function hexToBuffer(hexString) {
 export function getOrCreateKdfSalt() {
   const stored = localStorage.getItem(SALT_STORAGE_KEY);
   if (stored) return stored;
-  // First registration on this device — generate a fresh random 128-bit salt
-  const randomBytes = new Uint8Array(16);
-  window.crypto.getRandomValues(randomBytes);
-  const hex = bufferToHex(randomBytes);
-  localStorage.setItem(SALT_STORAGE_KEY, hex);
-  return hex;
+  return createKdfSalt();
 }
 
 export function getStoredKdfSalt() {
