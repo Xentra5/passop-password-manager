@@ -289,18 +289,19 @@ const Manager = ({
   };
 
   const getPasswordStrength = (pwd) => {
-    if (!pwd) return { score: 0, label: "None", width: "w-0", color: "bg-slate-700" }
-    let score = 0
-    if (pwd.length >= 8) score++
-    if (pwd.length >= 12) score++
-    if (/[A-Z]/.test(pwd) && /[a-z]/.test(pwd)) score++
-    if (/[0-9]/.test(pwd)) score++
-    if (/[^A-Za-z0-9]/.test(pwd)) score++
-
-    if (score <= 2) return { score: 1, label: "Basic", width: "w-1/4", color: "bg-rose-500" }
-    if (score <= 3) return { score: 2, label: "Moderate", width: "w-2/4", color: "bg-amber-500" }
-    if (score === 4) return { score: 3, label: "Strong", width: "w-3/4", color: "bg-emerald-500" }
-    return { score: 4, label: "Fortified", width: "w-full", color: "bg-emerald-400" }
+    if (!pwd) return { score: 0, label: "None", segments: 0, segColor: "bg-slate-300", checks: { length8: false, length12: false, mixedCase: false, numbers: false, symbols: false } }
+    const checks = {
+      length8: pwd.length >= 8,
+      length12: pwd.length >= 12,
+      mixedCase: /[A-Z]/.test(pwd) && /[a-z]/.test(pwd),
+      numbers: /[0-9]/.test(pwd),
+      symbols: /[^A-Za-z0-9]/.test(pwd),
+    }
+    let score = Object.values(checks).filter(Boolean).length
+    if (score <= 2) return { score: 1, label: "Weak", segments: 1, segColor: "bg-rose-500", checks }
+    if (score <= 3) return { score: 2, label: "Moderate", segments: 2, segColor: "bg-amber-400", checks }
+    if (score === 4) return { score: 3, label: "Strong", segments: 3, segColor: "bg-emerald-500", checks }
+    return { score: 4, label: "Fortified", segments: 4, segColor: "bg-emerald-400", checks }
   }
 
   const copyToClipboard = (text, keyIdentifier, label) => {
@@ -974,8 +975,13 @@ const Manager = ({
                     Password
                   </label>
                   {form.password && (
-                    <span className="text-[11px] text-[#958e85]">
-                      Strength: <span className="font-semibold text-[#176b65]">{strength.label}</span>
+                    <span className={`text-[11px] font-semibold ${
+                      strength.score === 1 ? "text-rose-500"
+                      : strength.score === 2 ? "text-amber-500"
+                      : strength.score >= 3 ? "text-emerald-600"
+                      : "text-[#958e85]"
+                    }`}>
+                      {strength.label}
                     </span>
                   )}
                 </div>
@@ -1034,10 +1040,41 @@ const Manager = ({
                   </button>
                 </div>
 
-                {/* Strength Meter Bar */}
+                {/* Strength Meter — segmented bar + requirements checklist */}
                 {form.password && (
-                  <div className="mt-2.5 flex h-1.5 w-full overflow-hidden rounded-full bg-[#e8e4de] dark:bg-slate-700/60">
-                    <div className={`h-full transition-all duration-300 ${strength.color} ${strength.width}`}></div>
+                  <div className="mt-2.5 space-y-2">
+                    {/* 4-segment bar */}
+                    <div className="flex gap-1">
+                      {[1, 2, 3, 4].map((seg) => (
+                        <div
+                          key={seg}
+                          className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${
+                            seg <= strength.segments ? strength.segColor : "bg-[#e8e4de] dark:bg-slate-700/60"
+                          }`}
+                        />
+                      ))}
+                    </div>
+                    {/* Requirements checklist */}
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px]">
+                      {[
+                        { key: "length8",    label: "8+ chars" },
+                        { key: "length12",   label: "12+ chars" },
+                        { key: "mixedCase",  label: "A-Z & a-z" },
+                        { key: "numbers",    label: "0-9" },
+                        { key: "symbols",    label: "!@#…" },
+                      ].map(({ key, label }) => (
+                        <span
+                          key={key}
+                          className={`flex items-center gap-0.5 font-medium transition-colors ${
+                            strength.checks[key]
+                              ? "text-emerald-600 dark:text-emerald-400"
+                              : "text-[#aaa39a] dark:text-slate-500"
+                          }`}
+                        >
+                          {strength.checks[key] ? "✓" : "○"} {label}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 )}
                 {isChangingExistingPassword && (
