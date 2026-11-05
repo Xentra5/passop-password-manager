@@ -10,6 +10,7 @@ import PasswordGeneratorModal from './PasswordGeneratorModal';
 import VaultMigrationModal from './VaultMigrationModal';
 import PasswordHistoryModal from './PasswordHistoryModal';
 import { secureFetch } from '../utils/csrf';
+import { generatePassphrase } from '../utils/passphraseGenerator';
 
 // BUG #6 FIX: Use env variable so production deploys use HTTPS.
 // Set VITE_API_BASE_URL=https://your-domain.com/api/passwords in .env
@@ -81,6 +82,7 @@ const Manager = ({
   const [deleteConfirmAccount, setDeleteConfirmAccount] = useState(null)
   const [currentPasswordConfirmation, setCurrentPasswordConfirmation] = useState("")
   const [newPasswordConfirmation, setNewPasswordConfirmation] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
 
   const searchInputRef = useRef(null)
   const siteInputId = useId()
@@ -192,11 +194,13 @@ const Manager = ({
         if (!isCancelled) {
           setPasswordArray(decryptedList)
           setBackendOnline(true)
+          setIsLoading(false)
         }
       } catch (error) {
         console.warn('Backend unavailable, using local session state:', error)
         if (!isCancelled) {
           setBackendOnline(false)
+          setIsLoading(false)
         }
       }
     }
@@ -248,6 +252,19 @@ const Manager = ({
       autoClose: 2000,
     });
   };
+
+  const handleGeneratePassphrase = () => {
+    const phrase = generatePassphrase({ wordCount: 4, separator: '-', capitalize: true, includeNumber: true })
+    setForm(prev => ({ ...prev, password: phrase }))
+    setCurrentPasswordConfirmation("")
+    setNewPasswordConfirmation("")
+    setShowPassword(true)
+    toast.success("Passphrase generated — easy to remember, hard to crack!", {
+      theme: "dark",
+      transition: Bounce,
+      autoClose: 2500,
+    })
+  }
 
   const handleBulkImport = async (candidates) => {
     // 1. Zero-Knowledge Client-Side Encryption for each candidate
@@ -346,6 +363,21 @@ const Manager = ({
 
     if (form.site.trim().length >= 3 && form.username.trim().length >= 3 && form.password.length >= 3) {
       const isEditing = Boolean(form.id)
+
+      // Duplicate detection: warn if same site+username already exists (and we're not editing that exact record)
+      const duplicate = passwordArray.find(
+        item =>
+          item.id !== form.id &&
+          item.site.trim().toLowerCase() === form.site.trim().toLowerCase() &&
+          item.username.trim().toLowerCase() === form.username.trim().toLowerCase()
+      )
+      if (duplicate) {
+        toast.warn(`A credential for "${form.site.trim()}" with that username already exists in your vault.`, {
+          theme: "dark",
+          autoClose: 4000,
+        })
+        return
+      }
       const generatedId = form.id || uuidv4()
 
       let updatedHistoryPlain = [];
@@ -1251,6 +1283,19 @@ const Manager = ({
                 >
                   <span>Generate 16 characters</span>
                 </button>
+
+                {/* Passphrase Generator Button */}
+                <button
+                  type="button"
+                  onClick={handleGeneratePassphrase}
+                  title="Generate a memorable 4-word passphrase (e.g. Falcon-Crystal-Storm-42)"
+                  className="flex items-center gap-1.5 rounded-md border border-violet-200 bg-violet-50 px-3 py-2.5 text-xs font-medium text-violet-700 transition-all hover:bg-violet-100 active:scale-[0.98]"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                  </svg>
+                  <span>Passphrase</span>
+                </button>
               </div>
 
               <button
@@ -1468,7 +1513,44 @@ const Manager = ({
           )}
 
           {/* Credentials Display List / Table */}
-          {passwordArray.length === 0 ? (
+          {isLoading ? (
+            /* Skeleton loading rows */
+            <div className="overflow-hidden rounded-xl border border-[#d5d0c8] bg-white dark:border-white/10 dark:bg-[#151b23]">
+              {[...Array(4)].map((_, i) => (
+                <div
+                  key={i}
+                  className="flex items-center gap-4 border-b border-[#f0ece6] px-4 py-3.5 last:border-0 dark:border-white/5"
+                  style={{ animationDelay: `${i * 80}ms` }}
+                >
+                  {/* Avatar skeleton */}
+                  <div className="h-9 w-9 flex-shrink-0 animate-pulse rounded-lg bg-[#e8e4de] dark:bg-slate-700/60" />
+                  {/* Site + tag skeleton */}
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3 w-28 animate-pulse rounded bg-[#e8e4de] dark:bg-slate-700/60" />
+                    <div className="h-2.5 w-16 animate-pulse rounded bg-[#ede9e3] dark:bg-slate-700/40" />
+                  </div>
+                  {/* Username skeleton */}
+                  <div className="hidden w-40 sm:block">
+                    <div className="h-3 w-32 animate-pulse rounded bg-[#e8e4de] dark:bg-slate-700/60" />
+                  </div>
+                  {/* Password dots skeleton */}
+                  <div className="hidden w-36 sm:block">
+                    <div className="h-3 w-24 animate-pulse rounded bg-[#e8e4de] dark:bg-slate-700/60" />
+                  </div>
+                  {/* Status badge skeleton */}
+                  <div className="hidden w-20 lg:block">
+                    <div className="h-5 w-14 animate-pulse rounded-full bg-[#e8e4de] dark:bg-slate-700/60" />
+                  </div>
+                  {/* Action buttons skeleton */}
+                  <div className="flex gap-2">
+                    <div className="h-7 w-7 animate-pulse rounded-md bg-[#e8e4de] dark:bg-slate-700/60" />
+                    <div className="h-7 w-7 animate-pulse rounded-md bg-[#e8e4de] dark:bg-slate-700/60" />
+                    <div className="h-7 w-7 animate-pulse rounded-md bg-[#e8e4de] dark:bg-slate-700/60" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : passwordArray.length === 0 ? (
             <div className="accounts-empty rounded-xl border border-[#d5d0c8] bg-white p-12 text-center dark:border-white/10 dark:bg-[#151b23]">
               <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-[#176b87]/20 bg-[#f0f8fa] text-[#176b87] shadow-inner dark:border-cyan-500/20 dark:bg-cyan-950/30 dark:text-cyan-400">
                 <svg className="h-7 w-7 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.75">
