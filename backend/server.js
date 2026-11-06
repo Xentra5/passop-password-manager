@@ -497,7 +497,7 @@ app.get('/api/passwords', authenticateToken, async (req, res) => {
     // FIX #4: MongoDB projection to only fetch needed fields — reduces bandwidth
     const passwords = await passwordsCol
       .find({ userId: req.user.userId })
-      .project({ _id: 0, id: 1, site: 1, username: 1, password: 1, favorite: 1, tag: 1, customFields: 1, history: 1 })
+      .project({ _id: 0, id: 1, site: 1, username: 1, password: 1, favorite: 1, tag: 1, customFields: 1, history: 1, createdAt: 1, updatedAt: 1 })
       .sort({ site: 1 })
       .toArray();
 
@@ -507,6 +507,8 @@ app.get('/api/passwords', authenticateToken, async (req, res) => {
       favorite: Boolean(item.favorite),
       tag: typeof item.tag === 'string' ? item.tag : 'Personal',
       customFields: Array.isArray(item.customFields) ? item.customFields : [],
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
       history: Array.isArray(item.history)
         ? item.history.map(h => ({
           ...h,

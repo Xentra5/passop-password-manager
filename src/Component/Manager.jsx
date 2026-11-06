@@ -34,6 +34,78 @@ export const getTagBadgeStyle = (tag) => {
   }
 };
 
+export const getPasswordAgeInfo = (item) => {
+  if (!item) return null;
+  const rawDate = item.updatedAt || item.history?.[0]?.changedAt || item.createdAt;
+  if (!rawDate) {
+    return {
+      label: 'Recently added',
+      badgeText: 'Updated recently',
+      days: 0,
+      isStale: false,
+      colorClass: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+      tooltip: 'Recently added to your vault',
+    };
+  }
+
+  const dateObj = new Date(rawDate);
+  const diffMs = Date.now() - dateObj.getTime();
+  const diffDays = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+
+  if (diffDays >= 90) {
+    return {
+      label: `${diffDays}d old`,
+      badgeText: `⚠️ ${diffDays}d old — Rotate`,
+      days: diffDays,
+      isStale: true,
+      colorClass: 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/50',
+      tooltip: `⚠️ Stale password (${diffDays} days old) — Consider rotating this password for optimal security.`,
+    };
+  }
+
+  if (diffDays >= 30) {
+    return {
+      label: `${diffDays}d old`,
+      badgeText: `🕒 ${diffDays}d old`,
+      days: diffDays,
+      isStale: false,
+      colorClass: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800/50',
+      tooltip: `Password last updated ${diffDays} days ago`,
+    };
+  }
+
+  if (diffDays === 0) {
+    return {
+      label: 'Updated today',
+      badgeText: '✓ Updated today',
+      days: 0,
+      isStale: false,
+      colorClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50',
+      tooltip: 'Password created or updated today',
+    };
+  }
+
+  if (diffDays === 1) {
+    return {
+      label: 'Updated 1d ago',
+      badgeText: 'Updated 1d ago',
+      days: 1,
+      isStale: false,
+      colorClass: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50',
+      tooltip: 'Password last updated 1 day ago',
+    };
+  }
+
+  return {
+    label: `Updated ${diffDays}d ago`,
+    badgeText: `Updated ${diffDays}d ago`,
+    days: diffDays,
+    isStale: false,
+    colorClass: 'bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+    tooltip: `Password last updated ${diffDays} days ago`,
+  };
+};
+
 const HoverHint = ({ text, children, className = "" }) => (
   <span className={`group relative inline-flex ${className}`}>
     {children}
@@ -431,6 +503,8 @@ const Manager = ({
         id: generatedId,
         history: updatedHistoryPlain,
         customFields: form.customFields || [],
+        createdAt: isEditing ? (existingAccount?.createdAt || new Date().toISOString()) : new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       }
 
       try {
@@ -1670,6 +1744,21 @@ const Manager = ({
                                     >
                                       {item.tag || 'Personal'}
                                     </span>
+
+                                    {/* Password Age / Stale Warning Badge */}
+                                    {(() => {
+                                      const age = getPasswordAgeInfo(item);
+                                      if (!age) return null;
+                                      return (
+                                        <HoverHint text={age.tooltip}>
+                                          <span
+                                            className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold border ${age.colorClass}`}
+                                          >
+                                            {age.badgeText}
+                                          </span>
+                                        </HoverHint>
+                                      );
+                                    })()}
                                     {/* Security Status Badges */}
                                     {auditData.breachedIds.has(item.id) && (
                                       <span
