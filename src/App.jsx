@@ -128,6 +128,13 @@ function App() {
     return groups;
   }, [credentials]);
   const reusedCount = credentials.filter((item) => item.password && passwordGroups.get(item.password) > 1).length;
+  const categoryCounts = useMemo(() => {
+    const counts = { All: credentials.length };
+    ["Finance", "Work", "Personal", "Developer"].forEach((cat) => {
+      counts[cat] = credentials.filter((item) => (item.category || "").toLowerCase() === cat.toLowerCase()).length;
+    });
+    return counts;
+  }, [credentials]);
   const healthScore = credentials.length
     ? Math.max(0, Math.round(100 - (weakCount / credentials.length) * 45 - (reusedCount / credentials.length) * 35))
     : 100;
@@ -654,7 +661,18 @@ function App() {
             )}
           </div>
           <nav className="category-tabs" aria-label="Filter by category">
-            {["All", "Finance", "Work", "Personal", "Developer"].map((value) => <button key={value} className={category === value && !weakOnly ? "active" : ""} onClick={() => { setCategory(value); setWeakOnly(false); }}>{value}{value === "All" && <span>({credentials.length})</span>}</button>)}
+            {["All", "Finance", "Work", "Personal", "Developer"].map((value) => {
+              const count = categoryCounts[value] ?? 0;
+              return (
+                <button
+                  key={value}
+                  className={category === value && !weakOnly ? "active" : ""}
+                  onClick={() => { setCategory(value); setWeakOnly(false); }}
+                >
+                  {value} <span>({count})</span>
+                </button>
+              );
+            })}
           </nav>
         </div>
 

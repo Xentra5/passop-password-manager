@@ -1575,12 +1575,10 @@ const Manager = ({
                     }`}
                 >
                   <span>{tag}</span>
-                  {tagCounts[tag] > 0 && (
-                    <span className={`rounded-full px-1.5 py-0.2 text-[10px] ${selectedTag === tag ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
-                      }`}>
-                      {tagCounts[tag]}
-                    </span>
-                  )}
+                  <span className={`rounded-full px-1.5 py-0.2 text-[10px] ${selectedTag === tag ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                    }`}>
+                    {tagCounts[tag] ?? 0}
+                  </span>
                 </button>
               ))}
             </div>
