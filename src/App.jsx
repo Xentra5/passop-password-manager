@@ -72,6 +72,9 @@ function App() {
   // This prevents the landing page from flashing before the /me check completes.
   const [isRestoringSession, setIsRestoringSession] = useState(true);
   const clipboardTimerRef = useRef(null);
+  const countdownIntervalRef = useRef(null);
+  const [clipboardCountdown, setClipboardCountdown] = useState(null);
+  const [clipboardClearedStatus, setClipboardClearedStatus] = useState(false);
   const searchRef = useRef(null);
 
   const filtered = useMemo(() => credentials.filter((item) => {
@@ -542,21 +545,64 @@ function App() {
     setCredentialFormError("");
   }
 
+  const clearClipboardImmediately = useCallback(async () => {
+    try {
+      await navigator.clipboard.writeText("");
+    } catch {
+      // Ignore clipboard permission errors
+    }
+    if (countdownIntervalRef.current) window.clearInterval(countdownIntervalRef.current);
+    if (clipboardTimerRef.current) window.clearTimeout(clipboardTimerRef.current);
+    setCopied("");
+    setClipboardCountdown(null);
+    setClipboardClearedStatus(true);
+    setTimeout(() => {
+      setClipboardClearedStatus(false);
+    }, 2000);
+  }, []);
+
   async function copyValue(value, id) {
     try {
       await navigator.clipboard.writeText(value);
       setCopied(id);
       window.clearTimeout(clipboardTimerRef.current);
-      clipboardTimerRef.current = window.setTimeout(async () => {
-        try {
-          if (!navigator.clipboard.readText || (await navigator.clipboard.readText()) === value) {
-            await navigator.clipboard.writeText("");
+      if (countdownIntervalRef.current) window.clearInterval(countdownIntervalRef.current);
+
+      const isPassword = id.includes("password");
+      if (isPassword) {
+        setClipboardClearedStatus(false);
+        setClipboardCountdown(30);
+
+        let remaining = 30;
+        countdownIntervalRef.current = window.setInterval(async () => {
+          remaining -= 1;
+          if (remaining <= 0) {
+            window.clearInterval(countdownIntervalRef.current);
+            try {
+              if (!navigator.clipboard.readText || (await navigator.clipboard.readText()) === value) {
+                await navigator.clipboard.writeText("");
+              }
+            } catch {
+              // Clipboard permissions may prevent clearing.
+            }
+            setCopied("");
+            setClipboardCountdown(null);
+            setClipboardClearedStatus(true);
+            setTimeout(() => setClipboardClearedStatus(false), 2000);
+          } else {
+            setClipboardCountdown(remaining);
           }
-        } catch {
-          // Clipboard permissions may prevent clearing.
-        }
-        setCopied("");
-      }, 30000);
+        }, 1000);
+      } else {
+        clipboardTimerRef.current = window.setTimeout(async () => {
+          try {
+            if (!navigator.clipboard.readText || (await navigator.clipboard.readText()) === value) {
+              await navigator.clipboard.writeText("");
+            }
+          } catch {}
+          setCopied("");
+        }, 30000);
+      }
     } catch {
       setVaultError("Clipboard access was blocked by your browser.");
     }
@@ -696,6 +742,34 @@ function App() {
       </main>
 
       <footer className="replica-footer"><span>PassVault — Hand-crafted personal credential manager</span><span>Clipboard clears after 30 seconds&nbsp;&nbsp; Press <kbd>/</kbd> to search&nbsp;&nbsp; Press <kbd>A</kbd> to add account</span></footer>
+
+      {/* Floating Clipboard Auto-Clear Countdown Pill */}
+      {(clipboardCountdown !== null || clipboardClearedStatus) && (
+        <div className="clipboard-floating-pill" role="status" aria-live="polite">
+          {clipboardClearedStatus ? (
+            <div className="clipboard-pill-content cleared">
+              <span className="pill-icon">✓</span>
+              <span className="pill-text">Clipboard securely cleared</span>
+            </div>
+          ) : (
+            <div className="clipboard-pill-content active">
+              <span className="pill-pulse-dot" />
+              <span className="pill-icon">🔒</span>
+              <span className="pill-text">
+                Clipboard clears in <strong>{clipboardCountdown}s</strong>…
+              </span>
+              <button
+                type="button"
+                className="pill-clear-btn"
+                onClick={clearClipboardImmediately}
+                title="Clear clipboard now"
+              >
+                Clear Now
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <PasswordHistoryModal
         isOpen={Boolean(selectedHistoryAccount)}

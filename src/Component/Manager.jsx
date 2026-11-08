@@ -155,6 +155,9 @@ const Manager = ({
   const [currentPasswordConfirmation, setCurrentPasswordConfirmation] = useState("")
   const [newPasswordConfirmation, setNewPasswordConfirmation] = useState("")
   const [isLoading, setIsLoading] = useState(true)
+  const [clipboardCountdown, setClipboardCountdown] = useState(null)
+  const [clipboardClearedStatus, setClipboardClearedStatus] = useState(false)
+  const countdownIntervalRef = useRef(null)
 
   const searchInputRef = useRef(null)
   const siteInputId = useId()
@@ -393,6 +396,19 @@ const Manager = ({
     return { score: 4, label: "Fortified", segments: 4, segColor: "bg-emerald-400", checks }
   }
 
+  const clearClipboardImmediately = async () => {
+    try {
+      await navigator.clipboard.writeText("")
+    } catch {}
+    if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current)
+    setCopiedKey(null)
+    setClipboardCountdown(null)
+    setClipboardClearedStatus(true)
+    setTimeout(() => {
+      setClipboardClearedStatus(false)
+    }, 2000)
+  }
+
   const copyToClipboard = (text, keyIdentifier, label) => {
     navigator.clipboard.writeText(text)
     setCopiedKey(keyIdentifier)
@@ -403,6 +419,29 @@ const Manager = ({
     setTimeout(() => {
       setCopiedKey(prev => (prev === keyIdentifier ? null : prev))
     }, 1600)
+
+    if (label === "Password" || keyIdentifier.includes("pass")) {
+      if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current)
+      setClipboardClearedStatus(false)
+      setClipboardCountdown(30)
+      let remaining = 30
+      countdownIntervalRef.current = setInterval(async () => {
+        remaining -= 1
+        if (remaining <= 0) {
+          clearInterval(countdownIntervalRef.current)
+          try {
+            if (!navigator.clipboard.readText || (await navigator.clipboard.readText()) === text) {
+              await navigator.clipboard.writeText("")
+            }
+          } catch {}
+          setClipboardCountdown(null)
+          setClipboardClearedStatus(true)
+          setTimeout(() => setClipboardClearedStatus(false), 2000)
+        } else {
+          setClipboardCountdown(remaining)
+        }
+      }, 1000)
+    }
   }
 
   const togglePasswordReveal = (id) => {
@@ -2119,6 +2158,34 @@ const Manager = ({
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Floating Clipboard Auto-Clear Countdown Pill */}
+        {(clipboardCountdown !== null || clipboardClearedStatus) && (
+          <div className="clipboard-floating-pill" role="status" aria-live="polite">
+            {clipboardClearedStatus ? (
+              <div className="clipboard-pill-content cleared">
+                <span className="pill-icon">✓</span>
+                <span className="pill-text">Clipboard securely cleared</span>
+              </div>
+            ) : (
+              <div className="clipboard-pill-content active">
+                <span className="pill-pulse-dot" />
+                <span className="pill-icon">🔒</span>
+                <span className="pill-text">
+                  Clipboard clears in <strong>{clipboardCountdown}s</strong>…
+                </span>
+                <button
+                  type="button"
+                  className="pill-clear-btn"
+                  onClick={clearClipboardImmediately}
+                  title="Clear clipboard now"
+                >
+                  Clear Now
+                </button>
+              </div>
+            )}
           </div>
         )}
       </main>
