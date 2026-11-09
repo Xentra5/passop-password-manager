@@ -35,6 +35,31 @@ function getServicePresentation(value = "") {
   return { label: raw || "Untitled account", detail: "Saved login" };
 }
 
+export function HighlightMatch({ text = "", query = "", className = "search-highlight" }) {
+  if (!text) return null;
+  const trimmed = typeof query === "string" ? query.trim() : "";
+  if (!trimmed) return <>{text}</>;
+
+  const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`(${escaped})`, "gi");
+  const parts = String(text).split(regex);
+  const lowerQuery = trimmed.toLowerCase();
+
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === lowerQuery ? (
+          <mark key={i} className={className}>
+            {part}
+          </mark>
+        ) : (
+          part
+        )
+      )}
+    </>
+  );
+}
+
 function AuthOverlay({ open, mode, onClose, onAuthenticated }) {
   if (!open) return null;
   return <div className="auth-overlay"><div className="auth-overlay-card"><Auth key={mode} initialMode={mode} onClose={onClose} onAuthenticated={onAuthenticated} /></div></div>;
@@ -699,7 +724,7 @@ function App() {
                     onClick={() => { setQuery(item.service || item.username); searchRef.current?.focus(); }}
                   >
                     <SiteLogo site={item.service} size="sm" className="suggestion-icon" />
-                    <span className="suggestion-copy"><strong>{item.service || "Untitled account"}</strong><small>{item.username || "No username"}</small></span>
+                    <span className="suggestion-copy"><strong><HighlightMatch text={item.service || "Untitled account"} query={query} /></strong><small><HighlightMatch text={item.username || "No username"} query={query} /></small></span>
                     <span className="suggestion-status">Saved</span>
                   </button>
                 ))}
@@ -731,8 +756,8 @@ function App() {
             const service = getServicePresentation(item.service);
             const breachResult = breachResults[item.id];
             return <article className="credential-row" key={item.id}>
-              <div className="service-cell"><SiteLogo site={item.service} size="md" className="service-icon" /><div><strong title={item.service}>{service.label}</strong><small>{item.category} · {service.detail}</small></div></div>
-              <div className="username-cell"><span title={item.username}>{item.username}</span><button className="icon-action inline-copy" aria-label="Copy username" title="Copy username" onClick={() => copyValue(item.username, `${item.id}-user`)}>{copied === `${item.id}-user` ? "✓" : "▢"}</button></div>
+              <div className="service-cell"><SiteLogo site={item.service} size="md" className="service-icon" /><div><strong title={item.service}><HighlightMatch text={service.label} query={query} /></strong><small><HighlightMatch text={item.category} query={query} /> · <HighlightMatch text={service.detail} query={query} /></small></div></div>
+              <div className="username-cell"><span title={item.username}><HighlightMatch text={item.username} query={query} /></span><button className="icon-action inline-copy" aria-label="Copy username" title="Copy username" onClick={() => copyValue(item.username, `${item.id}-user`)}>{copied === `${item.id}-user` ? "✓" : "▢"}</button></div>
               <div className="password-cell"><span>{revealed[item.id] ? item.password : "•".repeat(Math.min(Math.max(item.password.length, 8), 16))}</span><button className="icon-action" aria-label={revealed[item.id] ? "Hide password" : "Reveal password"} title={revealed[item.id] ? "Hide password" : "Reveal password"} onClick={() => setRevealed((value) => ({ ...value, [item.id]: !value[item.id] }))}>{revealed[item.id] ? "◉" : "◌"}</button><button className="icon-action" aria-label="Copy password" title="Copy password" onClick={() => copyValue(item.password, `${item.id}-password`)}>{copied === `${item.id}-password` ? "✓" : "▢"}</button></div>
               <div className="credential-status"><span className={`strength-tag ${strength.toLowerCase()}`}>{strength}</span><span className={`breach-tag${breachResult?.pwned ? " breached" : ""}`}>{breachResult?.error ? "Check failed" : breachResult ? breachResult.pwned ? "Breached" : "No match" : "Not checked"}</span></div>
               <div className="row-actions"><button className="icon-action" aria-label={`View password history${item.history?.length ? ` (${item.history.length} previous versions)` : ""}`} title={`${item.history?.length || 0} previous versions`} onClick={() => openHistory(item)}>↺{item.history?.length ? <sup>{item.history.length}</sup> : null}</button><button className="icon-action" aria-label="Edit credential" title="Edit credential" onClick={() => openEdit(item)}>✎</button><button className="icon-action delete-action" aria-label="Delete credential" title="Delete credential" onClick={() => removeCredential(item.id)}>×</button></div>

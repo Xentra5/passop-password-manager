@@ -118,6 +118,31 @@ const HoverHint = ({ text, children, className = "" }) => (
   </span>
 );
 
+export const HighlightMatch = ({ text = "", query = "", className = "search-highlight" }) => {
+  if (!text) return null;
+  const trimmed = typeof query === "string" ? query.trim() : "";
+  if (!trimmed) return <>{text}</>;
+
+  const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`(${escaped})`, "gi");
+  const parts = String(text).split(regex);
+  const lowerQuery = trimmed.toLowerCase();
+
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === lowerQuery ? (
+          <mark key={i} className={className}>
+            {part}
+          </mark>
+        ) : (
+          part
+        )
+      )}
+    </>
+  );
+};
+
 
 const Manager = ({
   token,
@@ -1552,8 +1577,8 @@ const Manager = ({
                         >
                           <SiteLogo site={item.site} size="sm" />
                           <span className="min-w-0 flex-1">
-                            <span className="block truncate text-xs font-semibold">{item.site || "Untitled account"}</span>
-                            <span className="block truncate text-[10px] opacity-65">{item.username || "No username"}</span>
+                            <span className="block truncate text-xs font-semibold"><HighlightMatch text={item.site || "Untitled account"} query={searchQuery} /></span>
+                            <span className="block truncate text-[10px] opacity-65"><HighlightMatch text={item.username || "No username"} query={searchQuery} /></span>
                           </span>
                           <span className="text-[10px] opacity-60">Password saved</span>
                         </button>
@@ -1754,20 +1779,20 @@ const Manager = ({
                                           {brand ? (
                                             <div className="flex items-center gap-1.5">
                                               <span className="font-semibold text-[#1f2933] text-xs">
-                                                {brand.name}
+                                                <HighlightMatch text={brand.name} query={searchQuery} />
                                               </span>
                                               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                                 Official
                                               </span>
                                               {brand.category && (
                                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-slate-100 text-slate-600 border border-slate-200">
-                                                  {brand.category}
+                                                  <HighlightMatch text={brand.category} query={searchQuery} />
                                                 </span>
                                               )}
                                             </div>
                                           ) : (
                                             <span className="font-semibold text-[#1f2933] text-xs">
-                                              {domain || item.site}
+                                              <HighlightMatch text={domain || item.site} query={searchQuery} />
                                             </span>
                                           )}
                                         </>
@@ -1779,7 +1804,7 @@ const Manager = ({
                                       title={`Folder: ${item.tag || 'Personal'}`}
                                       className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${getTagBadgeStyle(item.tag || 'Personal')}`}
                                     >
-                                      {item.tag || 'Personal'}
+                                      <HighlightMatch text={item.tag || 'Personal'} query={searchQuery} />
                                     </span>
 
                                     {/* Password Age / Stale Warning Badge */}
@@ -1844,7 +1869,7 @@ const Manager = ({
                                         title={item.site}
                                         className="max-w-60 truncate text-[11px] text-[#7b746b] hover:text-[#176b87] hover:underline"
                                       >
-                                        {item.site}
+                                        <HighlightMatch text={item.site} query={searchQuery} />
                                       </a>
                                     </HoverHint>
                                     <button
@@ -1870,7 +1895,7 @@ const Manager = ({
                             <td className="px-5 py-4 text-slate-300">
                               <div className="flex items-center gap-1.5 text-[#4b5563]">
                                 <HoverHint text="Saved username or email. Use the copy button to place it on your clipboard.">
-                                  <span className="max-w-45 truncate">{item.username}</span>
+                                  <span className="max-w-45 truncate"><HighlightMatch text={item.username} query={searchQuery} /></span>
                                 </HoverHint>
                                 <button
                                   type="button"
