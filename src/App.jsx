@@ -3,6 +3,7 @@ import LandingPage from "./Component/LandingPage";
 import Auth from "./Component/Auth";
 import PasswordHistoryModal from "./Component/PasswordHistoryModal";
 import LockScreenModal from "./Component/LockScreenModal";
+import VaultExportModal from "./Component/VaultExportModal";
 import SiteLogo from "./Component/SiteLogo";
 import { encryptCredential, decryptCredential, encryptCustomFields, decryptCustomFields, clearCachedVaultKey } from "./utils/cryptoVault";
 import { secureFetch, setCsrfToken } from "./utils/csrf";
@@ -71,6 +72,7 @@ function App() {
   const [vaultKey, setVaultKey] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState("login");
+  const [exportModalOpen, setExportModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [vaultError, setVaultError] = useState("");
@@ -668,6 +670,12 @@ function App() {
           <a className="replica-brand" href="#vault" aria-label="PassVault home"><span>PassVault</span><small>personal vault</small></a>
           <div className="replica-header-actions">
             <button className="landing-toggle" onClick={() => setShowLanding(true)}>Landing page</button>
+            <button className="export-vault-button" onClick={() => setExportModalOpen(true)} title="Export encrypted backup (.passvault) or plain CSV">
+              <svg className="h-3.5 w-3.5 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2" style={{ display: 'inline', verticalAlign: 'text-bottom' }}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>Export</span>
+            </button>
             <button className="add-credential-button" onClick={openNewCredential}>Add credential <kbd>A</kbd></button>
             <button className="lock-vault-button" onClick={lockVault} title="Lock vault now">Lock</button>
             <span className="profile-button" aria-label={`Signed in as ${session.user?.name || session.user?.email}`} title={session.user?.email}><span className="profile-dot" aria-hidden="true">●</span><span className="profile-label">{session.user?.name || session.user?.email}</span></span>
@@ -802,6 +810,13 @@ function App() {
         account={selectedHistoryAccount}
         onRestorePassword={restoreHistoricalPassword}
         onClearHistory={clearPasswordHistory}
+      />
+
+      <VaultExportModal
+        isOpen={exportModalOpen}
+        onClose={() => setExportModalOpen(false)}
+        credentials={credentials}
+        vaultKey={vaultKey}
       />
 
       {drawerOpen && <div className={`drawer-scrim${drawerClosing ? " is-closing" : ""}`} onMouseDown={(event) => { if (event.target === event.currentTarget) closeDrawer(); }}>

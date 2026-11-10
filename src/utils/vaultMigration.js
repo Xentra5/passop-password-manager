@@ -12,6 +12,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
+import { encryptCredential, decryptCredential } from './cryptoVault';
 
 // BUG #8 FIX: Safety limits for import
 const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB
@@ -50,6 +51,63 @@ function escapeCSV(val) {
 // ─── Export ───────────────────────────────────────────────────────────────
 
 /**
+ * Exports vault accounts to a Zero-Knowledge AES-256-GCM encrypted .passvault backup file.
+ * The backup is encrypted client-side using the user's master vault key.
+ */
+export async function exportToEncryptedPassvault(passwordArray = [], vaultKey = null) {
+  if (!passwordArray.length) {
+    throw new Error('Vault is empty. Nothing to export.');
+  }
+  if (!vaultKey) {
+    throw new Error('Master key is locked. Unlock your vault before exporting an encrypted backup.');
+  }
+
+  const rawPayload = {
+    app: 'PassVault Cryptographic Password Manager',
+    version: '2.0',
+    exportedAt: new Date().toISOString(),
+    accountCount: passwordArray.length,
+    accounts: passwordArray.map(item => ({
+      id: item.id || uuidv4(),
+      site: item.service || item.site || '',
+      username: item.username || '',
+      password: item.password || '',
+      category: item.category || item.tag || 'Personal',
+      favorite: Boolean(item.favorite),
+      note: item.note || '',
+      history: item.history || [],
+      createdAt: item.createdAt || new Date().toISOString(),
+      updatedAt: item.updatedAt || new Date().toISOString(),
+    })),
+  };
+
+  const jsonString = JSON.stringify(rawPayload);
+  const encryptedCipher = await encryptCredential(jsonString, vaultKey);
+
+  const passvaultContainer = {
+    vaultFormat: 'passvault-encrypted-v2',
+    cipher: 'AES-256-GCM',
+    kdf: 'PBKDF2-SHA256-600K',
+    accountCount: passwordArray.length,
+    exportedAt: rawPayload.exportedAt,
+    data: encryptedCipher,
+  };
+
+  const fileContent = JSON.stringify(passvaultContainer, null, 2);
+  const blob = new Blob([fileContent], { type: 'application/json;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement('a');
+  link.setAttribute('href', url);
+  const dateStr = new Date().toISOString().split('T')[0];
+  link.setAttribute('download', `passvault_backup_${dateStr}.passvault`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
+
+/**
  * Exports vault accounts to a plaintext CSV file.
  *
  * BUG #7 FIX: A security warning comment is prepended to the CSV, and the
@@ -65,16 +123,18 @@ export function exportToCSV(passwordArray = []) {
   const warningComment =
     '# WARNING: This file contains UNENCRYPTED passwords. Keep it secure and delete after use.\r\n';
 
-  const headers = ['name', 'url', 'username', 'password', 'notes'];
+  const headers = ['name', 'url', 'username', 'password', 'category', 'notes'];
   const rows = [headers.join(',')];
 
   for (const item of passwordArray) {
+    const site = item.service || item.site || '';
     const row = [
-      escapeCSV(item.site),
-      escapeCSV(item.site.startsWith('http') ? item.site : `https://${item.site}`),
-      escapeCSV(item.username),
-      escapeCSV(item.password),
-      escapeCSV('Exported from PassOP Vault — UNENCRYPTED'),
+      escapeCSV(site),
+      escapeCSV(site.startsWith('http') ? site : `https://${site}`),
+      escapeCSV(item.username || ''),
+      escapeCSV(item.password || ''),
+      escapeCSV(item.category || item.tag || 'Personal'),
+      escapeCSV(item.note || 'Exported from PassVault Vault'),
     ];
     rows.push(row.join(','));
   }
@@ -86,7 +146,7 @@ export function exportToCSV(passwordArray = []) {
   const link = document.createElement('a');
   link.setAttribute('href', url);
   const dateStr = new Date().toISOString().split('T')[0];
-  link.setAttribute('download', `passop_vault_export_${dateStr}.csv`);
+  link.setAttribute('download', `passvault_export_${dateStr}.csv`);
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);

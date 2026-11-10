@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { toast, Bounce } from 'react-toastify';
-import { exportToCSV, exportToJSONBackup, parseImportFile } from '../utils/vaultMigration';
+import { exportToCSV, exportToJSONBackup, exportToEncryptedPassvault, parseImportFile } from '../utils/vaultMigration';
 import SiteLogo from './SiteLogo';
 
 export default function VaultMigrationModal({
@@ -100,6 +100,18 @@ export default function VaultMigrationModal({
     try {
       exportToJSONBackup(passwordArray);
       toast.success('Backup file (.json) downloaded', { theme: 'dark', autoClose: 2000 });
+    } catch (err) {
+      toast.error(err.message, { theme: 'dark' });
+    }
+  };
+
+  const handleExportPassvault = async () => {
+    try {
+      if (!vaultKey) {
+        throw new Error('Vault is locked. Unlock before exporting encrypted backup.');
+      }
+      await exportToEncryptedPassvault(passwordArray, vaultKey);
+      toast.success('Encrypted .passvault backup downloaded!', { theme: 'dark', autoClose: 2000 });
     } catch (err) {
       toast.error(err.message, { theme: 'dark' });
     }
@@ -265,7 +277,32 @@ export default function VaultMigrationModal({
               Download a copy of your vault data. Currently storing <strong>{passwordArray.length} accounts</strong>.
             </p>
 
-            {/* Option A: JSON Backup */}
+            {/* Option A: Encrypted .passvault Backup */}
+            <div className="rounded-xl border border-cyan-500/30 bg-cyan-50/50 p-4 transition-all hover:border-cyan-600 dark:border-cyan-500/30 dark:bg-cyan-950/20">
+              <div className="flex items-start justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">🔒</span>
+                    <h4 className="text-xs font-bold text-[#1f2933] dark:text-white">Encrypted Vault Backup (.passvault)</h4>
+                    <span className="rounded bg-cyan-100 px-1.5 py-0.5 text-[10px] font-bold text-cyan-800 dark:bg-cyan-900/60 dark:text-cyan-300">
+                      AES-256
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-[#7b746b] dark:text-slate-400">
+                    Zero-Knowledge AES-256 encrypted with your Master Password. Safe for USB, cloud, or external backups.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleExportPassvault}
+                  className="rounded-md bg-cyan-700 px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-cyan-600 active:scale-95"
+                >
+                  Download .passvault
+                </button>
+              </div>
+            </div>
+
+            {/* Option B: JSON Backup */}
             <div className="rounded-xl border border-[#d5d0c8] bg-[#faf9f7] p-4 transition-all hover:border-[#176b87]">
               <div className="flex items-start justify-between">
                 <div>

@@ -636,3 +636,26 @@ mark.search-highlight {
   border-color: rgba(56, 189, 248, 0.5);
   box-shadow: 0 0 8px rgba(56, 189, 248, 0.4);
 }
+
+/* Export Vault Button */
+.export-vault-button {
+  min-height: 36px;
+  padding-inline: 12px;
+  border-radius: 7px;
+  border: 1px solid #333338;
+  background: transparent;
+  color: #dedee2;
+  font-size: 13px;
+  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.export-vault-button:hover {
+  border-color: #06b6d4;
+  background: rgba(6, 182, 212, 0.08);
+  color: #67e8f9;
+}
