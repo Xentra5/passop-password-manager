@@ -46,6 +46,12 @@ export default function LockScreenModal({
   // BUG #4 FIX: track lockout state for UI feedback
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
   const [remainingAttempts, setRemainingAttempts] = useState(5);
+  const [lockoutCycle, setLockoutCycle] = useState(0); // escalation tier
+  // Master password brute force protection (frontend-only, in-memory)
+  const [mpFailedAttempts, setMpFailedAttempts] = useState(0);
+  const [mpLockoutSeconds, setMpLockoutSeconds] = useState(0);
+  const mpLockoutTiers = [5, 30, 120, 600]; // 5s → 30s → 2min → 10min
+  const mpLockoutTimerRef = useRef(null);
   const lockoutTimerRef = useRef(null);
   const inputRef = useRef(null);
   const masterPasswordInputRef = useRef(null);
@@ -60,6 +66,14 @@ export default function LockScreenModal({
     }
     return () => clearTimeout(lockoutTimerRef.current);
   }, [lockoutSeconds]);
+
+  // Countdown tick for master password lockout
+  useEffect(() => {
+    if (mpLockoutSeconds > 0) {
+      mpLockoutTimerRef.current = setTimeout(() => setMpLockoutSeconds(s => s - 1), 1000);
+    }
+    return () => clearTimeout(mpLockoutTimerRef.current);
+  }, [mpLockoutSeconds]);
 
   // Check if PIN is configured whenever modal opens
   useEffect(() => {
@@ -78,6 +92,9 @@ export default function LockScreenModal({
         setUsePasswordMode(!hasVaultKey);
         setLockoutSeconds(0);
         setRemainingAttempts(5);
+        setMpFailedAttempts(0);
+        setMpLockoutSeconds(0);
+        setLockoutCycle(0);
         setTimeoutSetting(getAutoLockTimeoutMinutes());
         // Keep Chrome's password manager away from the hidden PIN field. Focus
         // the visible master-password field when the vault key is unavailable.
@@ -124,9 +141,10 @@ export default function LockScreenModal({
         onUnlock();
       } else if (result.locked) {
         setLockoutSeconds(result.secondsLeft || 30);
+        setLockoutCycle(result.cycle || 1);
         setRemainingAttempts(0);
         toast.error(
-          `Too many wrong attempts. Try again in ${result.secondsLeft || 30} seconds.`,
+          `🔒 Too many wrong attempts. Locked for ${result.secondsLeft || 30}s.`,
           { theme: 'dark', autoClose: 4000 }
         );
         triggerErrorShake();
@@ -186,6 +204,12 @@ export default function LockScreenModal({
     e.preventDefault();
     if (!masterPassword || isUnlocking) return;
 
+    // Master password brute force protection
+    if (mpLockoutSeconds > 0) {
+      toast.error(`🔒 Too many failed attempts. Try again in ${mpLockoutSeconds}s.`, { theme: 'dark', autoClose: 3000 });
+      return;
+    }
+
     if (masterPassword.length < 12) {
       const msg = masterPassword.length <= 4
         ? 'Please enter your full account Master Password (at least 12 characters), not your 4-digit PIN. After a browser refresh, the full password is required to derive your vault encryption key.'
@@ -203,12 +227,28 @@ export default function LockScreenModal({
         throw new Error('Master password verification is not available. Please log out and log in again.');
       }
       await onUnlockWithMasterPassword(masterPassword);
+      // Success — reset MP failure counter
+      setMpFailedAttempts(0);
+      setMpLockoutSeconds(0);
       onUnlock();
     } catch (err) {
       const message = err.message || 'Could not unlock the vault. Please try again.';
       setMasterPasswordError(message);
       toast.error(message, { theme: 'dark' });
       triggerErrorShake();
+
+      // Increment MP failure counter and enforce escalating lockout
+      setMpFailedAttempts(prev => {
+        const next = prev + 1;
+        const MAX_MP = 5;
+        if (next >= MAX_MP) {
+          const tierIdx = Math.min(Math.floor(next / MAX_MP) - 1, mpLockoutTiers.length - 1);
+          const lockSecs = mpLockoutTiers[tierIdx];
+          setMpLockoutSeconds(lockSecs);
+          toast.error(`🔒 Too many wrong attempts! Locked for ${lockSecs}s.`, { theme: 'dark', autoClose: 5000 });
+        }
+        return next;
+      });
     } finally {
       setIsUnlocking(false);
     }
@@ -285,11 +325,14 @@ export default function LockScreenModal({
           </p>
         </div>
 
-        {/* BUG #4 FIX: Lockout Banner */}
+        {/* PIN Lockout Banner — escalating tier display */}
         {isLockedOut && (
           <div className="mt-4 rounded-lg border border-rose-700 bg-rose-900/40 px-4 py-3 text-center text-xs text-rose-300">
             🔒 Too many wrong attempts.<br />
             <span className="font-bold text-rose-200">Try again in {lockoutSeconds}s</span>
+            {lockoutCycle > 1 && (
+              <span className="ml-1 text-rose-400 text-[10px]">(lockout #{lockoutCycle} — increasing each time)</span>
+            )}
           </div>
         )}
 
@@ -437,6 +480,19 @@ export default function LockScreenModal({
         {/* PASSWORD MODE: Unlock with Full Master Password */}
         {usePasswordMode && (
           <form onSubmit={handleMasterPasswordSubmit} className="mt-5 space-y-4" aria-busy={isUnlocking}>
+            {/* Master password brute force lockout banner */}
+            {mpLockoutSeconds > 0 && (
+              <div className="rounded-lg border border-rose-700 bg-rose-900/40 px-4 py-3 text-center text-xs text-rose-300">
+                🔒 Too many wrong attempts.<br />
+                <span className="font-bold text-rose-200">Try again in {mpLockoutSeconds}s</span>
+                <span className="block mt-1 text-[10px] text-rose-400">Lockout increases with each violation</span>
+              </div>
+            )}
+            {mpLockoutSeconds === 0 && mpFailedAttempts > 0 && mpFailedAttempts < 5 && (
+              <p className="text-center text-[11px] text-amber-400 font-semibold">
+                ⚠️ {5 - mpFailedAttempts} attempt{5 - mpFailedAttempts !== 1 ? 's' : ''} remaining before lockout
+              </p>
+            )}
             <div>
               <label className="text-xs font-semibold text-slate-300">Enter Master Password</label>
               {!hasVaultKey && (
@@ -458,7 +514,7 @@ export default function LockScreenModal({
                   }}
                   placeholder="Master password (min 12 chars)"
                   className="lock-master-password w-full rounded-md border border-slate-700 bg-[#141b22] px-3 py-2.5 pr-10 text-sm text-white focus:border-slate-300 focus:outline-none"
-                  disabled={isUnlocking}
+                  disabled={isUnlocking || mpLockoutSeconds > 0}
                   required
                 />
                 <button
@@ -489,10 +545,10 @@ export default function LockScreenModal({
 
             <button
               type="submit"
-              disabled={isUnlocking}
-              className="w-full rounded-md bg-white py-2.5 text-xs font-bold text-black shadow transition-all hover:bg-slate-200 active:scale-95 disabled:cursor-wait disabled:opacity-70"
+              disabled={isUnlocking || mpLockoutSeconds > 0}
+              className="w-full rounded-md bg-white py-2.5 text-xs font-bold text-black shadow transition-all hover:bg-slate-200 active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              {isUnlocking ? 'Unlocking vault…' : 'Unlock Vault'}
+              {isUnlocking ? 'Unlocking vault…' : mpLockoutSeconds > 0 ? `Locked ${mpLockoutSeconds}s…` : 'Unlock Vault'}
             </button>
 
             <button

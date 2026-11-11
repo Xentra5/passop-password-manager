@@ -23,9 +23,11 @@ const TIMEOUT_STORAGE_KEY = 'passvault_autolock_minutes';
 //             so they cannot be tampered with via localStorage.
 const _failedAttempts = {};      // { [userEmail]: number }
 const _lockedUntil   = {};       // { [userEmail]: timestamp }
+const _lockoutCycle  = {};       // { [userEmail]: number } — tracks escalation tier
 
 const MAX_ATTEMPTS   = 5;        // lock after 5 wrong PINs
-const LOCKOUT_MS     = 30_000;   // 30 second initial lockout
+// Escalating lockout tiers: 5s → 30s → 2min → 10min (after that: 10min each cycle)
+const LOCKOUT_TIERS_MS = [5_000, 30_000, 120_000, 600_000];
 const PBKDF2_ITERATIONS_PIN = 100_000; // slow KDF for the short PIN space
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -101,6 +103,7 @@ export async function saveUserPin(pin, userEmail) {
   localStorage.setItem(`${PIN_STORAGE_PREFIX}${userEmail}`, hash);
   // Reset any existing failure counters when a new PIN is set
   _failedAttempts[userEmail] = 0;
+  _lockoutCycle[userEmail] = 0;
   delete _lockedUntil[userEmail];
   return true;
 }
@@ -132,6 +135,7 @@ export async function verifyUserPin(pin, userEmail) {
   if (isValid) {
     // Reset failure counter on success
     _failedAttempts[userEmail] = 0;
+    _lockoutCycle[userEmail] = 0;
     delete _lockedUntil[userEmail];
     return { valid: true, locked: false, remainingAttempts: MAX_ATTEMPTS };
   }
@@ -142,12 +146,13 @@ export async function verifyUserPin(pin, userEmail) {
   const remaining = Math.max(0, MAX_ATTEMPTS - attempts);
 
   if (attempts >= MAX_ATTEMPTS) {
-    // Exponential backoff: 30s * 2^(extra attempts above threshold)
-    const extra = attempts - MAX_ATTEMPTS;
-    const lockMs = LOCKOUT_MS * Math.pow(2, extra);
+    // Escalating lockout tiers: 5s → 30s → 2min → 10min, then 10min each cycle
+    const cycle = _lockoutCycle[userEmail] || 0;
+    const lockMs = LOCKOUT_TIERS_MS[Math.min(cycle, LOCKOUT_TIERS_MS.length - 1)];
     _lockedUntil[userEmail] = Date.now() + lockMs;
+    _lockoutCycle[userEmail] = cycle + 1;
     _failedAttempts[userEmail] = 0; // reset counter for next lockout cycle
-    return { valid: false, locked: true, remainingAttempts: 0, secondsLeft: Math.ceil(lockMs / 1000) };
+    return { valid: false, locked: true, remainingAttempts: 0, secondsLeft: Math.ceil(lockMs / 1000), cycle: cycle + 1 };
   }
 
   return { valid: false, locked: false, remainingAttempts: remaining };
@@ -169,6 +174,7 @@ export function removeUserPin(userEmail) {
   localStorage.removeItem(`${PIN_STORAGE_PREFIX}${userEmail}`);
   localStorage.removeItem(`${PIN_SALT_PREFIX}${userEmail}`);
   _failedAttempts[userEmail] = 0;
+  _lockoutCycle[userEmail] = 0;
   delete _lockedUntil[userEmail];
 }
 
