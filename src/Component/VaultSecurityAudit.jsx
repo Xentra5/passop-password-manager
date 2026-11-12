@@ -271,7 +271,7 @@ export default function VaultSecurityAudit({
                     🔁 Reused Passwords ({reusedCount} accounts)
                   </span>
                   <div className="mt-2 space-y-1.5 text-xs text-amber-900">
-                    {Object.entries(reusedMap).map(([pwd, accounts], idx) => (
+                    {Object.entries(reusedMap).map(([, accounts], idx) => (
                       <div key={idx} className="flex flex-wrap items-center gap-1.5 text-[11px]">
                         <span className="font-mono text-amber-700">Identical password used on:</span>
                         {accounts.map(acc => (

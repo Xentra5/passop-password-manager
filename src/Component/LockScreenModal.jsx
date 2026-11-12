@@ -8,9 +8,6 @@ import {
   setAutoLockTimeoutMinutes,
 } from '../utils/pinAuth';
 
-// Temporary local testing shortcut. Remove before exposing this build publicly.
-const TEMPORARY_TEST_PIN = '0000';
-
 /**
  * SECURITY FIXES APPLIED:
  * - BUG #4 FIX: verifyUserPin now returns { valid, locked, remainingAttempts, secondsLeft }.
@@ -123,12 +120,6 @@ export default function LockScreenModal({
     pinVerificationInFlightRef.current = true;
 
     try {
-      if (enteredPin === TEMPORARY_TEST_PIN) {
-        toast.success('Vault unlocked with the temporary test PIN.', { theme: 'dark', autoClose: 1500 });
-        onUnlock();
-        return;
-      }
-
       const result = await verifyUserPin(enteredPin, userEmail);
 
       if (result.valid) {
@@ -366,7 +357,6 @@ export default function LockScreenModal({
             <p className="mt-2 text-[11px] text-slate-400">
               {isLockedOut ? 'Keypad disabled during lockout' : 'Enter 4-digit PIN (type on keyboard or tap below)'}
             </p>
-            <p className="mt-1 text-[10px] text-amber-300/90">Temporary test PIN: 0000 · remove before deployment</p>
 
             {/* Numeric Keypad */}
             <div className="mt-5 grid grid-cols-3 gap-2.5 w-full max-w-60">

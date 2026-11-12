@@ -188,12 +188,12 @@ function App() {
     }
   }
 
-  function authHeaders(json = false) {
+  const authHeaders = useCallback((json = false) => {
     return {
       ...(json ? { "Content-Type": "application/json" } : {}),
       ...(session.token ? { Authorization: `Bearer ${session.token}` } : {}),
     };
-  }
+  }, [session.token]);
 
   function openAuth(mode = "login") {
     setAuthModalMode(mode);
@@ -256,7 +256,6 @@ function App() {
       }
     })();
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Run ONCE on mount only
 
   const lockVault = useCallback(() => {
@@ -316,7 +315,7 @@ function App() {
     setVaultKey(key);
     setIsLoading(true);
     setIsVaultLocked(false);
-  }, [session.user, session.token]);
+  }, [session.user, authHeaders]);
 
   // Called by LockScreenModal when user unlocks with PIN (vault key already in RAM).
   const handlePinUnlock = useCallback(() => {
@@ -386,7 +385,7 @@ function App() {
       .catch((error) => { if (!cancelled) setVaultError(error.message); })
       .finally(() => { if (!cancelled) setIsLoading(false); });
     return () => { cancelled = true; };
-  }, [session.user, session.token, vaultKey]);
+  }, [session.user, session.token, vaultKey, authHeaders]);
 
   useEffect(() => {
     const onKeyDown = (event) => {
@@ -626,7 +625,9 @@ function App() {
             if (!navigator.clipboard.readText || (await navigator.clipboard.readText()) === value) {
               await navigator.clipboard.writeText("");
             }
-          } catch {}
+          } catch {
+            // Ignore clipboard read denial
+          }
           setCopied("");
         }, 30000);
       }

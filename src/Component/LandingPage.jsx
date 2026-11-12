@@ -38,30 +38,16 @@ import { useState, useMemo } from "react";
 import {
   ShieldCheck,
   LockKey,
-  Eye,
-  EyeSlash,
   CheckCircle,
   Copy,
   Terminal,
-  Sparkle,
   Check,
   ArrowRight,
   Lightning,
-  Globe,
-  Lock
 } from "@phosphor-icons/react";
-import { useSpotlight, useTilt, useScrollReveal, useMagnetic } from "../hooks/useMotion";
+import { useSpotlight, useScrollReveal, useMagnetic } from "../hooks/useMotion";
 import CryptographicNetworkGlobe from "./CryptographicNetworkGlobe";
 import HeroVault from "./HeroVault";
-
-// Sample test passwords for the interactive Entropy Analyzer
-const SAMPLE_SEEDS = [
-  "alpha-phoenix-982#delta",
-  "k9!Vektor$Vault_2026",
-  "neptune-spectral-77x",
-  "quantum_shield^4421",
-  "hyper-symmetric-vault#09"
-];
 
 // ============================================================================
 // HELPER COMPONENT: SpotlightCard
@@ -134,13 +120,6 @@ const LandingPage = ({ onOpenAuth }) => {
   const cipherHex = scrambledHex ?? defaultCipher;
 
   // --------------------------------------------------------------------------
-  // STATE: Live Password Entropy Simulator
-  // --------------------------------------------------------------------------
-  const [simPassword, setSimPassword] = useState("K9#vX92$qL1!mZ"); // Password being tested
-  const [showSimPassword, setShowSimPassword] = useState(false);    // Toggle eye icon (masked vs plain)
-  const [randomizeSpin, setRandomizeSpin] = useState(false);        // Button icon spin animation
-
-  // --------------------------------------------------------------------------
   // STATE: Architecture Pipeline Hover
   // --------------------------------------------------------------------------
   const [hoveredStage, setHoveredStage] = useState(null); // Stage 1, 2, or 3 hovered
@@ -148,7 +127,6 @@ const LandingPage = ({ onOpenAuth }) => {
   // --------------------------------------------------------------------------
   // MOTION HOOKS
   // --------------------------------------------------------------------------
-  const heroTiltRef = useTilt({ maxTilt: 7, scale: 1.015 });        // 3D tilt effect on card
   const primaryCtaRef = useMagnetic({ strength: 6, ease: 0.12 });     // Button pulled towards cursor
 
   // --------------------------------------------------------------------------
@@ -179,36 +157,6 @@ const LandingPage = ({ onOpenAuth }) => {
     navigator.clipboard.writeText(cipherHex);
     setCopiedCipher(true);
     setTimeout(() => setCopiedCipher(false), 2000);
-  };
-
-  // --------------------------------------------------------------------------
-  // ENTROPY CALCULATION (Information Theory - Shannon Bits)
-  // Calculates mathematical resistance against brute-force attacks:
-  // --------------------------------------------------------------------------
-  const entropyStats = useMemo(() => {
-    const len = simPassword.length;
-    let poolSize = 0;
-    if (/[a-z]/.test(simPassword)) poolSize += 26;        // Lowercase letters
-    if (/[A-Z]/.test(simPassword)) poolSize += 26;        // Uppercase letters
-    if (/[0-9]/.test(simPassword)) poolSize += 10;        // Numbers
-    if (/[^a-zA-Z0-9]/.test(simPassword)) poolSize += 32; // Special characters
-    if (poolSize === 0 || len === 0) return { bits: 0, label: "Empty", rating: "poor", percentage: 5 };
-
-    // Shannon Entropy formula: bits = length * log2(poolSize)
-    const bits = Math.round(len * (Math.log(poolSize) / Math.log(2)));
-    if (bits < 40) return { bits, label: "Weak", rating: "weak", percentage: 25 };
-    if (bits < 65) return { bits, label: "Moderate", rating: "moderate", percentage: 55 };
-    if (bits < 90) return { bits, label: "Strong", rating: "strong", percentage: 85 };
-    return { bits, label: "Optimal", rating: "optimal", percentage: 100 };
-  }, [simPassword]);
-
-  // Picks a random seed password for testing:
-  const randomizeSimPassword = () => {
-    setRandomizeSpin(true);
-    const available = SAMPLE_SEEDS.filter((s) => s !== simPassword);
-    const pick = available[Math.floor(Math.random() * available.length)] || SAMPLE_SEEDS[0];
-    setSimPassword(pick);
-    setTimeout(() => setRandomizeSpin(false), 500);
   };
 
   // ==========================================================================

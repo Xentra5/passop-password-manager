@@ -12,7 +12,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { encryptCredential, decryptCredential } from './cryptoVault';
+import { encryptCredential } from './cryptoVault';
 
 // BUG #8 FIX: Safety limits for import
 const MAX_IMPORT_FILE_SIZE_BYTES = 5 * 1024 * 1024; // 5 MB

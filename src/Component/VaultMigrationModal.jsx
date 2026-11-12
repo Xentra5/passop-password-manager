@@ -9,7 +9,6 @@ export default function VaultMigrationModal({
   passwordArray = [],
   onBulkImportSuccess,
   vaultKey,
-  token,
 }) {
   const [activeTab, setActiveTab] = useState('import'); // 'import' | 'export'
   const [parsedPreview, setParsedPreview] = useState([]);

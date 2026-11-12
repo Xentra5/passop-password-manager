@@ -1,4 +1,4 @@
-import { useState, useEffect, useId, useMemo, useRef, Fragment } from 'react'
+import { useState, useEffect, useId, useMemo, useCallback, useRef, Fragment } from 'react'
 import { ToastContainer, toast, Bounce } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { v4 as uuidv4 } from "uuid";
@@ -16,9 +16,9 @@ import { generatePassphrase } from '../utils/passphraseGenerator';
 // Set VITE_API_BASE_URL=https://your-domain.com/api/passwords in .env
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api/passwords"
 
-export const PRESET_TAGS = ['Personal', 'Work', 'Finance', 'Development', 'Social'];
+const PRESET_TAGS = ['Personal', 'Work', 'Finance', 'Development', 'Social'];
 
-export const getTagBadgeStyle = (tag) => {
+const getTagBadgeStyle = (tag) => {
   switch ((tag || '').toLowerCase()) {
     case 'finance':
       return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50';
@@ -34,7 +34,7 @@ export const getTagBadgeStyle = (tag) => {
   }
 };
 
-export const getPasswordAgeInfo = (item) => {
+const getPasswordAgeInfo = (item) => {
   if (!item) return null;
   const rawDate = item.updatedAt || item.history?.[0]?.changedAt || item.createdAt;
   if (!rawDate) {
@@ -222,10 +222,10 @@ const Manager = ({
     }
   }
 
-  const authHeaders = () => ({
+  const authHeaders = useCallback(() => ({
     Authorization: `Bearer ${token}`,
     "Content-Type": "application/json",
-  })
+  }), [token]);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value })
@@ -309,7 +309,7 @@ const Manager = ({
     return () => {
       isCancelled = true;
     }
-  }, [token, vaultKey, onUnauthorized])
+  }, [token, vaultKey, onUnauthorized, authHeaders])
 
   const generateStrongPassword = () => {
     const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-="
@@ -424,7 +424,9 @@ const Manager = ({
   const clearClipboardImmediately = async () => {
     try {
       await navigator.clipboard.writeText("")
-    } catch {}
+    } catch {
+      // Ignore clipboard write denial
+    }
     if (countdownIntervalRef.current) clearInterval(countdownIntervalRef.current)
     setCopiedKey(null)
     setClipboardCountdown(null)
@@ -458,7 +460,9 @@ const Manager = ({
             if (!navigator.clipboard.readText || (await navigator.clipboard.readText()) === text) {
               await navigator.clipboard.writeText("")
             }
-          } catch {}
+          } catch {
+            // Ignore clipboard access failure
+          }
           setClipboardCountdown(null)
           setClipboardClearedStatus(true)
           setTimeout(() => setClipboardClearedStatus(false), 2000)
