@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { exportToCSV, exportToEncryptedPassvault } from '../utils/vaultMigration';
+import { logAuditEvent, AUDIT_CATEGORIES, AUDIT_EVENT_TYPES } from '../utils/auditLogger';
 
 export default function VaultExportModal({
   isOpen,
   onClose,
   credentials = [],
   vaultKey = null,
+  userEmail = 'user',
 }) {
   const [isExporting, setIsExporting] = useState(false);
   const [statusMessage, setStatusMessage] = useState(null); // { type: 'success' | 'error', text: '' }
@@ -22,6 +24,13 @@ export default function VaultExportModal({
         throw new Error('Vault is locked. Unlock your vault before exporting an encrypted backup.');
       }
       await exportToEncryptedPassvault(credentials, vaultKey);
+      logAuditEvent(userEmail, {
+        type: AUDIT_EVENT_TYPES.EXPORT_VAULT,
+        title: 'Encrypted Vault Backup Exported',
+        description: `Exported ${count} credentials to encrypted .passvault backup file.`,
+        severity: 'success',
+        category: AUDIT_CATEGORIES.VAULT,
+      });
       setStatusMessage({
         type: 'success',
         text: `Successfully exported ${count} accounts to an encrypted .passvault backup!`,
@@ -44,6 +53,13 @@ export default function VaultExportModal({
     setStatusMessage(null);
     try {
       exportToCSV(credentials);
+      logAuditEvent(userEmail, {
+        type: AUDIT_EVENT_TYPES.EXPORT_VAULT,
+        title: 'Plain CSV Vault Exported',
+        description: `Exported ${count} credentials to unencrypted CSV spreadsheet.`,
+        severity: 'warning',
+        category: AUDIT_CATEGORIES.VAULT,
+      });
       setStatusMessage({
         type: 'success',
         text: `Successfully exported ${count} accounts to CSV spreadsheet!`,

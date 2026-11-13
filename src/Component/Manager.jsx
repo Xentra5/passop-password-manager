@@ -9,8 +9,10 @@ import { checkPasswordBreach, auditVaultSecurity } from '../utils/breachCheck';
 import PasswordGeneratorModal from './PasswordGeneratorModal';
 import VaultMigrationModal from './VaultMigrationModal';
 import PasswordHistoryModal from './PasswordHistoryModal';
+import AuditLogModal from './AuditLogModal';
 import { secureFetch } from '../utils/csrf';
 import { generatePassphrase } from '../utils/passphraseGenerator';
+import { logAuditEvent, AUDIT_CATEGORIES, AUDIT_EVENT_TYPES } from '../utils/auditLogger';
 
 // BUG #6 FIX: Use env variable so production deploys use HTTPS.
 // Set VITE_API_BASE_URL=https://your-domain.com/api/passwords in .env
@@ -174,6 +176,7 @@ const Manager = ({
   const [auditFilter, setAuditFilter] = useState('all')
   const [isGeneratorOpen, setIsGeneratorOpen] = useState(false)
   const [isMigrationOpen, setIsMigrationOpen] = useState(false)
+  const [isAuditLogOpen, setIsAuditLogOpen] = useState(false)
   const [selectedHistoryAccount, setSelectedHistoryAccount] = useState(null)
   const [credentialFormOpen, setCredentialFormOpen] = useState(false)
   const [deleteConfirmAccount, setDeleteConfirmAccount] = useState(null)
@@ -188,6 +191,15 @@ const Manager = ({
   const siteInputId = useId()
   const usernameInputId = useId()
   const passwordInputId = useId()
+
+  const userEmail = useMemo(() => {
+    try {
+      const stored = localStorage.getItem('passvault_user');
+      return stored ? JSON.parse(stored)?.email || 'user' : 'user';
+    } catch {
+      return 'user';
+    }
+  }, []);
 
   const searchSuggestions = useMemo(() => {
     const query = searchQuery.trim().toLowerCase()
@@ -439,6 +451,13 @@ const Manager = ({
   const copyToClipboard = (text, keyIdentifier, label) => {
     navigator.clipboard.writeText(text)
     setCopiedKey(keyIdentifier)
+    logAuditEvent(userEmail, {
+      type: label === "Password" ? AUDIT_EVENT_TYPES.COPY_PASSWORD : AUDIT_EVENT_TYPES.COPY_USERNAME,
+      title: `${label} Copied`,
+      description: `${label} copied to system clipboard.`,
+      severity: "info",
+      category: AUDIT_CATEGORIES.CLIPBOARD,
+    })
     toast.success(`${label} copied to clipboard`, {
       theme: "dark",
       autoClose: 1800,
@@ -596,6 +615,14 @@ const Manager = ({
             : [...previousPasswords, localPasswordRecord]
         )
 
+        logAuditEvent(userEmail, {
+          type: isEditing ? AUDIT_EVENT_TYPES.CREDENTIAL_UPDATE : AUDIT_EVENT_TYPES.CREDENTIAL_CREATE,
+          title: isEditing ? 'Credential Updated' : 'Credential Added',
+          description: `${isEditing ? 'Updated' : 'Added'} login record for "${localPasswordRecord.site}".`,
+          severity: 'success',
+          category: AUDIT_CATEGORIES.VAULT,
+        })
+
         toast.success(isEditing ? 'Credential updated!' : 'Credential secured in vault!', {
           theme: "dark",
           transition: Bounce,
@@ -695,6 +722,13 @@ const Manager = ({
       setPasswordArray(previousPasswords =>
         previousPasswords.filter(item => item.id !== id)
       )
+      logAuditEvent(userEmail, {
+        type: AUDIT_EVENT_TYPES.CREDENTIAL_DELETE,
+        title: 'Credential Deleted',
+        description: `Removed account "${deleteConfirmAccount.site || id}" from vault.`,
+        severity: 'warning',
+        category: AUDIT_CATEGORIES.VAULT,
+      })
       toast.info('Credential removed from vault', {
         theme: "dark",
         transition: Bounce,
@@ -1525,6 +1559,19 @@ const Manager = ({
                 <span>Import / Export</span>
               </button>
 
+              {/* Security & Access Audit Log Button */}
+              <button
+                type="button"
+                onClick={() => setIsAuditLogOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-md border border-[#d5d0c8] bg-white px-3 py-2 text-xs font-semibold text-[#4b5563] transition-all hover:border-[#176b87] hover:bg-[#f0f8fa] hover:text-[#176b87] active:scale-95"
+                title="View vault security & access audit log"
+              >
+                <svg className="h-3.5 w-3.5 text-cyan-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span>Audit Log</span>
+              </button>
+
               {/* Search Input Filter with Ctrl+K shortcut badge */}
               {passwordArray.length > 0 && (
                 <div className="relative w-full sm:w-72">
@@ -2115,7 +2162,13 @@ const Manager = ({
           passwordArray={passwordArray}
           onBulkImportSuccess={handleBulkImport}
           vaultKey={vaultKey}
-          token={token}
+        />
+
+        {/* Vault Security & Access Audit Log Modal */}
+        <AuditLogModal
+          isOpen={isAuditLogOpen}
+          onClose={() => setIsAuditLogOpen(false)}
+          userEmail={userEmail}
         />
 
         {/* Password Version History Modal */}

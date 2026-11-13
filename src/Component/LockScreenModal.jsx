@@ -7,6 +7,11 @@ import {
   getAutoLockTimeoutMinutes,
   setAutoLockTimeoutMinutes,
 } from '../utils/pinAuth';
+import {
+  logAuditEvent,
+  AUDIT_CATEGORIES,
+  AUDIT_EVENT_TYPES,
+} from '../utils/auditLogger';
 
 /**
  * SECURITY FIXES APPLIED:
@@ -124,6 +129,13 @@ export default function LockScreenModal({
 
       if (result.valid) {
         setLockoutSeconds(0);
+        logAuditEvent(userEmail, {
+          type: AUDIT_EVENT_TYPES.UNLOCK_PIN,
+          title: 'Vault Unlocked via PIN',
+          description: '4-digit Quick PIN entered successfully.',
+          severity: 'success',
+          category: AUDIT_CATEGORIES.AUTH,
+        });
         toast.success('Vault unlocked!', {
           theme: 'dark',
           transition: Bounce,
@@ -134,6 +146,13 @@ export default function LockScreenModal({
         setLockoutSeconds(result.secondsLeft || 30);
         setLockoutCycle(result.cycle || 1);
         setRemainingAttempts(0);
+        logAuditEvent(userEmail, {
+          type: AUDIT_EVENT_TYPES.LOCKOUT_TRIGGERED,
+          title: 'Keypad Lockout Enforced',
+          description: `Too many wrong PIN attempts. Keypad locked for ${result.secondsLeft || 30}s (tier #${result.cycle || 1}).`,
+          severity: 'danger',
+          category: AUDIT_CATEGORIES.SECURITY,
+        });
         toast.error(
           `🔒 Too many wrong attempts. Locked for ${result.secondsLeft || 30}s.`,
           { theme: 'dark', autoClose: 4000 }
@@ -141,6 +160,13 @@ export default function LockScreenModal({
         triggerErrorShake();
       } else {
         setRemainingAttempts(result.remainingAttempts ?? 5);
+        logAuditEvent(userEmail, {
+          type: AUDIT_EVENT_TYPES.FAILED_PIN,
+          title: 'Incorrect PIN Attempt',
+          description: `Failed PIN attempt entered. ${result.remainingAttempts} attempt(s) remaining.`,
+          severity: 'warning',
+          category: AUDIT_CATEGORIES.SECURITY,
+        });
         toast.error(
           `Incorrect PIN. ${result.remainingAttempts} attempt${result.remainingAttempts !== 1 ? 's' : ''} remaining.`,
           { theme: 'dark', autoClose: 1800 }
@@ -221,12 +247,27 @@ export default function LockScreenModal({
       // Success — reset MP failure counter
       setMpFailedAttempts(0);
       setMpLockoutSeconds(0);
+      logAuditEvent(userEmail, {
+        type: AUDIT_EVENT_TYPES.UNLOCK_MASTER,
+        title: 'Vault Unlocked via Master Password',
+        description: 'Account master password entered and verified.',
+        severity: 'success',
+        category: AUDIT_CATEGORIES.AUTH,
+      });
       onUnlock();
     } catch (err) {
       const message = err.message || 'Could not unlock the vault. Please try again.';
       setMasterPasswordError(message);
       toast.error(message, { theme: 'dark' });
       triggerErrorShake();
+
+      logAuditEvent(userEmail, {
+        type: AUDIT_EVENT_TYPES.FAILED_MASTER,
+        title: 'Failed Master Password Unlock',
+        description: 'Incorrect master password entered.',
+        severity: 'danger',
+        category: AUDIT_CATEGORIES.SECURITY,
+      });
 
       // Increment MP failure counter and enforce escalating lockout
       setMpFailedAttempts(prev => {

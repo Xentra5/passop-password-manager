@@ -4,11 +4,13 @@ import Auth from "./Component/Auth";
 import PasswordHistoryModal from "./Component/PasswordHistoryModal";
 import LockScreenModal from "./Component/LockScreenModal";
 import VaultExportModal from "./Component/VaultExportModal";
+import AuditLogModal from "./Component/AuditLogModal";
 import SiteLogo from "./Component/SiteLogo";
 import { encryptCredential, decryptCredential, encryptCustomFields, decryptCustomFields, clearCachedVaultKey } from "./utils/cryptoVault";
 import { secureFetch, setCsrfToken } from "./utils/csrf";
 import { getAutoLockTimeoutMinutes, setAutoLockTimeoutMinutes } from "./utils/pinAuth";
 import { checkPasswordBreach } from "./utils/breachCheck";
+import { logAuditEvent, AUDIT_CATEGORIES, AUDIT_EVENT_TYPES } from "./utils/auditLogger";
 
 const CATEGORIES = ["Personal", "Finance", "Work", "Developer"];
 const initialForm = { service: "", category: "Personal", username: "", password: "", note: "" };
@@ -73,6 +75,7 @@ function App() {
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authModalMode, setAuthModalMode] = useState("login");
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [isAuditLogOpen, setIsAuditLogOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [vaultError, setVaultError] = useState("");
@@ -260,6 +263,13 @@ function App() {
 
   const lockVault = useCallback(() => {
     if (!session.user) return;
+    logAuditEvent(session.user?.email, {
+      type: AUDIT_EVENT_TYPES.LOCK_VAULT,
+      title: 'Vault Locked',
+      description: 'Vault manually or automatically locked.',
+      severity: 'info',
+      category: AUDIT_CATEGORIES.AUTH,
+    });
     // Keep the in-memory key and decrypted records available for the
     // configured quick PIN. A PIN is only a local gate; it cannot recreate
     // a key that has already been discarded. A page refresh still clears
@@ -509,6 +519,13 @@ function App() {
       setCredentials((items) => editingId
         ? items.map((item) => item.id === id ? { ...item, ...form, site: payload.site, tag: payload.tag, history } : item)
         : [...items, { ...form, id, site: payload.site, tag: payload.tag, favorite: false, history: [] }]);
+      logAuditEvent(session.user?.email, {
+        type: editingId ? AUDIT_EVENT_TYPES.CREDENTIAL_UPDATE : AUDIT_EVENT_TYPES.CREDENTIAL_CREATE,
+        title: editingId ? 'Credential Updated' : 'Credential Added',
+        description: `${editingId ? 'Updated' : 'Added'} login record for "${form.service}".`,
+        severity: 'success',
+        category: AUDIT_CATEGORIES.VAULT,
+      });
       setCurrentPasswordConfirmation("");
       setNewPasswordConfirmation("");
       closeDrawer();
@@ -595,6 +612,13 @@ function App() {
       if (countdownIntervalRef.current) window.clearInterval(countdownIntervalRef.current);
 
       const isPassword = id.includes("password");
+      logAuditEvent(session.user?.email, {
+        type: isPassword ? AUDIT_EVENT_TYPES.COPY_PASSWORD : AUDIT_EVENT_TYPES.COPY_USERNAME,
+        title: isPassword ? 'Password Copied' : 'Credential Copied',
+        description: `${isPassword ? 'Password' : 'Value'} copied to clipboard.`,
+        severity: 'info',
+        category: AUDIT_CATEGORIES.CLIPBOARD,
+      });
       if (isPassword) {
         setClipboardClearedStatus(false);
         setClipboardCountdown(30);
@@ -642,6 +666,13 @@ function App() {
       const response = await secureFetch(`${API_BASE_URL}/${encodeURIComponent(id)}`, { method: "DELETE", headers: authHeaders() });
       if (!response.ok) throw new Error("The database could not delete this credential.");
       setCredentials((items) => items.filter((item) => item.id !== id));
+      logAuditEvent(session.user?.email, {
+        type: AUDIT_EVENT_TYPES.CREDENTIAL_DELETE,
+        title: 'Credential Deleted',
+        description: `Removed credential (ID: ${id}) from vault.`,
+        severity: 'warning',
+        category: AUDIT_CATEGORIES.VAULT,
+      });
     } catch (error) {
       setVaultError(error.message);
     }
@@ -676,6 +707,12 @@ function App() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
               <span>Export</span>
+            </button>
+            <button className="export-vault-button" onClick={() => setIsAuditLogOpen(true)} title="View vault security & access audit log">
+              <svg className="h-3.5 w-3.5 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2" style={{ display: 'inline', verticalAlign: 'text-bottom' }}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <span>Audit Log</span>
             </button>
             <button className="add-credential-button" onClick={openNewCredential}>Add credential <kbd>A</kbd></button>
             <button className="lock-vault-button" onClick={lockVault} title="Lock vault now">Lock</button>
@@ -818,6 +855,13 @@ function App() {
         onClose={() => setExportModalOpen(false)}
         credentials={credentials}
         vaultKey={vaultKey}
+        userEmail={session.user?.email || "user"}
+      />
+
+      <AuditLogModal
+        isOpen={isAuditLogOpen}
+        onClose={() => setIsAuditLogOpen(false)}
+        userEmail={session.user?.email || "user"}
       />
 
       {drawerOpen && <div className={`drawer-scrim${drawerClosing ? " is-closing" : ""}`} onMouseDown={(event) => { if (event.target === event.currentTarget) closeDrawer(); }}>
