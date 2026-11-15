@@ -3302,3 +3302,100 @@ html.dark ::-webkit-scrollbar-thumb:hover,
 .landing-page-view .landing-page [class*="bg-cyan-950"] { background-color: #201d2b !important; }
 .landing-page-view .landing-page [class*="border-[#ddd8d0]"],
 .landing-page-view .landing-page [class*="border-[#d5d0c8]"] { border-color: #302d3a !important; }
+
+/* ==========================================================================
+   Linear / Apple High-Performance Motion System for Modals & Overlays
+   GPU-composited transforms, spring deceleration, and zero layout shift
+   ========================================================================== */
+
+@keyframes audit-modal-spring {
+  0% {
+    opacity: 0;
+    transform: scale(0.96) translateY(16px);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+    filter: blur(0);
+  }
+}
+
+@keyframes audit-backdrop-fade {
+  from {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  to {
+    opacity: 1;
+    backdrop-filter: blur(20px);
+  }
+}
+
+@keyframes radar-sweep {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes radar-pulse {
+  0% {
+    transform: scale(0.85);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 0.15;
+  }
+  100% {
+    transform: scale(0.85);
+    opacity: 0.7;
+  }
+}
+
+@keyframes audit-row-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-audit-modal {
+  animation: audit-modal-spring 0.32s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity, filter;
+}
+
+.animate-audit-backdrop {
+  animation: audit-backdrop-fade 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: opacity, backdrop-filter;
+}
+
+.animate-radar-sweep {
+  animation: radar-sweep 4s linear infinite;
+  will-change: transform;
+}
+
+.animate-radar-pulse {
+  animation: radar-pulse 3s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-audit-modal,
+  .animate-audit-backdrop,
+  .animate-radar-sweep,
+  .animate-radar-pulse {
+    animation: none !important;
+    transform: none !important;
+    filter: none !important;
+    transition: none !important;
+  }
+}
+
