@@ -97,6 +97,9 @@ export async function deriveVaultKey(masterPassword, email, accountSalt = null) 
   // The randomSaltHex is generated once and stored in localStorage.
   const randomSaltHex = accountSalt || getStoredKdfSalt();
   if (!/^[a-f0-9]{32}$/i.test(randomSaltHex)) throw new Error('Invalid vault salt.');
+  if (typeof localStorage !== 'undefined') {
+    localStorage.setItem(SALT_STORAGE_KEY, randomSaltHex.toLowerCase());
+  }
   const combinedSalt = enc.encode(`passvault:kdf:v3:${email.toLowerCase().trim()}:${randomSaltHex.toLowerCase()}`);
 
   const vaultKey = await window.crypto.subtle.deriveKey(

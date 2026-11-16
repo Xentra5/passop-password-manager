@@ -6,7 +6,7 @@ import LockScreenModal from "./Component/LockScreenModal";
 import VaultExportModal from "./Component/VaultExportModal";
 import AuditLogModal from "./Component/AuditLogModal";
 import SiteLogo from "./Component/SiteLogo";
-import { encryptCredential, decryptCredential, encryptCustomFields, decryptCustomFields, clearCachedVaultKey } from "./utils/cryptoVault";
+import { encryptCredential, decryptCredential, encryptCustomFields, decryptCustomFields, clearCachedVaultKey, deriveVaultKey } from "./utils/cryptoVault";
 import { secureFetch, setCsrfToken } from "./utils/csrf";
 import { getAutoLockTimeoutMinutes, setAutoLockTimeoutMinutes } from "./utils/pinAuth";
 import { checkPasswordBreach } from "./utils/breachCheck";
@@ -284,7 +284,6 @@ function App() {
   // a page refresh. Validate the derived key against stored ciphertext before
   // unlocking; PBKDF2 can derive a key from any input, including a wrong one.
   const handleUnlockWithMasterPassword = useCallback(async (masterPassword) => {
-    const { deriveVaultKey } = await import("./utils/cryptoVault");
     const key = await deriveVaultKey(masterPassword, session.user.email, session.user.vaultSalt);
     let response;
     try {
