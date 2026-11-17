@@ -58,7 +58,13 @@ app.use(cookieParser());
 app.use(
   cors({
     origin: (origin, callback) => {
-      if (!origin || FRONTEND_ORIGINS.has(origin)) {
+      // Allow: no origin (curl/Postman), whitelisted frontend, Chrome/Firefox extensions
+      if (
+        !origin ||
+        FRONTEND_ORIGINS.has(origin) ||
+        origin.startsWith('chrome-extension://') ||
+        origin.startsWith('moz-extension://')
+      ) {
         callback(null, true);
         return;
       }
