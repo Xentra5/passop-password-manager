@@ -1,211 +1,340 @@
-# PassVault
+# 🛡️ PassVault — Enterprise-Grade Interactive Password Manager & Zero-Knowledge Vault
 
-A **zero-knowledge password manager** built with React + Express + MongoDB. All vault entries are encrypted in the browser using the Web Crypto API before they ever reach the server — the backend stores only ciphertext and never sees a plaintext password.
+[![React 19](https://img.shields.io/badge/React-19.2-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![Vite](https://img.shields.io/badge/Vite-8.0-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
+[![Tailwind CSS v4](https://img.shields.io/badge/Tailwind_CSS-v4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+[![Web Crypto API](https://img.shields.io/badge/WebCrypto-AES--256--GCM-007ACC?style=for-the-badge&logo=shield)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API)
+[![Chrome Extension](https://img.shields.io/badge/Manifest_V3-Chrome_%2F_Edge-E37400?style=for-the-badge&logo=googlechrome&logoColor=white)](https://developer.chrome.com/docs/extensions/develop)
+[![Three.js](https://img.shields.io/badge/Three.js-WebGL-black?style=for-the-badge&logo=three.js&logoColor=white)](https://threejs.org/)
+[![Lenis Scroll](https://img.shields.io/badge/Lenis-Smooth_Scroll-FF4500?style=for-the-badge)](https://lenis.darkroom.engineering/)
+[![Express](https://img.shields.io/badge/Express-5.2-000000?style=for-the-badge&logo=express&logoColor=white)](https://expressjs.com/)
+[![MongoDB](https://img.shields.io/badge/MongoDB-8.x-47A248?style=for-the-badge&logo=mongodb&logoColor=white)](https://www.mongodb.com/)
+[![Anti-CSRF Protected](https://img.shields.io/badge/Anti--CSRF-Double--Submit-blueviolet?style=for-the-badge&logo=security)](https://owasp.org/www-community/attacks/csrf)
 
----
-
-## ✨ Features
-
-### 🔐 Core Vault
-- **Zero-knowledge encryption** — AES-256-GCM encryption/decryption happens entirely in the browser. The server stores only opaque ciphertext.
-- **PBKDF2 key derivation** — 600,000 iterations of SHA-256 (NIST SP 800-132 2023 recommendation) derives a vault key from your master password + email + a random per-user salt.
-- **Non-extractable vault key** — The derived `CryptoKey` lives only in React state (RAM). A page refresh requires master password re-entry.
-- **Credential management** — Create, edit, delete, favorite, tag, and search credentials. Supports custom fields and secure notes.
-- **Password history** — Full revision history per credential with timestamps.
-
-### 🛡️ Security & Access
-- **4-digit PIN unlock** — Quick vault unlock without re-entering your full master password, with escalating lockout on failed attempts (5 s → 30 s → 2 min → 10 min).
-- **Inactivity auto-lock** — Vault locks automatically after a configurable idle timeout.
-- **Vault Security & Access Audit Log** — Chronological activity trail: unlocks, clipboard copies, failed PIN attempts, exports. JSON export supported.
-- **Brute-force protection** — Rate-limited auth endpoints; bcrypt cost factor configurable via env.
-- **HTTP security headers** — Helmet.js (CSP, clickjacking protection, MIME sniffing prevention).
-- **CSRF protection** — Double-submit cookie pattern on all state-changing requests.
-
-### 🧰 Utilities
-- **Password & passphrase generator** — Configurable length, symbols, digits, and word-based passphrases.
-- **Vault health audit** — Flags weak, reused, and old passwords at a glance.
-- **Have I Been Pwned integration** — Range API check: only a 5-char SHA-1 prefix is sent; suffix matching happens locally.
-- **CSV import** — Import credentials from Bitwarden, 1Password, LastPass, and generic CSV exports.
-- **Encrypted JSON export** — Full vault export and re-import with format validation.
-- **Vault migration** — Upgrade legacy credential formats in-place.
-
-### 🔗 PassVault Send
-- **Encrypted one-time secret sharing** — Generate expiring, view-limited secret links. The decryption key lives only in the URL fragment (#) — the server never sees it.
-
-### 🌐 Browser Extension *(Manifest V3)*
-- **Auto-fill on any website** — The extension detects login forms and fills username + password with one click.
-- **Domain-aware matching** — Credentials are filtered to the current tab's domain.
-- **Session-scoped vault key** — Stored in `chrome.storage.session` (auto-cleared on browser close, invisible to web pages).
-- Works in Chrome and Edge.
+An enterprise-grade, zero-knowledge, full-stack password security vault, browser extension, and high-performance interactive web application. Engineered with **React 19**, **WebCrypto AES-256-GCM**, **Manifest V3 Browser Extension**, **Three.js**, **Express 5**, and **MongoDB**, featuring **Linear/Raycast-inspired obsidian glass design**, client-side cryptographic isolation, real-time breach detection, encrypted one-time secret sharing, and a comprehensive security audit telemetry system.
 
 ---
 
-## 🏗️ Tech Stack
+## 🚀 Key Milestones & Features
 
-| Layer | Technology |
+PassVault delivers defense-in-depth, zero-knowledge password protection across both web and browser extension platforms:
+
+### 1. 🔐 Client-Side Zero-Knowledge Encryption (`cryptoVault.js`)
+- **Web Crypto API (SubtleCrypto)**: All encryption and decryption occurs strictly in the browser. The backend API only ever handles opaque ciphertext (`enc:v2:...`).
+- **PBKDF2 Key Derivation**: 600,000 iterations of SHA-256 (NIST SP 800-132 2023 standard) combined with a random per-user salt and normalized email.
+- **Non-Extractable Keys**: `CryptoKey` instances are instantiated with `extractable: false` and reside **exclusively in RAM** (React state). Never saved to `localStorage` or `sessionStorage`.
+- **AES-256-GCM**: Industry-standard authenticated encryption with random 96-bit IVs and 128-bit authentication tags per credential.
+
+### 2. 🧩 Manifest V3 Browser Extension (`extension/`)
+- **Automatic Form Detection**: Injected content script automatically detects login forms (`<input type="password">` + username/email inputs) with React/Vue/Angular synthetic event dispatch.
+- **Domain-Aware Matching**: Filters vault credentials to match the current tab's hostname in real time.
+- **1-Click Auto-Fill**: Injects username and decrypted password straight into page input fields.
+- **Secure Key Lifecycle**: Vault key is derived and stored in `chrome.storage.session` (in-memory, auto-cleared when browser closes, completely isolated from web pages).
+- **Obsidian Dark Theme**: Designed to match the web app's aesthetics with quick search, copy-to-clipboard, and manual lock controls.
+
+### 3. 📋 Vault Security & Access Audit Log (`AuditLogModal.jsx`, `auditLogger.js`)
+- **Tamper-Evident Chronological Activity Trail**: Tracks critical security events in real-time:
+  - 🔓 Vault unlocks via Master Password and 4-digit PIN
+  - 📋 Passwords and secrets copied to clipboard
+  - ⚠️ Failed PIN unlock attempts recorded
+  - 📦 Vault export and migration actions
+  - 🔗 PassVault Send creation and revocations
+- **Linear/Raycast Glassmorphism UI**: Obsidian dark glass interface with telemetry counters, filter tabs, interactive radar sonar empty state, and 1-click JSON export.
+
+### 4. ⚡ PassVault Send — Ephemeral Secret Sharing (`VaultSendModal.jsx`, `VaultSendViewer.jsx`)
+- **Zero-Knowledge Disposable Links**: Share sensitive credentials and secure notes via self-destructing links.
+- **URL Fragment Key**: The 256-bit AES-GCM decryption key is embedded solely in the URL fragment (`#key=...`) — the server never receives it.
+- **Burn-After-Reading & Quotas**: Configurable view limits (1 to 100 views) and expiration windows (1 minute to 7 days).
+- **Passphrase Challenge**: Optional secondary passphrase protection verified using local SHA-256 challenge.
+
+### 5. 🛡️ Privacy-Preserving Breach Detection (`breachCheck.js`, `VaultSecurityAudit.jsx`)
+- **k-Anonymity Model**: Direct integration with HaveIBeenPwned API. Only the first 5 characters of the SHA-1 password hash are sent over the wire; the remaining 35 characters are compared locally in the client.
+- **Audit Scoring**: Live grade (A+ through F) identifying compromised, reused, weak, and stale (>90 days) credentials.
+
+### 6. ⏱️ Inactivity Auto-Lock & Escalating PIN Defense (`LockScreenModal.jsx`, `pinAuth.js`)
+- **Idle Detection**: Monitors mouse movement, keyboard strokes, wheel events, and tab visibility changes.
+- **4-Digit Quick PIN**: Fast re-authentication without retyping long master passwords.
+- **Escalating Lockout**: Progressive brute-force defense (5s → 30s → 2min → 10min lockout backoff).
+
+### 7. 🎲 Diceware Passphrase & Password Generator (`PasswordGeneratorModal.jsx`, `passphraseGenerator.js`)
+- **Cryptographic Random Passwords**: Configurable length, symbols, digits, and ambiguous character filtering.
+- **Memorable Diceware Passphrases**: Multi-word dictionary passphrases with custom delimiters and capitalization.
+- **Shannon Entropy Engine**: Real-time bit strength and offline crack-time visualization.
+
+### 8. 🔄 1-Click Vault Migration & Import/Export (`VaultMigrationModal.jsx`, `vaultMigration.js`)
+- **Universal Importer**: Seamlessly parse CSV exports from Chrome, Firefox, Bitwarden, 1Password, and Dashlane.
+- **Zero-Knowledge Encrypted Export**: Export your entire vault as a passphrase-protected encrypted `.json` file or plaintext CSV/JSON.
+
+---
+
+## 🏛️ Cryptographic Architecture
+
+```mermaid
+flowchart TD
+    subgraph Client ["Client Browser / Extension (SubtleCrypto)"]
+        MP["User Master Password"] --> KDF["PBKDF2 Key Derivation\n(600,000 Iterations / SHA-256 / 128-bit Salt)"]
+        KDF --> Key["Non-Extractable CryptoKey\n(AES-256-GCM in RAM Only)"]
+        
+        RawCred["Plaintext Credentials\n(Passwords, Custom Fields, Notes)"] --> EncryptEngine["WebCrypto AES-256-GCM\n(Random 96-bit IV)"]
+        Key --> EncryptEngine
+        EncryptEngine --> Ciphertext["Ciphertext Payload\n(enc:v2:iv:ciphertext)"]
+    end
+
+    subgraph Network ["Transport Layer (HTTPS)"]
+        Ciphertext -->|"POST /api/passwords (X-CSRF-Token + HttpOnly Cookie)"| Transport["TLS 1.3 Transport"]
+    end
+
+    subgraph Backend ["Server & Database Layer"]
+        Transport --> Node["Node.js / Express API\n(Blind Ingestion - No Plaintext)"]
+        Node --> Mongo[("MongoDB Document Store\n(Scoped per userId)")]
+    end
+```
+
+### k-Anonymity Breach Detection Workflow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Client Browser
+    participant HIBP as HaveIBeenPwned API
+    
+    User->>User: Compute SHA-1(Password) locally via WebCrypto
+    Note over User: Hash: 5BAA61E4C9B93F3F0682250B6CF8331B7EE68FD8
+    User->>HIBP: GET /range/5BAA6 (Only first 5 hex characters)
+    HIBP-->>User: Returns ~800 hash suffixes matching prefix
+    User->>User: Checks if remaining 35 characters match any suffix locally
+    Note over User: Password and full hash NEVER leave the browser!
+```
+
+---
+
+## 🛠️ Tech Stack & Architecture
+
+### Frontend
+| Technology | Role |
 |---|---|
-| Frontend | React 18, Vite 8, Tailwind CSS |
-| Crypto | Web Crypto API (SubtleCrypto) — PBKDF2 + AES-256-GCM |
-| Backend | Node.js, Express 5 |
-| Database | MongoDB (via native driver) |
-| Auth | JWT (HttpOnly cookie) + CSRF double-submit |
-| Extension | Manifest V3, Chrome Storage Session API |
+| **React 19.2** | UI component architecture and modern hooks (`useActionState`, `useMemo`, `useId`) |
+| **Vite 8.0** | High-performance bundling and instant HMR development server |
+| **Tailwind CSS v4** | Modern utility-first styling with design tokens and dark mode support |
+| **Web Crypto API** | Native in-browser AES-256-GCM encryption and PBKDF2 key derivation |
+| **Three.js** | 3D WebGL cryptographic particle globe visualizer |
+| **Lenis** | Inertial smooth scrolling with `prefers-reduced-motion` compliance |
+| **GSAP** | Fluid motion interpolation and spring physics |
+| **Phosphor Icons** | Clean, minimalist icon system |
+| **React Toastify** | Accessible, toast feedback notifications |
+| **UUID (v4)** | Unique client-side record key generation |
 
----
-
-## 🚀 Run Locally
-
-You need two terminals and a running MongoDB instance.
-
-### Prerequisites
-- Node.js 20+
-- MongoDB (local at `127.0.0.1:27017` or a hosted URI)
-
----
-
-### 1 — Start MongoDB
-
-```sh
-# Example: local mongod (adjust --dbpath as needed)
-mongod --dbpath ./mongodb_data --bind_ip 127.0.0.1 --port 27017
-```
-
----
-
-### 2 — Start the Backend API
-
-```sh
-cd backend
-npm install
-```
-
-Create `backend/.env`:
-
-```env
-MONGO_URL=mongodb://127.0.0.1:27017/passOP
-DB_NAME=passOP
-PORT=3000
-CORS_ORIGIN=http://localhost:5173
-JWT_SECRET=replace-with-a-long-random-secret
-VAULT_ENCRYPTION_KEY=replace-with-a-separate-random-secret
-NODE_ENV=development
-BCRYPT_ROUNDS=12
-```
-
-> **Never commit `.env` files.** Use unique, randomly generated secrets in production.
-
-Start the server:
-
-```sh
-node server.js
-```
-
-Health check: `http://localhost:3000/health`
-
----
-
-### 3 — Start the Frontend
-
-In a second terminal from the **project root**:
-
-```sh
-npm install
-```
-
-Create a root `.env` file:
-
-```env
-VITE_AUTH_API_URL=http://localhost:3000/api/auth
-VITE_API_BASE_URL=http://localhost:3000/api/passwords
-VITE_SENDS_API_URL=http://localhost:3000/api/sends
-```
-
-Start the dev server:
-
-```sh
-npm run dev
-```
-
-Open `http://localhost:5173` in your browser.
-
----
-
-### 4 — Load the Browser Extension *(optional)*
-
-1. Open `chrome://extensions` (or `edge://extensions`)
-2. Enable **Developer mode**
-3. Click **Load unpacked**
-4. Select the `extension/` folder inside this project
-5. Click the **PassVault** icon in your toolbar, sign in with your email + master password, then visit any site with saved credentials and click **Fill**
-
-See [`extension/README_EXTENSION.md`](extension/README_EXTENSION.md) for detailed extension docs and security model.
-
----
-
-## 🧪 Commands
-
-### Frontend *(run from project root)*
-
-| Command | Description |
+### Browser Extension
+| Technology | Role |
 |---|---|
-| `npm run dev` | Start the Vite development server |
-| `npm run build` | Build into `dist/` for production |
-| `npm run preview` | Preview the production build locally |
-| `npm run lint` | Run ESLint across the whole project |
+| **Manifest V3** | Chrome & Edge extension standard |
+| **Service Worker (`background.js`)** | Zero-knowledge decryption, session vault key derivation, fill routing |
+| **Content Script (`content.js`)** | DOM login form detection, synthetic event firing for React/Vue inputs |
+| **Session Storage API** | In-memory key storage isolated to extension process |
 
-### Backend *(run from `backend/`)*
-
-| Command | Description |
+### Backend & Database
+| Technology | Role |
 |---|---|
-| `node server.js` | Start the API server |
-| `npm run dev` | Start with auto-reload (if nodemon configured) |
+| **Node.js & Express 5** | High-throughput asynchronous REST API service |
+| **MongoDB Native Driver** | Scalable document store with connection pooling and compound indexes |
+| **Double-Submit Anti-CSRF** | Custom CSRF verification middleware matching `XSRF-TOKEN` cookie to headers |
+| **jsonwebtoken (JWT)** | Stateless bearer token and session authorization via HttpOnly cookies |
+| **bcryptjs** | Adaptive password hashing with 12 salt rounds for master user accounts |
+| **Helmet & Compression** | Security headers (CSP, frameguard) and gzip payload compression |
+| **express-rate-limit** | Anti-brute-force rate limiting on authentication routes |
 
 ---
 
-## 🔒 Security Model
-
-| Concern | Approach |
-|---|---|
-| **Vault encryption** | AES-256-GCM, browser-only. Server stores ciphertext exclusively. |
-| **Key derivation** | PBKDF2 · 600k iterations · SHA-256 · per-user random salt (server-stored) |
-| **Vault key persistence** | Never written to `localStorage` or `sessionStorage`. Lives in React state (RAM) only. |
-| **Authentication** | JWT in an HttpOnly cookie (7-day expiry). Never accessible to JS. |
-| **CSRF** | Double-submit cookie: `XSRF-TOKEN` cookie + `X-CSRF-Token` request header. |
-| **Extension key storage** | Raw key bytes stored in `chrome.storage.session` — session-scoped, auto-cleared on browser close, extension-sandboxed. |
-| **HIBP check** | k-Anonymity range API — only the first 5 hex chars of a SHA-1 hash are sent; matching done locally. |
-| **PassVault Send** | Decryption key lives only in the URL fragment (`#key=…`). Server never receives it. Links expire after a configured view count or TTL. |
-| **HTTP headers** | Helmet.js — CSP, X-Frame-Options, X-Content-Type-Options, HSTS (production). |
-| **Rate limiting** | Auth endpoints rate-limited to prevent brute-force login attacks. |
-| **Input sanitization** | Dangerous HTML characters stripped server-side before DB writes. |
-| **Body size limit** | JSON body capped at 200 KB — a password manager never needs large payloads. |
-
-> **Deployment checklist**: HTTPS on both frontend and API, `CORS_ORIGIN` set to exact production origin, MongoDB access restricted, `JWT_SECRET` and `VAULT_ENCRYPTION_KEY` rotated per environment, `NODE_ENV=production`.
-
----
-
-## 📁 Project Structure
+## 📁 Repository Structure
 
 ```
 PasswordProject/
-├── backend/              Express API + MongoDB
-│   ├── server.js         Main server (auth, passwords, sends, CSRF, rate limiting)
-│   └── .env              Backend secrets (not committed)
-├── extension/            Manifest V3 Chrome/Edge extension
-│   ├── manifest.json
-│   ├── background.js     Service worker — auth proxy, crypto, fill router
-│   ├── content.js        Page script — form detection & autofill
-│   ├── popup.html/js/css Extension popup UI
-│   └── icons/            16×16 → 128×128 PNGs
+├── backend/
+│   ├── .env.example              # Sample backend configuration
+│   ├── package.json              # Express & MongoDB dependencies
+│   └── server.js                 # API routes, auth, anti-CSRF, crypto fallback & DB indexes
+├── extension/                    # Manifest V3 Chrome/Edge Extension
+│   ├── manifest.json             # Extension manifest & permissions
+│   ├── background.js             # Service worker: auth proxy & zero-knowledge decryption
+│   ├── content.js                # Injected script: form detection & credential auto-fill
+│   ├── popup.html/js/css         # Extension obsidian glass popup UI
+│   ├── README_EXTENSION.md       # Extension setup and architecture guide
+│   └── icons/                    # Extension icon assets (16x16 to 128x128)
 ├── src/
-│   ├── Component/        React UI components
-│   └── utils/            cryptoVault.js, auditLogger, csrf, pinAuth, …
-├── public/
-├── .env                  Frontend Vite env vars (not committed)
+│   ├── assets/                   # Vector logos, monograms & security visual assets
+│   ├── Component/
+│   │   ├── AuditLogModal.jsx     # Security & access audit log with live timeline
+│   │   ├── Auth.jsx              # Master registration & login modal with key derivation
+│   │   ├── CryptographicNetworkGlobe.jsx  # Three.js 3D interactive particle globe
+│   │   ├── Footer.jsx            # App footer with telemetry status signals
+│   │   ├── LandingPage.jsx       # Linear-style interactive showcase & live cipher sandbox
+│   │   ├── LockScreenModal.jsx   # Inactivity lock screen with 4-digit PIN unlock
+│   │   ├── Manager.jsx           # Vault manager (CRUD, search, tags, custom fields, logos)
+│   │   ├── NavBar.jsx            # Responsive navigation, theme toggle & session controls
+│   │   ├── PassVaultLogo.jsx     # Geometric brand monogram and wordmark
+│   │   ├── PasswordGeneratorModal.jsx # Passphrase & custom entropy generator modal
+│   │   ├── PasswordHistoryModal.jsx   # Zero-knowledge credential version history & restore
+│   │   ├── SiteLogo.jsx          # Domain logo resolution engine with dual fallback
+│   │   ├── VaultDefenseExperience.jsx # Interactive cryptographic audit & defense shield
+│   │   ├── VaultExportModal.jsx  # Encrypted vault backup and export modal
+│   │   ├── VaultMigrationModal.jsx    # CSV/JSON import, export & bulk migration modal
+│   │   ├── VaultSecurityAudit.jsx     # HaveIBeenPwned breach detection & health scoring
+│   │   ├── VaultSendModal.jsx         # PassVault Send creator & active links manager
+│   │   └── VaultSendViewer.jsx        # Public decryption viewer for one-time shared secrets
+│   ├── hooks/
+│   │   ├── useAutoLock.js        # Inactivity tracking and session lock lifecycle hook
+│   │   ├── useMotion.js          # Spotlight, Tilt, ScrollReveal & Magnetic physics hooks
+│   │   └── useSmoothScroll.js    # Lenis inertial scroll integration
+│   ├── utils/
+│   │   ├── auditLogger.js        # Audit trail persistence and telemetry logging
+│   │   ├── breachCheck.js        # Privacy-preserving k-Anonymity HIBP breach client
+│   │   ├── cryptoVault.js        # WebCrypto AES-256-GCM & PBKDF2 (600k rounds) engine
+│   │   ├── csrf.js               # Double-Submit anti-CSRF client utility & secureFetch
+│   │   ├── passphraseGenerator.js# Diceware wordlist & cryptographic entropy generator
+│   │   ├── pinAuth.js            # PIN hashing, lockout tracking & timeout persistence
+│   │   └── vaultMigration.js     # CSV/JSON parsers, XSS sanitizer & RFC 4180 exporter
+│   ├── App.jsx                   # Central controller, session orchestrator & views
+│   ├── index.css                 # Tailwind tokens, keyframes & glassmorphism utilities
+│   └── main.jsx                  # React 19 application entry point
+├── index.html
+├── package.json
+├── tailwind.config.js
 └── vite.config.js
 ```
 
 ---
 
+## ⚡ Getting Started
+
+### Prerequisites
+- **Node.js**: v18.0.0 or later (v20+ recommended)
+- **MongoDB**: Local MongoDB instance (`mongodb://127.0.0.1:27017`) or MongoDB Atlas URI
+- **Google Chrome** or **Microsoft Edge** (for the extension)
+
+---
+
+### 1. Backend Setup
+
+1. Open a terminal and navigate to the backend directory:
+   ```bash
+   cd PasswordProject/backend
+   npm install
+   ```
+
+2. Configure environment variables in `backend/.env`:
+   ```env
+   MONGO_URL=mongodb://127.0.0.1:27017/passOP
+   DB_NAME=passOP
+   PORT=3000
+   CORS_ORIGIN=http://localhost:5173
+   JWT_SECRET=your-super-strong-jwt-secret-key-here
+   VAULT_ENCRYPTION_KEY=your-32-byte-hex-encryption-key-here
+   NODE_ENV=development
+   BCRYPT_ROUNDS=12
+   ```
+
+3. Start the backend service:
+   ```bash
+   node server.js
+   ```
+   The backend API will run on `http://localhost:3000` (Health check: `http://localhost:3000/health`).
+
+---
+
+### 2. Frontend Setup
+
+1. In a second terminal, navigate to the frontend directory:
+   ```bash
+   cd PasswordProject
+   npm install
+   ```
+
+2. Configure environment variables in root `.env`:
+   ```env
+   VITE_AUTH_API_URL=http://localhost:3000/api/auth
+   VITE_API_BASE_URL=http://localhost:3000/api/passwords
+   VITE_SENDS_API_URL=http://localhost:3000/api/sends
+   ```
+
+3. Launch the Vite development server:
+   ```bash
+   npm run dev
+   ```
+
+4. Open your browser and navigate to:
+   ```
+   http://localhost:5173
+   ```
+
+---
+
+### 3. Load the Browser Extension (Chrome / Edge)
+
+1. Open your browser and navigate to `chrome://extensions` (or `edge://extensions`).
+2. Toggle on **Developer mode** in the upper-right corner.
+3. Click **Load unpacked** and select the folder:
+   ```
+   PasswordProject/extension
+   ```
+4. Click the PassVault extension icon in your toolbar, log in with your email and master password, and navigate to any site to auto-fill credentials!
+
+---
+
+## 📡 API Reference
+
+All mutating routes (`POST`, `PUT`, `DELETE`) enforce **Double-Submit Anti-CSRF protection** requiring an `X-CSRF-Token` header matching the `XSRF-TOKEN` cookie. Authenticated endpoints use **HttpOnly session cookies** (with fallback to `Authorization: Bearer <token>`).
+
+### 1. Authentication & Session Endpoints
+| Method | Route | Description | Auth Required | CSRF Required |
+|---|---|---|:---:|:---:|
+| `GET` | `/api/csrf-token` | Issue or refresh Double-Submit CSRF cookie & token | ❌ | ❌ |
+| `POST` | `/api/auth/register` | Register new master account (≥12 char password) | ❌ | ✅ |
+| `POST` | `/api/auth/login` | Authenticate and issue HttpOnly session cookie | ❌ | ✅ |
+| `GET` | `/api/auth/me` | Verify active session on page reload | ✅ | ❌ |
+| `POST` | `/api/auth/logout` | Clear session and anti-CSRF cookies | ❌ | ✅ |
+
+### 2. Password Vault Endpoints
+| Method | Route | Description | Auth Required | CSRF Required |
+|---|---|---|:---:|:---:|
+| `GET` | `/api/passwords` | Retrieve all encrypted vault items for user | ✅ | ❌ |
+| `POST` | `/api/passwords` | Add new credential item (`enc:v2:...` ciphertext) | ✅ | ✅ |
+| `POST` | `/api/passwords/bulk` | Bulk import credentials from CSV/JSON | ✅ | ✅ |
+| `PUT` | `/api/passwords/:id` | Update credential, tags, custom fields, history | ✅ | ✅ |
+| `DELETE` | `/api/passwords/:id` | Delete a vault record by ID | ✅ | ✅ |
+
+### 3. PassVault Send Endpoints
+| Method | Route | Description | Auth Required | CSRF Required |
+|---|---|---|:---:|:---:|
+| `POST` | `/api/sends` | Create a new encrypted one-time secret | Optional | ✅ |
+| `GET` | `/api/sends/meta/:id` | Check secret metadata (remaining views, expiration) | ❌ | ❌ |
+| `POST` | `/api/sends/reveal/:id` | Reveal secret (verifies passphrase & burns) | ❌ | ✅ |
+| `GET` | `/api/sends/my` | List active secrets created by current user | ✅ | ❌ |
+| `DELETE` | `/api/sends/:id` | Sender manually revokes/burns secret | ✅ | ✅ |
+
+### 4. Utility Endpoints
+| Method | Route | Description | Auth Required | CSRF Required |
+|---|---|---|:---:|:---:|
+| `GET` | `/health` | Server liveness check (`{ ok: true }`) | ❌ | ❌ |
+| `GET` | `/api/logo` | Resolve brand logo URL from domain query | ❌ | ❌ |
+| `GET` | `/api/logo/popular` | Curated list of popular platform metadata | ❌ | ❌ |
+
+---
+
+## 🔒 Enterprise Security & Defense Model
+
+PassVault is engineered with zero-trust architectural principles:
+
+1. **Zero-Knowledge Core**: Plaintext passwords, notes, and custom fields never leave the client's browser. Encryption occurs before any network transmission using standard WebCrypto APIs.
+2. **600,000 PBKDF2 Iterations**: Meets NIST SP 800-132 recommendations, providing heavy defense against GPU-accelerated offline dictionary and rainbow table attacks.
+3. **Non-Extractable Keys**: CryptoKey objects are instantiated with `extractable: false`, preventing external scripts or extensions from reading raw key bytes out of browser memory.
+4. **Anti-CSRF Double-Submit**: State changes require an authenticated cryptographic header token matching an unforgeable cookie verified via constant-time byte comparisons (`crypto.timingSafeEqual`).
+5. **HttpOnly Cookie Storage**: Authentication tokens are isolated in HttpOnly, SameSite cookies to protect against script-based token theft (XSS exfiltration).
+6. **Input Sanitization**: CSV imports and user inputs are strictly validated and stripped of executable tags and control characters to prevent Stored XSS.
+7. **Scoped Data Isolation**: MongoDB queries strictly filter by `userId`, enforcing multi-tenant isolation across all vault operations.
+8. **Rate Limiting & Defense**: Auth routes are capped to prevent credential stuffing; 200KB payload limits block memory flooding.
+
+---
+
 ## 📄 License
 
-ISC — see `package.json` for metadata.
+Distributed under the **ISC License**. See `package.json` for details.
