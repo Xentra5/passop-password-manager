@@ -5,6 +5,7 @@ import PasswordHistoryModal from "./Component/PasswordHistoryModal";
 import LockScreenModal from "./Component/LockScreenModal";
 import VaultExportModal from "./Component/VaultExportModal";
 import AuditLogModal from "./Component/AuditLogModal";
+import EmergencyKitModal from "./Component/EmergencyKitModal";
 import SiteLogo from "./Component/SiteLogo";
 import { encryptCredential, decryptCredential, encryptCustomFields, decryptCustomFields, clearCachedVaultKey, deriveVaultKey } from "./utils/cryptoVault";
 import { secureFetch, setCsrfToken } from "./utils/csrf";
@@ -76,6 +77,7 @@ function App() {
   const [authModalMode, setAuthModalMode] = useState("login");
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [isAuditLogOpen, setIsAuditLogOpen] = useState(false);
+  const [emergencyKitOpen, setEmergencyKitOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [vaultError, setVaultError] = useState("");
@@ -713,6 +715,12 @@ function App() {
               </svg>
               <span>Audit Log</span>
             </button>
+            <button className="export-vault-button" onClick={() => setEmergencyKitOpen(true)} title="Print or view 24-word Emergency Vault Recovery Kit">
+              <svg className="h-3.5 w-3.5 inline mr-1 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.2" style={{ display: 'inline', verticalAlign: 'text-bottom' }}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
+              <span>Emergency Kit</span>
+            </button>
             <button className="add-credential-button" onClick={openNewCredential}>Add credential <kbd>A</kbd></button>
             <button className="lock-vault-button" onClick={lockVault} title="Lock vault now">Lock</button>
             <span className="profile-button" aria-label={`Signed in as ${session.user?.name || session.user?.email}`} title={session.user?.email}><span className="profile-dot" aria-hidden="true">●</span><span className="profile-label">{session.user?.name || session.user?.email}</span></span>
@@ -861,6 +869,13 @@ function App() {
         isOpen={isAuditLogOpen}
         onClose={() => setIsAuditLogOpen(false)}
         userEmail={session.user?.email || "user"}
+      />
+
+      <EmergencyKitModal
+        isOpen={emergencyKitOpen}
+        onClose={() => setEmergencyKitOpen(false)}
+        userEmail={session.user?.email || "user@example.com"}
+        vaultSalt={session.user?.vaultSalt || ""}
       />
 
       {drawerOpen && <div className={`drawer-scrim${drawerClosing ? " is-closing" : ""}`} onMouseDown={(event) => { if (event.target === event.currentTarget) closeDrawer(); }}>

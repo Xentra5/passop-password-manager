@@ -65,6 +65,13 @@ PassVault delivers defense-in-depth, zero-knowledge password protection across b
 - **Universal Importer**: Seamlessly parse CSV exports from Chrome, Firefox, Bitwarden, 1Password, and Dashlane.
 - **Zero-Knowledge Encrypted Export**: Export your entire vault as a passphrase-protected encrypted `.json` file or plaintext CSV/JSON.
 
+### 9. 📄 Printable Emergency Vault Recovery Kit (`EmergencyKitModal.jsx`, `recoveryKit.js`)
+- **BIP-39 24-Word Cryptographic Mnemonic**: Generates a standard 256-bit emergency recovery key with an 8-bit SHA-256 checksum across 2,048 English words.
+- **1-Page Printable PDF Emergency Sheet**: Clean, high-contrast, executive layout with `@media print` styling for standard A4/Letter paper or saving directly to PDF. Includes warning notices, account salt, QR code, and signature/date lines.
+- **Offline Setup & Zero-Knowledge Vault Wrapping**: Encrypts the raw vault key into a rescue ciphertext blob (`rec:v1:...`) with PBKDF2 (100k rounds) before saving to the server.
+- **Full Account Recovery Workflow**: Reset master password and restore vault access without data loss via the "Forgot Master Password? Recover with Emergency Kit" flow on the login screen.
+- **Interactive Checksum Verification**: Test and verify printed recovery words inside the app before physical archiving.
+
 ---
 
 ## 🏛️ Cryptographic Architecture

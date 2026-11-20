@@ -413,6 +413,162 @@ app.post('/api/auth/logout', (req, res) => {
   res.json({ success: true, message: 'Logged out successfully' });
 });
 
+// ─── Emergency Recovery Kit Endpoints ────────────────────────────────────────
+
+// PUT /api/auth/emergency-kit: Stores or updates the encrypted rescue blob on user account
+app.put('/api/auth/emergency-kit', authenticateToken, async (req, res) => {
+  try {
+    const rescueBlob = typeof req.body?.emergencyRescueBlob === 'string'
+      ? req.body.emergencyRescueBlob.trim()
+      : null;
+
+    if (!rescueBlob || !rescueBlob.startsWith('rec:v1:') || rescueBlob.length < 30 || rescueBlob.length > 5000) {
+      return res.status(400).json({ success: false, message: 'Invalid emergency rescue blob format' });
+    }
+
+    await usersCol.updateOne(
+      { _id: new ObjectId(req.user.userId) },
+      {
+        $set: {
+          emergencyRescueBlob: rescueBlob,
+          emergencyKitCreatedAt: new Date(),
+        },
+      }
+    );
+
+    res.json({
+      success: true,
+      message: 'Emergency recovery kit saved securely.',
+    });
+  } catch (error) {
+    console.error('Failed to save emergency kit:', error);
+    res.status(500).json({ success: false, message: 'Failed to save emergency kit' });
+  }
+});
+
+// GET /api/auth/emergency-kit: Checks if user has an active registered emergency kit
+app.get('/api/auth/emergency-kit', authenticateToken, async (req, res) => {
+  try {
+    const userDoc = await usersCol.findOne(
+      { _id: new ObjectId(req.user.userId) },
+      { projection: { emergencyRescueBlob: 1, emergencyKitCreatedAt: 1 } }
+    );
+
+    res.json({
+      success: true,
+      hasEmergencyKit: Boolean(userDoc?.emergencyRescueBlob),
+      createdAt: userDoc?.emergencyKitCreatedAt || null,
+    });
+  } catch (error) {
+    console.error('Failed to get emergency kit status:', error);
+    res.status(500).json({ success: false, message: 'Failed to check emergency kit status' });
+  }
+});
+
+// POST /api/auth/recover-init: Initiates emergency vault recovery with account email
+app.post('/api/auth/recover-init', strictAuthLimiter, async (req, res) => {
+  try {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ success: false, message: 'A valid email address is required' });
+    }
+
+    const user = await usersCol.findOne({ email });
+    if (!user || !user.emergencyRescueBlob) {
+      return res.status(404).json({
+        success: false,
+        message: 'No emergency recovery kit is registered for this account.',
+      });
+    }
+
+    // Return the vault salt and rescue ciphertext blob (both are encrypted/zero-knowledge)
+    res.json({
+      success: true,
+      vaultSalt: user.vaultSalt,
+      emergencyRescueBlob: user.emergencyRescueBlob,
+    });
+  } catch (error) {
+    console.error('Recovery init failed:', error);
+    res.status(500).json({ success: false, message: 'Recovery lookup failed' });
+  }
+});
+
+// POST /api/auth/recover-reset: Finalizes vault recovery, sets new master password and updates re-encrypted vault
+app.post('/api/auth/recover-reset', strictAuthLimiter, async (req, res) => {
+  try {
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim().toLowerCase() : '';
+    const newPassword = typeof req.body?.newPassword === 'string' ? req.body.newPassword : '';
+    const newVaultSalt = typeof req.body?.newVaultSalt === 'string' && /^[a-f0-9]{32}$/i.test(req.body.newVaultSalt)
+      ? req.body.newVaultSalt.toLowerCase()
+      : null;
+    const reencryptedPasswords = Array.isArray(req.body?.passwords) ? req.body.passwords : [];
+
+    if (!email || newPassword.length < 12 || !newVaultSalt) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid email, new master password (min 12 chars), and vault salt are required.',
+      });
+    }
+
+    const user = await usersCol.findOne({ email });
+    if (!user || !user.emergencyRescueBlob) {
+      return res.status(404).json({ success: false, message: 'Account or recovery kit not found' });
+    }
+
+    // Update password hash, new vault salt, and clear the old rescue blob so user is prompted to generate a fresh kit
+    const newPasswordHash = await bcrypt.hash(newPassword, BCRYPT_ROUNDS);
+    await usersCol.updateOne(
+      { _id: user._id },
+      {
+        $set: {
+          passwordHash: newPasswordHash,
+          vaultSalt: newVaultSalt,
+          updatedAt: new Date(),
+        },
+        $unset: {
+          emergencyRescueBlob: '',
+          emergencyKitCreatedAt: '',
+        },
+      }
+    );
+
+    // Update existing credentials with re-encrypted ciphertext payloads if provided
+    for (const cred of reencryptedPasswords) {
+      if (cred && cred.id && typeof cred.password === 'string' && cred.password.startsWith('enc:v2:')) {
+        await passwordsCol.updateOne(
+          { id: String(cred.id), userId: user._id },
+          {
+            $set: {
+              password: cred.password,
+              customFields: Array.isArray(cred.customFields) ? cred.customFields : [],
+              updatedAt: new Date(),
+            },
+          }
+        );
+      }
+    }
+
+    user.passwordHash = newPasswordHash;
+    user.vaultSalt = newVaultSalt;
+    const token = createToken(user);
+
+    res.cookie(COOKIE_NAME, token, COOKIE_OPTIONS);
+    const csrfToken = setCsrfCookie(res);
+
+    res.json({
+      success: true,
+      message: 'Vault successfully recovered and master password updated.',
+      token,
+      csrfToken,
+      vaultSalt: newVaultSalt,
+      user: { email: user.email },
+    });
+  } catch (error) {
+    console.error('Recovery reset failed:', error);
+    res.status(500).json({ success: false, message: 'Failed to complete vault recovery' });
+  }
+});
+
 const extractDomain = (urlOrSite) => {
   if (!urlOrSite || typeof urlOrSite !== 'string') return '';
   let cleaned = urlOrSite.trim();
