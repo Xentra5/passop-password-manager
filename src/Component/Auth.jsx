@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
 import { toast, Bounce } from "react-toastify"
 import "react-toastify/dist/ReactToastify.css"
-import { createKdfSalt, deriveVaultKey, getStoredKdfSalt } from "../utils/cryptoVault"
+import { createKdfSalt, deriveVaultKey, getStoredKdfSalt, encryptCredential, decryptCredential } from "../utils/cryptoVault"
 import { secureFetch, setCsrfToken, getCsrfToken } from "../utils/csrf"
 import { validateRecoveryKey, decryptEmergencyRescueBlob, importRawVaultKey } from "../utils/recoveryKit"
 import { logAuditEvent, AUDIT_CATEGORIES, AUDIT_EVENT_TYPES } from "../utils/auditLogger"
@@ -22,6 +22,8 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
   const [recoveryWords, setRecoveryWords] = useState("")
   const [newMasterPassword, setNewMasterPassword] = useState("")
   const [confirmNewMasterPassword, setConfirmNewMasterPassword] = useState("")
+  // Stores the recovered vault key (CryptoKey) across recovery steps for credential re-encryption
+  const [recoveredVaultKey, setRecoveredVaultKey] = useState(null)
 
   const [form, setForm] = useState({ email: "", password: "", confirmPassword: "" })
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -172,6 +174,8 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
       if (!restoredKey) {
         throw new Error("Failed to reconstruct vault key from rescue payload.")
       }
+      // Store recovered key so handleCompleteRecovery can re-encrypt existing passwords
+      setRecoveredVaultKey(restoredKey)
       setRecoveryStep(2)
       toast.success("Emergency key verified! Choose a new master password.", { theme: "dark" })
     } catch (err) {
@@ -200,6 +204,43 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
       const newSalt = createKdfSalt()
       const newKey = await deriveVaultKey(newMasterPassword, form.email, newSalt)
 
+      // Re-encrypt all existing vault credentials with the new vault key
+      let reencryptedPasswords = []
+      if (recoveredVaultKey) {
+        try {
+          const pwRes = await secureFetch("/api/passwords", { method: "GET" })
+          if (pwRes.ok) {
+            const pwData = await pwRes.json()
+            const passwords = pwData.passwords || pwData || []
+            reencryptedPasswords = await Promise.all(
+              passwords.map(async (cred) => {
+                try {
+                  const plainText = await decryptCredential(cred.password, recoveredVaultKey)
+                  const newCiphertext = await encryptCredential(plainText, newKey)
+                  const reencryptedCustomFields = Array.isArray(cred.customFields)
+                    ? await Promise.all(
+                        cred.customFields.map(async (field) => ({
+                          ...field,
+                          value: field.value
+                            ? await encryptCredential(await decryptCredential(field.value, recoveredVaultKey), newKey).catch(() => field.value)
+                            : field.value,
+                        }))
+                      )
+                    : []
+                  return { id: cred.id, password: newCiphertext, customFields: reencryptedCustomFields }
+                } catch {
+                  // If a credential can't be re-encrypted, skip it (don't block full recovery)
+                  return null
+                }
+              })
+            )
+            reencryptedPasswords = reencryptedPasswords.filter(Boolean)
+          }
+        } catch {
+          // Non-fatal: proceed with recovery even if re-encryption fetch fails
+        }
+      }
+
       const res = await secureFetch(`${AUTH_API_URL}/recover-reset`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -207,6 +248,7 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
           email: form.email.trim().toLowerCase(),
           newPassword: newMasterPassword,
           newVaultSalt: newSalt,
+          passwords: reencryptedPasswords,
         }),
       })
       const data = await res.json()
@@ -321,6 +363,8 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
                   setIsRecovering(false)
                   setRecoveryStep(1)
                   setAuthError("")
+                  setRecoveredVaultKey(null)
+                  setRecoveryWords("")
                 }}
                 className="w-full text-xs font-semibold text-white/70 hover:text-white"
               >
