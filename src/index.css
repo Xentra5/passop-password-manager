@@ -583,7 +583,7 @@ h1 span {
 .landing-page .fallback-card small { color: rgba(255,255,255,.9); }
 
 /* Final landing-page theme override: keep every public section on the same dark canvas. */
-.landing-page-view { width: 100%; max-width: none; min-height: 100vh; overflow: hidden; background: #080808 !important; color: #f5f5f7 !important; }
+.landing-page-view { width: 100%; max-width: none; min-height: 100vh; overflow-x: hidden; background: #080808 !important; color: #f5f5f7 !important; }
 .landing-page-view > .landing-page { width: 100%; max-width: none; margin: 0; background: #080808 !important; color: #f5f5f7 !important; }
 .landing-page-view .hero-full-bleed { width: 100%; max-width: none; margin: 0; background: #080808 !important; }
 .landing-page-view .landing-page section:not(.vault-defense-section) { background-color: #080808 !important; border-color: #242428 !important; }
@@ -3308,6 +3308,47 @@ html.dark ::-webkit-scrollbar-thumb:hover,
    GPU-composited transforms, spring deceleration, and zero layout shift
    ========================================================================== */
 
+/* ── Auth Modal Overlay ─────────────────────────────────────────────────── */
+.auth-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  /* Blurred dark backdrop — Linear / Apple style */
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  animation: auth-backdrop-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.auth-overlay-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 448px;
+  animation: auth-card-spring 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, opacity;
+}
+
+@keyframes auth-backdrop-in {
+  from { opacity: 0; backdrop-filter: blur(0px); }
+  to   { opacity: 1; backdrop-filter: blur(16px); }
+}
+
+@keyframes auth-card-spring {
+  from { opacity: 0; transform: scale(0.96) translateY(14px); filter: blur(3px); }
+  to   { opacity: 1; transform: scale(1) translateY(0);       filter: blur(0);   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-overlay { animation: none; }
+  .auth-overlay-card { animation: none; }
+}
+
+
 @keyframes audit-modal-spring {
   0% {
     opacity: 0;
@@ -3399,3 +3440,19 @@ html.dark ::-webkit-scrollbar-thumb:hover,
   }
 }
 
+
+/* ── Mobile Navigation Menu ─────────────────────────────────────────────── */
+.mobile-nav-menu {
+  animation: mobile-menu-open 200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: top center;
+  overflow: hidden;
+}
+
+@keyframes mobile-menu-open {
+  from { opacity: 0; transform: translateY(-8px) scaleY(0.95); }
+  to   { opacity: 1; transform: translateY(0)   scaleY(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mobile-nav-menu { animation: none; }
+}

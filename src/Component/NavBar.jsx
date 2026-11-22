@@ -1,3 +1,4 @@
+import { useState } from "react";
 import githubIcon from "../assets/github-icon-1-logo.svg";
 import PassVaultLogo from "./PassVaultLogo";
 
@@ -12,6 +13,8 @@ const NavBar = ({
   theme = "light",
   onToggleTheme,
 }) => {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
     <header className={`site-nav nav-reveal sticky top-0 z-30 w-full border-b border-[#ddd8d0]/80 bg-[#f4f1ec]/85 backdrop-blur-md transition-all dark:border-white/10 dark:bg-[#0c1017]/88 ${user && activeView === "vault" ? "reference-header" : ""}`}>
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:px-6">
@@ -88,7 +91,7 @@ const NavBar = ({
               <button
                 type="button"
                 onClick={() => onOpenAuth("login")}
-                className="rounded-md px-3 py-1.5 text-xs font-semibold text-[#4b5563] hover:text-[#1f2933] dark:text-[#c9d1d9] dark:hover:text-white"
+                className="hidden rounded-md px-3 py-1.5 text-xs font-semibold text-[#4b5563] hover:text-[#1f2933] sm:inline-block dark:text-[#c9d1d9] dark:hover:text-white"
               >
                 Sign In
               </button>
@@ -148,8 +151,74 @@ const NavBar = ({
             />
             <span>GitHub</span>
           </a>
+
+          {/* Mobile hamburger — only shown on small screens when logged out (landing page) */}
+          {!user && (
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(o => !o)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-[#d5d0c8] bg-white text-[#4b5563] transition hover:border-[#176b87] hover:text-[#176b87] lg:hidden dark:border-[#30363d] dark:bg-[#161b22] dark:text-[#c9d1d9] dark:hover:border-slate-500"
+              aria-label={mobileMenuOpen ? "Close menu" : "Open menu"}
+              aria-expanded={mobileMenuOpen}
+            >
+              {mobileMenuOpen ? (
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              ) : (
+                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+              )}
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Mobile dropdown menu */}
+      {!user && mobileMenuOpen && (
+        <div className="mobile-nav-menu border-t border-[#ddd8d0]/80 bg-[#f4f1ec]/95 pb-4 backdrop-blur-md lg:hidden dark:border-white/10 dark:bg-[#0c1017]/95">
+          <nav className="mx-auto flex max-w-6xl flex-col gap-1 px-4 pt-3">
+            <a
+              href="#features"
+              onClick={() => setMobileMenuOpen(false)}
+              className="rounded-lg px-3 py-2.5 text-sm font-semibold text-[#4b5563] transition hover:bg-[#eae8e3] hover:text-[#176b87] dark:text-[#c9d1d9] dark:hover:bg-white/5 dark:hover:text-white"
+            >
+              Features
+            </a>
+            <a
+              href="#cipher-sandbox"
+              onClick={() => setMobileMenuOpen(false)}
+              className="rounded-lg px-3 py-2.5 text-sm font-semibold text-[#4b5563] transition hover:bg-[#eae8e3] hover:text-[#176b87] dark:text-[#c9d1d9] dark:hover:bg-white/5 dark:hover:text-white"
+            >
+              Cipher Demo
+            </a>
+            <a
+              href="#architecture"
+              onClick={() => setMobileMenuOpen(false)}
+              className="rounded-lg px-3 py-2.5 text-sm font-semibold text-[#4b5563] transition hover:bg-[#eae8e3] hover:text-[#176b87] dark:text-[#c9d1d9] dark:hover:bg-white/5 dark:hover:text-white"
+            >
+              Architecture
+            </a>
+            <div className="mt-2 flex gap-2 border-t border-[#ddd8d0]/80 pt-3 dark:border-white/10">
+              <button
+                type="button"
+                onClick={() => { onOpenAuth("login"); setMobileMenuOpen(false); }}
+                className="flex-1 rounded-lg border border-[#d5d0c8] bg-white py-2 text-xs font-semibold text-[#4b5563] transition hover:bg-[#faf9f7] dark:border-[#30363d] dark:bg-[#161b22] dark:text-[#c9d1d9]"
+              >
+                Sign In
+              </button>
+              <button
+                type="button"
+                onClick={() => { onOpenAuth("register"); setMobileMenuOpen(false); }}
+                className="flex-1 rounded-lg bg-[#176b87] py-2 text-xs font-bold text-white hover:bg-[#145d74]"
+              >
+                Open Vault
+              </button>
+            </div>
+          </nav>
+        </div>
+      )}
     </header>
   );
 };

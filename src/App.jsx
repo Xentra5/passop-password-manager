@@ -12,6 +12,7 @@ import { secureFetch, setCsrfToken } from "./utils/csrf";
 import { getAutoLockTimeoutMinutes, setAutoLockTimeoutMinutes } from "./utils/pinAuth";
 import { checkPasswordBreach } from "./utils/breachCheck";
 import { logAuditEvent, AUDIT_CATEGORIES, AUDIT_EVENT_TYPES } from "./utils/auditLogger";
+import { useSmoothScroll } from "./hooks/useSmoothScroll";
 
 const CATEGORIES = ["Personal", "Finance", "Work", "Developer"];
 const initialForm = { service: "", category: "Personal", username: "", password: "", note: "" };
@@ -83,6 +84,9 @@ function App() {
   const [vaultError, setVaultError] = useState("");
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("All");
+
+  // Lenis smooth scrolling — activated globally
+  useSmoothScroll();
   const [weakOnly, setWeakOnly] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerClosing, setDrawerClosing] = useState(false);
