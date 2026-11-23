@@ -187,7 +187,7 @@ const LandingPage = ({ onOpenAuth }) => {
               </ScrollRevealSection>
 
               <ScrollRevealSection delayClass="stagger-2">
-                <h1 className="hero-headline mt-6 text-4xl sm:text-6xl lg:text-7xl font-bold text-[#0f1923] dark:text-white">
+                <h1 className="hero-headline mt-6 text-4xl sm:text-6xl lg:text-7xl font-bold text-white">
                   Defend your
                   <br className="hidden sm:inline" />{" "}
                   digital identity
@@ -201,7 +201,7 @@ const LandingPage = ({ onOpenAuth }) => {
               </ScrollRevealSection>
 
               <ScrollRevealSection delayClass="stagger-3">
-                <p className="mt-6 max-w-[48ch] text-[17px] leading-[1.65] text-[#4a5568] dark:text-slate-300">
+                <p className="mt-6 max-w-[48ch] text-[17px] leading-[1.65] text-slate-300">
                   Save credentials in a vault that encrypts them in your browser with AES-256-GCM.
                   Your vault key is derived in your browser and kept in memory while the vault is unlocked.
                 </p>
@@ -225,15 +225,15 @@ const LandingPage = ({ onOpenAuth }) => {
                   {/* Secondary CTA: Scrolls down to live interactive cipher sandbox */}
                   <a
                     href="#cipher-sandbox"
-                    className="hero-cta-secondary group inline-flex items-center gap-2.5 rounded-xl border border-[#c8c3bb] bg-white/80 px-6 py-4 text-sm font-semibold text-[#1f2933] backdrop-blur-sm transition-all hover:border-[#176b87]/40 hover:bg-white hover:shadow-md dark:border-slate-700 dark:bg-[#161f2e] dark:text-slate-200 dark:hover:bg-[#1c273a] dark:hover:border-slate-600"
+                    className="hero-cta-secondary group inline-flex items-center gap-2.5 rounded-xl border border-slate-700 bg-[#161f2e] px-6 py-4 text-sm font-semibold text-slate-200 backdrop-blur-sm transition-all hover:bg-[#1c273a] hover:border-slate-600 hover:shadow-md"
                   >
-                    <Terminal size={18} weight="bold" className="text-[#176b87] dark:text-cyan-400 transition-transform group-hover:-rotate-3" />
+                    <Terminal size={18} weight="bold" className="text-cyan-400 transition-transform group-hover:-rotate-3" />
                     <span>Simulate Cipher</span>
                   </a>
                 </div>
 
                 {/* 3 Core Trust Badges */}
-                <div className="mt-9 flex flex-wrap items-center gap-6 text-xs font-medium text-[#6b6560] dark:text-slate-400">
+                <div className="mt-9 flex flex-wrap items-center gap-6 text-xs font-medium text-slate-400">
                   <div className="flex items-center gap-1.5">
                     <ShieldCheck size={15} className="text-[#26968a]" weight="fill" />
                     <span>Client-Side AES-GCM</span>

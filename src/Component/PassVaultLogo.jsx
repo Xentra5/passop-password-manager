@@ -40,32 +40,37 @@ const PassVaultLogo = ({
 
   const content = (
     <div className={`group inline-flex items-center gap-3 select-none ${className}`}>
-      {/* ── 1. Geometric PV monogram ── */}
+      {/* ── 1. Geometric Vault Padlock Icon ── */}
       <div
-        className={`flex ${currentSize.box} shrink-0 items-center justify-center border border-[#cbd6da] bg-[#edf3f4] font-sans text-[11px] font-bold tracking-[-0.08em] text-[#176b78] transition-colors group-hover:border-[#8eabb1] group-hover:bg-white dark:border-[#34434b] dark:bg-[#182329] dark:text-[#9ed0d3]`}
+        className={`flex ${currentSize.box} shrink-0 items-center justify-center border border-white/25 bg-black text-white transition-colors group-hover:border-white/50 shadow-sm`}
         aria-hidden="true"
       >
-        <span>PV</span>
+        <svg className="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none">
+          <path d="M7 10V7a5 5 0 0 1 10 0v3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
+          <rect x="3.5" y="10" width="17" height="12" rx="3" fill="currentColor" />
+          <circle cx="12" cy="15" r="1.3" fill="#000000" />
+          <path d="M11.3 15.5 L12.7 15.5 L12.9 18.5 L11.1 18.5 Z" fill="#000000" />
+        </svg>
       </div>
 
       {/* ── 2. Brand Wordmark Typography ── */}
       <div className="flex flex-col text-left justify-center">
         <div className="flex items-center leading-none">
           <span
-            className={`font-sans ${currentSize.title} font-semibold tracking-[-0.055em] text-[#0f172a] dark:text-white`}
+            className={`font-sans ${currentSize.title} font-bold tracking-[-0.04em] text-white`}
           >
             Pass
-            <span className="text-[#64748b] dark:text-[#cbd5e1] transition-colors duration-300">
+            <span className="text-neutral-400 font-normal ml-0.5 transition-colors duration-300">
               Vault
             </span>
           </span>
         </div>
 
-        {/* Quiet product descriptor instead of a marketing-heavy security label. */}
+        {/* Quiet product descriptor */}
         {showTagline && (
           <div className="mt-1 flex items-center gap-1.5 leading-none">
             <span
-              className={`font-sans font-medium uppercase text-[#64748b] dark:text-[#94a3b8] ${currentSize.tagline}`}
+              className={`font-sans font-medium uppercase text-neutral-400 ${currentSize.tagline}`}
             >
               PASSWORD MANAGER
             </span>
@@ -76,9 +81,9 @@ const PassVaultLogo = ({
       {/* ── 3. Optional Inline Active Status Pill ── */}
       {showStatusPill && (
         <span
-          className={`ml-1 inline-flex items-center gap-1.5 rounded-full border border-[#bfe7df] bg-[#e8f6f3] ${currentSize.pill} font-medium text-[#0d7369] transition-all`}
+          className={`ml-1 inline-flex items-center gap-1.5 rounded-full border border-white/20 bg-white/5 ${currentSize.pill} font-medium text-neutral-300 transition-all`}
         >
-          <span className="h-1.5 w-1.5 rounded-full bg-[#0d9488]" />
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
           {statusText}
         </span>
       )}

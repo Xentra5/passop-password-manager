@@ -435,7 +435,7 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
       <div className="auth-signal" aria-hidden="true"></div>
 
       {/* Main Auth Card */}
-      <section className="auth-panel compact-auth-panel relative z-10 w-full max-w-md rounded-2xl border border-white/20 bg-black p-6 text-white shadow-2xl sm:p-8">
+      <section className="auth-panel compact-auth-panel relative z-10 w-full max-w-[560px] rounded-2xl border border-white/20 bg-black text-white shadow-2xl">
 
         {/* Close Button ('X' icon) */}
         {onClose && (
@@ -443,9 +443,9 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
             type="button"
             onClick={onClose}
             aria-label="Close modal"
-            className="absolute right-4 top-4 rounded-md p-1.5 text-white/70 transition hover:bg-white/10 hover:text-white"
+            className="absolute right-6 top-6 rounded-lg p-2 text-white/70 transition hover:bg-white/10 hover:text-white"
           >
-            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg className="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
