@@ -8,7 +8,7 @@ import AuditLogModal from "./Component/AuditLogModal";
 import EmergencyKitModal from "./Component/EmergencyKitModal";
 import SiteLogo from "./Component/SiteLogo";
 import { encryptCredential, decryptCredential, encryptCustomFields, decryptCustomFields, clearCachedVaultKey, deriveVaultKey } from "./utils/cryptoVault";
-import { secureFetch, setCsrfToken } from "./utils/csrf";
+import { clearCsrfToken, secureFetch, setCsrfToken } from "./utils/csrf";
 import { getAutoLockTimeoutMinutes, setAutoLockTimeoutMinutes } from "./utils/pinAuth";
 import { checkPasswordBreach } from "./utils/breachCheck";
 import { logAuditEvent, AUDIT_CATEGORIES, AUDIT_EVENT_TYPES } from "./utils/auditLogger";
@@ -225,6 +225,7 @@ function App() {
     try { await secureFetch(`${AUTH_API_URL}/logout`, { method: "POST", headers: authHeaders() }); } catch { /* Local lock still completes if the server is offline. */ }
     localStorage.removeItem("passvault_user");
     clearCachedVaultKey();
+    clearCsrfToken();
     setSession({ user: null, token: null });
     setVaultKey(null);
     setCredentials([]);
@@ -368,7 +369,9 @@ function App() {
         if (!response.ok) throw new Error(`Could not load your vault (${response.status}).`);
         return response.json();
       })
-      .then(async (items) => Promise.all(items.map(async (item) => {
+      .then(async (items) => {
+        if (!Array.isArray(items)) throw new Error("The vault API returned an unexpected response.");
+        return Promise.all(items.map(async (item) => {
         const password = await decryptCredential(item.password, vaultKey);
         const history = Array.isArray(item.history)
           ? await Promise.all(item.history.map(async (entry) => ({
@@ -395,7 +398,8 @@ function App() {
           note,
           customFields,
         };
-      })))
+        }));
+      })
       .then((items) => { if (!cancelled) setCredentials(items); })
       .catch((error) => { if (!cancelled) setVaultError(error.message); })
       .finally(() => { if (!cancelled) setIsLoading(false); });
@@ -470,50 +474,50 @@ function App() {
       setShowLanding(true);
       return;
     }
-    const existing = credentials.find((item) => item.id === editingId);
-    const passwordChanged = Boolean(existing && existing.password !== form.password);
-    if (passwordChanged && currentPasswordConfirmation !== existing.password) {
-      setCredentialFormError("Enter the account's current password to change it.");
-      return;
-    }
-    if (passwordChanged && newPasswordConfirmation !== form.password) {
-      setCredentialFormError("Confirm the new password before saving.");
-      return;
-    }
-    setCredentialFormError("");
-    const id = editingId || crypto.randomUUID();
-    const customFields = form.note.trim()
-      ? await encryptCustomFields([{ id: "note", label: "Note", value: form.note.trim(), type: "text" }], vaultKey)
-      : [];
-    const payload = {
-      id,
-      site: form.service.trim(),
-      username: form.username.trim(),
-      password: await encryptCredential(form.password, vaultKey),
-      favorite: Boolean(existing?.favorite),
-      tag: form.category === "Developer" ? "Development" : form.category,
-      customFields,
-      history: passwordChanged
-        ? await Promise.all([
-          { password: existing.password, changedAt: new Date().toISOString() },
-          ...(existing.history || []),
-        ].slice(0, 50).map(async (entry) => ({
-          password: await encryptCredential(entry.password, vaultKey),
-          changedAt: entry.changedAt,
-        })))
-        : (existing?.history
-          ? await Promise.all(existing.history.map(async (entry) => ({
-            password: await encryptCredential(entry.password, vaultKey),
-            changedAt: entry.changedAt,
-          })))
-          : []),
-    };
-    const history = passwordChanged
-      ? [{ password: existing.password, changedAt: new Date().toISOString() }, ...(existing.history || [])].slice(0, 50)
-      : (existing?.history || []);
     setIsSaving(true);
     setVaultError("");
     try {
+      const existing = credentials.find((item) => item.id === editingId);
+      const passwordChanged = Boolean(existing && existing.password !== form.password);
+      if (passwordChanged && currentPasswordConfirmation !== existing.password) {
+        setCredentialFormError("Enter the account's current password to change it.");
+        return;
+      }
+      if (passwordChanged && newPasswordConfirmation !== form.password) {
+        setCredentialFormError("Confirm the new password before saving.");
+        return;
+      }
+      setCredentialFormError("");
+      const id = editingId || crypto.randomUUID();
+      const customFields = form.note.trim()
+        ? await encryptCustomFields([{ id: "note", label: "Note", value: form.note.trim(), type: "text" }], vaultKey)
+        : [];
+      const payload = {
+        id,
+        site: form.service.trim(),
+        username: form.username.trim(),
+        password: await encryptCredential(form.password, vaultKey),
+        favorite: Boolean(existing?.favorite),
+        tag: form.category === "Developer" ? "Development" : form.category,
+        customFields,
+        history: passwordChanged
+          ? await Promise.all([
+            { password: existing.password, changedAt: new Date().toISOString() },
+            ...(existing.history || []),
+          ].slice(0, 50).map(async (entry) => ({
+            password: await encryptCredential(entry.password, vaultKey),
+            changedAt: entry.changedAt,
+          })))
+          : (existing?.history
+            ? await Promise.all(existing.history.map(async (entry) => ({
+              password: await encryptCredential(entry.password, vaultKey),
+              changedAt: entry.changedAt,
+            })))
+            : []),
+      };
+      const history = passwordChanged
+        ? [{ password: existing.password, changedAt: new Date().toISOString() }, ...(existing.history || [])].slice(0, 50)
+        : (existing?.history || []);
       const response = await secureFetch(editingId ? `${API_BASE_URL}/${encodeURIComponent(id)}` : API_BASE_URL, {
         method: editingId ? "PUT" : "POST",
         headers: authHeaders(true),

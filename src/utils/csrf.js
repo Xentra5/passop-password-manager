@@ -16,6 +16,7 @@ const API_BASE = AUTH_URL.replace(/\/auth\/?$/, '');
 
 let memoryCsrfToken = null;
 let fetchingPromise = null;
+let refreshingPromise = null;
 
 /**
  * Extracts a cookie value by name from document.cookie.
@@ -24,8 +25,15 @@ let fetchingPromise = null;
  */
 export function getCookie(name) {
   if (typeof document === 'undefined') return null;
-  const match = document.cookie.match(new RegExp('(^|;\\s*)' + name + '=([^;]*)'));
-  return match ? decodeURIComponent(match[2]) : null;
+  const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = document.cookie.match(new RegExp('(^|;\\s*)' + escapedName + '=([^;]*)'));
+  if (!match) return null;
+
+  try {
+    return decodeURIComponent(match[2]);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -36,6 +44,15 @@ export function setCsrfToken(token) {
   if (typeof token === 'string' && token.trim().length > 0) {
     memoryCsrfToken = token.trim();
   }
+}
+
+/**
+ * Clears the cached CSRF token (for example after logout).
+ */
+export function clearCsrfToken() {
+  memoryCsrfToken = null;
+  fetchingPromise = null;
+  refreshingPromise = null;
 }
 
 /**
@@ -57,6 +74,42 @@ export async function getCsrfToken(forceRefresh = false) {
     }
   }
 
+  if (forceRefresh) {
+    if (refreshingPromise) return refreshingPromise;
+
+    refreshingPromise = (async () => {
+      memoryCsrfToken = null;
+
+      try {
+        const response = await fetch(`${API_BASE}/csrf-token`, {
+          method: 'GET',
+          credentials: 'include',
+          cache: 'no-store',
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (typeof data?.csrfToken === 'string' && data.csrfToken.trim()) {
+            memoryCsrfToken = data.csrfToken.trim();
+            return memoryCsrfToken;
+          }
+        }
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          console.warn('[DEV] Failed to refresh CSRF token:', err.message);
+        }
+      } finally {
+        refreshingPromise = null;
+      }
+
+      const cookieToken = getCookie('XSRF-TOKEN');
+      if (cookieToken) memoryCsrfToken = cookieToken;
+      return cookieToken || '';
+    })();
+
+    return refreshingPromise;
+  }
+
   // 3. Avoid duplicate concurrent fetch requests
   if (fetchingPromise) {
     return fetchingPromise;
@@ -67,6 +120,7 @@ export async function getCsrfToken(forceRefresh = false) {
       const response = await fetch(`${API_BASE}/csrf-token`, {
         method: 'GET',
         credentials: 'include',
+        cache: 'no-store',
       });
 
       if (response.ok) {
@@ -102,7 +156,7 @@ export async function getCsrfToken(forceRefresh = false) {
  */
 export async function secureFetch(url, options = {}) {
   const method = (options.method || 'GET').toUpperCase();
-  const isStateModifying = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method);
+  const isStateModifying = !['GET', 'HEAD', 'OPTIONS'].includes(method);
 
   const mergedHeaders = new Headers(options.headers || {});
 
