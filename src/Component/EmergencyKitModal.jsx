@@ -10,11 +10,14 @@ import { generateQRCodeSVG } from '../utils/qrcode';
 import { secureFetch } from '../utils/csrf';
 import { logAuditEvent, AUDIT_CATEGORIES, AUDIT_EVENT_TYPES } from '../utils/auditLogger';
 
+const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL ?? 'http://localhost:3000/api/auth';
+
 export default function EmergencyKitModal({
   isOpen,
   onClose,
   userEmail = 'user@example.com',
   vaultSalt = '',
+  authToken = null,
 }) {
   const [activeTab, setActiveTab] = useState('kit'); // 'kit' | 'verify'
   const [recoveryKeyData, setRecoveryKeyData] = useState(null); // { words, keyString, entropyHex }
@@ -136,14 +139,18 @@ export default function EmergencyKitModal({
       );
 
       // 3. Save to backend
-      const res = await secureFetch('/api/auth/emergency-kit', {
+      const headers = {
+        'Content-Type': 'application/json',
+        ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+      };
+      const res = await secureFetch(`${AUTH_API_URL}/emergency-kit`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({ emergencyRescueBlob: rescueBlob }),
       });
 
       const data = await res.json();
-      if (!data.success) {
+      if (!res.ok || !data.success) {
         throw new Error(data.message || 'Failed to save emergency kit to server.');
       }
 

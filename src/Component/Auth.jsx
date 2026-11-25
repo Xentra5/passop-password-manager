@@ -9,6 +9,7 @@ import { logAuditEvent, AUDIT_CATEGORIES, AUDIT_EVENT_TYPES } from "../utils/aud
 // BUG #6 FIX: Use env variable so production deploys use HTTPS.
 // Set VITE_AUTH_API_URL=https://your-domain.com/api/auth in .env
 const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL ?? "http://localhost:3000/api/auth"
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api/passwords"
 
 
 // ============================================================================
@@ -208,7 +209,7 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
       let reencryptedPasswords = []
       if (recoveredVaultKey) {
         try {
-          const pwRes = await secureFetch("/api/passwords", { method: "GET" })
+          const pwRes = await secureFetch(API_BASE_URL, { method: "GET" })
           if (pwRes.ok) {
             const pwData = await pwRes.json()
             const passwords = pwData.passwords || pwData || []
@@ -605,6 +606,7 @@ const Auth = ({ onAuthenticated, initialMode = "login", onClose }) => {
           type="button"
           onClick={() => {
             setIsRegistering(previous => !previous)
+            setAuthError("")
             setForm(previous => ({ ...previous, confirmPassword: "" }))
           }}
           className="mt-5 w-full text-xs font-semibold text-white/75 hover:text-white hover:underline"

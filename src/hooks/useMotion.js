@@ -142,6 +142,7 @@ export function useMagnetic({ strength = 8, ease = 0.15 } = {}) {
         rafId.current = requestAnimationFrame(animate);
       } else {
         el.style.transform = "";
+        rafId.current = null;
       }
     };
 

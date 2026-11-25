@@ -409,13 +409,18 @@ function App() {
   useEffect(() => {
     const onKeyDown = (event) => {
       if (event.key === "Escape") closeDrawer();
-      if (event.key === "/" && !["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) {
+      const target = document.activeElement;
+      const isTyping = ["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName) || target?.isContentEditable;
+      if (event.key === "/" && !isTyping) {
         event.preventDefault(); searchRef.current?.focus();
       }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault(); searchRef.current?.focus();
       }
-      if (!showLanding && !event.ctrlKey && !event.metaKey && event.key.toLowerCase() === "a" && !drawerOpen) openNewCredential();
+      const hasModalOpen = isVaultLocked || authModalOpen || exportModalOpen || isAuditLogOpen || emergencyKitOpen || Boolean(selectedHistoryAccount);
+      if (!showLanding && !isTyping && !hasModalOpen && !event.ctrlKey && !event.metaKey && !event.altKey && event.key.toLowerCase() === "a" && !drawerOpen) {
+        openNewCredential();
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
@@ -489,8 +494,11 @@ function App() {
       }
       setCredentialFormError("");
       const id = editingId || crypto.randomUUID();
-      const customFields = form.note.trim()
-        ? await encryptCustomFields([{ id: "note", label: "Note", value: form.note.trim(), type: "text" }], vaultKey)
+      const plainCustomFields = form.note.trim()
+        ? [{ id: "note", label: "Note", value: form.note.trim(), type: "text" }]
+        : [];
+      const customFields = plainCustomFields.length
+        ? await encryptCustomFields(plainCustomFields, vaultKey)
         : [];
       const payload = {
         id,
@@ -526,8 +534,8 @@ function App() {
       if (response.status === 401) throw new Error("Your session expired. Please sign in again.");
       if (!response.ok) throw new Error("The database could not save this credential.");
       setCredentials((items) => editingId
-        ? items.map((item) => item.id === id ? { ...item, ...form, site: payload.site, tag: payload.tag, history } : item)
-        : [...items, { ...form, id, site: payload.site, tag: payload.tag, favorite: false, history: [] }]);
+        ? items.map((item) => item.id === id ? { ...item, ...form, site: payload.site, tag: payload.tag, customFields: plainCustomFields, history } : item)
+        : [...items, { ...form, id, site: payload.site, tag: payload.tag, customFields: plainCustomFields, favorite: false, history: [] }]);
       logAuditEvent(session.user?.email, {
         type: editingId ? AUDIT_EVENT_TYPES.CREDENTIAL_UPDATE : AUDIT_EVENT_TYPES.CREDENTIAL_CREATE,
         title: editingId ? 'Credential Updated' : 'Credential Added',
@@ -884,6 +892,7 @@ function App() {
         onClose={() => setEmergencyKitOpen(false)}
         userEmail={session.user?.email || "user@example.com"}
         vaultSalt={session.user?.vaultSalt || ""}
+        authToken={session.token}
       />
 
       {drawerOpen && <div className={`drawer-scrim${drawerClosing ? " is-closing" : ""}`} onMouseDown={(event) => { if (event.target === event.currentTarget) closeDrawer(); }}>
