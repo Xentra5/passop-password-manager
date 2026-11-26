@@ -26,6 +26,43 @@ function passwordStrength(value) {
   return "Strong";
 }
 
+function getTrashDaysRemaining(item) {
+  const purgeMs = item?.purgeAt
+    ? new Date(item.purgeAt).getTime()
+    : item?.deletedAt
+      ? new Date(item.deletedAt).getTime() + 30 * 24 * 60 * 60 * 1000
+      : null;
+  if (!purgeMs || Number.isNaN(purgeMs)) return 30;
+  return Math.max(0, Math.ceil((purgeMs - Date.now()) / (24 * 60 * 60 * 1000)));
+}
+
+async function normalizeEncryptedCredential(item, vaultKey) {
+  const password = await decryptCredential(item.password, vaultKey);
+  const history = Array.isArray(item.history)
+    ? await Promise.all(item.history.map(async (entry) => ({
+      password: await decryptCredential(entry.password, vaultKey),
+      changedAt: entry.changedAt,
+    })))
+    : [];
+  const customFields = Array.isArray(item.customFields) ? await decryptCustomFields(item.customFields, vaultKey) : [];
+  const note = customFields.find((field) => field.label === "Note")?.value || "";
+  const service = typeof item.site === "string" && item.site.trim()
+    ? item.site.trim()
+    : typeof item.service === "string" && item.service.trim()
+      ? item.service.trim()
+      : "Untitled account";
+  return {
+    ...item,
+    service,
+    username: typeof item.username === "string" ? item.username : "",
+    password: typeof password === "string" ? password : "",
+    history,
+    category: item.tag === "Development" ? "Developer" : (item.tag || "Personal"),
+    note,
+    customFields,
+  };
+}
+
 function getServicePresentation(value = "") {
   const raw = value.trim();
   try {
@@ -72,6 +109,11 @@ function AuthOverlay({ open, mode, onClose, onAuthenticated }) {
 
 function App() {
   const [credentials, setCredentials] = useState([]);
+  const [trashedCredentials, setTrashedCredentials] = useState([]);
+  const [trashNotice, setTrashNotice] = useState(null);
+  const [confirmPermanentId, setConfirmPermanentId] = useState(null);
+  const [confirmEmptyTrash, setConfirmEmptyTrash] = useState(false);
+  const trashNoticeTimerRef = useRef(null);
   const [session, setSession] = useState({ user: null, token: null });
   const [vaultKey, setVaultKey] = useState(null);
   const [authModalOpen, setAuthModalOpen] = useState(false);
@@ -113,17 +155,23 @@ function App() {
   const [clipboardClearedStatus, setClipboardClearedStatus] = useState(false);
   const searchRef = useRef(null);
 
-  const filtered = useMemo(() => credentials.filter((item) => {
-    const matchesCategory = category === "All" || item.category === category;
+  const isTrashView = category === "Trash";
+
+  const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
-    return matchesCategory && (!weakOnly || passwordStrength(item.password) === "Weak") && (!term || `${item.service} ${item.username} ${item.category}`.toLowerCase().includes(term));
-  }), [credentials, category, query, weakOnly]);
+    const source = isTrashView ? trashedCredentials : credentials;
+    return source.filter((item) => {
+      const matchesCategory = isTrashView || category === "All" || item.category === category;
+      return matchesCategory && (isTrashView || !weakOnly || passwordStrength(item.password) === "Weak") && (!term || `${item.service} ${item.username} ${item.category}`.toLowerCase().includes(term));
+    });
+  }, [credentials, trashedCredentials, category, query, weakOnly, isTrashView]);
 
   const searchSuggestions = useMemo(() => {
     const term = query.trim().toLowerCase();
     if (!term) return [];
+    const source = isTrashView ? trashedCredentials : credentials;
 
-    return credentials
+    return source
       .filter((item) => {
         const service = (item.service || "").toLowerCase();
         const username = (item.username || "").toLowerCase();
@@ -131,7 +179,7 @@ function App() {
         return service.includes(term) || username.includes(term) || itemCategory.includes(term);
       })
       .slice(0, 6);
-  }, [credentials, query]);
+  }, [credentials, trashedCredentials, query, isTrashView]);
 
   const [activeSuggestion, setActiveSuggestion] = useState(0);
   const [serviceSuggestionIndex, setServiceSuggestionIndex] = useState(0);
@@ -229,6 +277,11 @@ function App() {
     setSession({ user: null, token: null });
     setVaultKey(null);
     setCredentials([]);
+    setTrashedCredentials([]);
+    if (trashNoticeTimerRef.current) window.clearTimeout(trashNoticeTimerRef.current);
+    setTrashNotice(null);
+    setConfirmPermanentId(null);
+    setConfirmEmptyTrash(false);
     setShowLanding(true);
     setVaultError("");
     setIsVaultLocked(false);
@@ -284,6 +337,10 @@ function App() {
     setRevealed({});
     setQuery("");
     setHealthOpen(false);
+    if (trashNoticeTimerRef.current) window.clearTimeout(trashNoticeTimerRef.current);
+    setTrashNotice(null);
+    setConfirmPermanentId(null);
+    setConfirmEmptyTrash(false);
     setIsVaultLocked(true);
   }, [session.user]);
 
@@ -363,44 +420,30 @@ function App() {
   useEffect(() => {
     if (!session.user || !vaultKey) return undefined;
     let cancelled = false;
-    secureFetch(API_BASE_URL, { headers: authHeaders() })
-      .then(async (response) => {
+    Promise.all([
+      secureFetch(API_BASE_URL, { headers: authHeaders() }).then(async (response) => {
         if (response.status === 401) throw new Error("Your session expired. Please sign in again.");
         if (!response.ok) throw new Error(`Could not load your vault (${response.status}).`);
         return response.json();
+      }),
+      secureFetch(`${API_BASE_URL}/trash`, { headers: authHeaders() })
+        .then(async (response) => (response.ok ? response.json() : []))
+        .catch(() => []),
+    ])
+      .then(async ([activeItems, trashedItems]) => {
+        if (!Array.isArray(activeItems)) throw new Error("The vault API returned an unexpected response.");
+        const [normalizedActive, normalizedTrash] = await Promise.all([
+          Promise.all(activeItems.map((item) => normalizeEncryptedCredential(item, vaultKey))),
+          Promise.all((Array.isArray(trashedItems) ? trashedItems : []).map((item) => normalizeEncryptedCredential(item, vaultKey))),
+        ]);
+        return [normalizedActive, normalizedTrash];
       })
-      .then(async (items) => {
-        if (!Array.isArray(items)) throw new Error("The vault API returned an unexpected response.");
-        return Promise.all(items.map(async (item) => {
-        const password = await decryptCredential(item.password, vaultKey);
-        const history = Array.isArray(item.history)
-          ? await Promise.all(item.history.map(async (entry) => ({
-            password: await decryptCredential(entry.password, vaultKey),
-            changedAt: entry.changedAt,
-          })))
-          : [];
-        const customFields = Array.isArray(item.customFields) ? await decryptCustomFields(item.customFields, vaultKey) : [];
-        const note = customFields.find((field) => field.label === "Note")?.value || "";
-        // Older records may omit `site`, username, or password. Normalize them
-        // before rendering so one incomplete record cannot crash the list.
-        const service = typeof item.site === "string" && item.site.trim()
-          ? item.site.trim()
-          : typeof item.service === "string" && item.service.trim()
-            ? item.service.trim()
-            : "Untitled account";
-        return {
-          ...item,
-          service,
-          username: typeof item.username === "string" ? item.username : "",
-          password: typeof password === "string" ? password : "",
-          history,
-          category: item.tag === "Development" ? "Developer" : (item.tag || "Personal"),
-          note,
-          customFields,
-        };
-        }));
+      .then(([normalizedActive, normalizedTrash]) => {
+        if (!cancelled) {
+          setCredentials(normalizedActive);
+          setTrashedCredentials(normalizedTrash);
+        }
       })
-      .then((items) => { if (!cancelled) setCredentials(items); })
       .catch((error) => { if (!cancelled) setVaultError(error.message); })
       .finally(() => { if (!cancelled) setIsLoading(false); });
     return () => { cancelled = true; };
@@ -679,15 +722,91 @@ function App() {
 
   async function removeCredential(id) {
     setVaultError("");
+    const target = credentials.find((item) => item.id === id);
     try {
       const response = await secureFetch(`${API_BASE_URL}/${encodeURIComponent(id)}`, { method: "DELETE", headers: authHeaders() });
-      if (!response.ok) throw new Error("The database could not delete this credential.");
+      if (!response.ok) throw new Error("The database could not move this credential to Trash.");
+      const payload = await response.json().catch(() => ({}));
+      const deletedAt = payload.deletedAt || new Date().toISOString();
+      const purgeAt = payload.purgeAt || new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
       setCredentials((items) => items.filter((item) => item.id !== id));
+      if (target) {
+        setTrashedCredentials((items) => [{ ...target, deletedAt, purgeAt }, ...items.filter((item) => item.id !== id)]);
+      }
+      if (trashNoticeTimerRef.current) window.clearTimeout(trashNoticeTimerRef.current);
+      setTrashNotice({ id, label: getServicePresentation(target?.service).label });
+      trashNoticeTimerRef.current = window.setTimeout(() => setTrashNotice(null), 8000);
+      logAuditEvent(session.user?.email, {
+        type: AUDIT_EVENT_TYPES.CREDENTIAL_TRASH,
+        title: 'Moved to Trash',
+        description: `Moved "${target?.service || id}" to Trash (30-day recovery window).`,
+        severity: 'warning',
+        category: AUDIT_CATEGORIES.VAULT,
+      });
+    } catch (error) {
+      setVaultError(error.message);
+    }
+  }
+
+  async function restoreCredential(id) {
+    setVaultError("");
+    const target = trashedCredentials.find((item) => item.id === id);
+    try {
+      const response = await secureFetch(`${API_BASE_URL}/${encodeURIComponent(id)}/restore`, { method: "POST", headers: authHeaders() });
+      if (!response.ok) throw new Error("The database could not restore this credential.");
+      setTrashedCredentials((items) => items.filter((item) => item.id !== id));
+      if (target) {
+        const restored = { ...target, deletedAt: null, purgeAt: null };
+        setCredentials((items) => [...items, restored].sort((a, b) => (a.service || "").localeCompare(b.service || "")));
+      }
+      setConfirmPermanentId((current) => (current === id ? null : current));
+      setTrashNotice((current) => (current?.id === id ? null : current));
+      logAuditEvent(session.user?.email, {
+        type: AUDIT_EVENT_TYPES.CREDENTIAL_RESTORE,
+        title: 'Credential Restored',
+        description: `Restored "${target?.service || id}" from Trash.`,
+        severity: 'success',
+        category: AUDIT_CATEGORIES.VAULT,
+      });
+    } catch (error) {
+      setVaultError(error.message);
+    }
+  }
+
+  async function permanentlyDeleteCredential(id) {
+    setVaultError("");
+    const target = trashedCredentials.find((item) => item.id === id);
+    try {
+      const response = await secureFetch(`${API_BASE_URL}/${encodeURIComponent(id)}?permanent=true`, { method: "DELETE", headers: authHeaders() });
+      if (!response.ok) throw new Error("The database could not permanently delete this credential.");
+      setTrashedCredentials((items) => items.filter((item) => item.id !== id));
+      setConfirmPermanentId(null);
       logAuditEvent(session.user?.email, {
         type: AUDIT_EVENT_TYPES.CREDENTIAL_DELETE,
-        title: 'Credential Deleted',
-        description: `Removed credential (ID: ${id}) from vault.`,
-        severity: 'warning',
+        title: 'Credential Permanently Deleted',
+        description: `Permanently deleted "${target?.service || id}" from Trash.`,
+        severity: 'danger',
+        category: AUDIT_CATEGORIES.VAULT,
+      });
+    } catch (error) {
+      setVaultError(error.message);
+    }
+  }
+
+  async function emptyTrash() {
+    setVaultError("");
+    try {
+      const response = await secureFetch(`${API_BASE_URL}/trash/empty`, { method: "DELETE", headers: authHeaders() });
+      if (!response.ok) throw new Error("The database could not empty Trash.");
+      const count = trashedCredentials.length;
+      setTrashedCredentials([]);
+      setConfirmEmptyTrash(false);
+      setConfirmPermanentId(null);
+      logAuditEvent(session.user?.email, {
+        type: AUDIT_EVENT_TYPES.CREDENTIAL_DELETE,
+        title: 'Trash Emptied',
+        description: `Permanently deleted ${count} credential${count === 1 ? "" : "s"} from Trash.`,
+        severity: 'danger',
         category: AUDIT_CATEGORIES.VAULT,
       });
     } catch (error) {
@@ -807,35 +926,125 @@ function App() {
                 <button
                   key={value}
                   className={category === value && !weakOnly ? "active" : ""}
-                  onClick={() => { setCategory(value); setWeakOnly(false); }}
+                  onClick={() => { setCategory(value); setWeakOnly(false); setConfirmEmptyTrash(false); setConfirmPermanentId(null); }}
                 >
                   {value} <span>({count})</span>
                 </button>
               );
             })}
+            <button
+              className={`trash-tab${isTrashView ? " active" : ""}`}
+              onClick={() => { setCategory("Trash"); setWeakOnly(false); setConfirmEmptyTrash(false); setConfirmPermanentId(null); }}
+            >
+              Trash <span>({trashedCredentials.length})</span>
+            </button>
           </nav>
         </div>
 
-        <section className="credential-list" aria-label="Saved credentials">
-          <div className="credential-list-head"><span>Service &amp; name</span><span>Username or email</span><span>Password</span><span>Status</span><span>Actions</span></div>
+        <section className="credential-list" aria-label={isTrashView ? "Trashed credentials" : "Saved credentials"}>
+          {isTrashView && (
+            <div className="trash-banner">
+              <span>Items in Trash are permanently removed after 30 days. Restore any item before it expires.</span>
+              {trashedCredentials.length > 0 && (
+                <div className="trash-banner-actions">
+                  {confirmEmptyTrash ? (
+                    <>
+                      <button type="button" className="trash-confirm-btn" onClick={() => { void emptyTrash(); }}>
+                        Confirm empty ({trashedCredentials.length})
+                      </button>
+                      <button type="button" className="trash-cancel-btn" onClick={() => setConfirmEmptyTrash(false)}>
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button type="button" className="empty-trash-button" onClick={() => setConfirmEmptyTrash(true)}>
+                      Empty Trash
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          <div className={`credential-list-head${isTrashView ? " trash-head" : ""}`}>
+            <span>Service &amp; name</span>
+            <span>Username or email</span>
+            <span>Password</span>
+            <span>{isTrashView ? "Recovery" : "Status"}</span>
+            <span>Actions</span>
+          </div>
           {vaultError && <div className="vault-message" role="alert">{vaultError}{vaultError.includes("session expired") && <button onClick={() => { void handleLogout(); }}>Sign in again</button>}</div>}
           {isLoading && <div className="empty-list">Loading credentials from your account…</div>}
-          {!isLoading && filtered.length === 0 ? credentials.length ? <div className="empty-list">No credentials match these filters. <button className="clear-filters-button" onClick={() => { setQuery(""); setCategory("All"); setWeakOnly(false); }}>Clear filters</button></div> : <div className="empty-state"><div className="empty-state-icon" aria-hidden="true">✳</div><h2>Your vault starts here</h2><p>Add a login to get started. Passwords are encrypted in your browser before they sync to your account.</p><button className="add-credential-button" onClick={openNewCredential}>Add your first credential <span aria-hidden="true">→</span></button></div> : !isLoading && filtered.map((item) => {
+          {!isLoading && filtered.length === 0 ? (
+            isTrashView ? (
+              trashedCredentials.length ? (
+                <div className="empty-list">No trashed credentials match this search. <button className="clear-filters-button" onClick={() => setQuery("")}>Clear search</button></div>
+              ) : (
+                <div className="empty-list">Trash is empty. Deleted credentials stay here for 30 days before permanent removal.</div>
+              )
+            ) : credentials.length ? (
+              <div className="empty-list">No credentials match these filters. <button className="clear-filters-button" onClick={() => { setQuery(""); setCategory("All"); setWeakOnly(false); }}>Clear filters</button></div>
+            ) : (
+              <div className="empty-state"><div className="empty-state-icon" aria-hidden="true">✳</div><h2>Your vault starts here</h2><p>Add a login to get started. Passwords are encrypted in your browser before they sync to your account.</p><button className="add-credential-button" onClick={openNewCredential}>Add your first credential <span aria-hidden="true">→</span></button></div>
+            )
+          ) : !isLoading && filtered.map((item) => {
             const strength = passwordStrength(item.password);
             const service = getServicePresentation(item.service);
             const breachResult = breachResults[item.id];
-            return <article className="credential-row" key={item.id}>
+            const daysLeft = isTrashView ? getTrashDaysRemaining(item) : 0;
+            return <article className={`credential-row${isTrashView ? " trashed-row" : ""}`} key={item.id}>
               <div className="service-cell"><SiteLogo site={item.service} size="md" className="service-icon" /><div><strong title={item.service}><HighlightMatch text={service.label} query={query} /></strong><small><HighlightMatch text={item.category} query={query} /> · <HighlightMatch text={service.detail} query={query} /></small></div></div>
               <div className="username-cell"><span title={item.username}><HighlightMatch text={item.username} query={query} /></span><button className="icon-action inline-copy" aria-label="Copy username" title="Copy username" onClick={() => copyValue(item.username, `${item.id}-user`)}>{copied === `${item.id}-user` ? "✓" : "▢"}</button></div>
               <div className="password-cell"><span>{revealed[item.id] ? item.password : "•".repeat(Math.min(Math.max(item.password.length, 8), 16))}</span><button className="icon-action" aria-label={revealed[item.id] ? "Hide password" : "Reveal password"} title={revealed[item.id] ? "Hide password" : "Reveal password"} onClick={() => setRevealed((value) => ({ ...value, [item.id]: !value[item.id] }))}>{revealed[item.id] ? "◉" : "◌"}</button><button className="icon-action" aria-label="Copy password" title="Copy password" onClick={() => copyValue(item.password, `${item.id}-password`)}>{copied === `${item.id}-password` ? "✓" : "▢"}</button></div>
-              <div className="credential-status"><span className={`strength-tag ${strength.toLowerCase()}`}>{strength}</span><span className={`breach-tag${breachResult?.pwned ? " breached" : ""}`}>{breachResult?.error ? "Check failed" : breachResult ? breachResult.pwned ? "Breached" : "No match" : "Not checked"}</span></div>
-              <div className="row-actions"><button className="icon-action" aria-label={`View password history${item.history?.length ? ` (${item.history.length} previous versions)` : ""}`} title={`${item.history?.length || 0} previous versions`} onClick={() => openHistory(item)}>↺{item.history?.length ? <sup>{item.history.length}</sup> : null}</button><button className="icon-action" aria-label="Edit credential" title="Edit credential" onClick={() => openEdit(item)}>✎</button><button className="icon-action delete-action" aria-label="Delete credential" title="Delete credential" onClick={() => removeCredential(item.id)}>×</button></div>
+              {isTrashView ? (
+                <>
+                  <div className="credential-status">
+                    <span className={`trash-expiry-tag${daysLeft <= 5 ? " expiring-soon" : ""}`}>
+                      {daysLeft === 0 ? "Expires today" : `${daysLeft}d left`}
+                    </span>
+                  </div>
+                  <div className="row-actions">
+                    <button type="button" className="restore-action" onClick={() => { void restoreCredential(item.id); }} title="Restore credential to vault">Restore</button>
+                    {confirmPermanentId === item.id ? (
+                      <button type="button" className="trash-confirm-btn" onClick={() => { void permanentlyDeleteCredential(item.id); }} title="Confirm permanent deletion">Confirm</button>
+                    ) : (
+                      <button type="button" className="icon-action delete-action" aria-label="Delete permanently" title="Delete permanently" onClick={() => setConfirmPermanentId(item.id)}>×</button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="credential-status"><span className={`strength-tag ${strength.toLowerCase()}`}>{strength}</span><span className={`breach-tag${breachResult?.pwned ? " breached" : ""}`}>{breachResult?.error ? "Check failed" : breachResult ? breachResult.pwned ? "Breached" : "No match" : "Not checked"}</span></div>
+                  <div className="row-actions"><button className="icon-action" aria-label={`View password history${item.history?.length ? ` (${item.history.length} previous versions)` : ""}`} title={`${item.history?.length || 0} previous versions`} onClick={() => openHistory(item)}>↺{item.history?.length ? <sup>{item.history.length}</sup> : null}</button><button className="icon-action" aria-label="Edit credential" title="Edit credential" onClick={() => openEdit(item)}>✎</button><button className="icon-action delete-action" aria-label="Move to Trash" title="Move to Trash (30-day recovery)" onClick={() => removeCredential(item.id)}>×</button></div>
+                </>
+              )}
             </article>;
           })}
         </section>
       </main>
 
       <footer className="replica-footer"><span>PassVault — Hand-crafted personal credential manager</span><span>Clipboard clears after 30 seconds&nbsp;&nbsp; Press <kbd>/</kbd> to search&nbsp;&nbsp; Press <kbd>A</kbd> to add account</span></footer>
+
+      {/* Floating Trash Undo Notification */}
+      {trashNotice && (
+        <div className="trash-undo-pill" role="status" aria-live="polite">
+          <span>Moved <strong>{trashNotice.label}</strong> to Trash · 30-day recovery</span>
+          <button
+            type="button"
+            className="trash-undo-btn"
+            onClick={() => { void restoreCredential(trashNotice.id); }}
+          >
+            Undo
+          </button>
+          <button
+            type="button"
+            className="trash-undo-close"
+            aria-label="Dismiss notification"
+            onClick={() => setTrashNotice(null)}
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       {/* Floating Clipboard Auto-Clear Countdown Pill */}
       {(clipboardCountdown !== null || clipboardClearedStatus) && (

@@ -733,3 +733,157 @@ mark.search-highlight {
   background: rgba(6, 182, 212, 0.08);
   color: #67e8f9;
 }
+
+/* Trash / 30-Day Soft-Delete UI */
+.category-tabs button.trash-tab.active {
+  background: #2b1a1c;
+  color: #fecaca;
+}
+.trash-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #24232b;
+  background: #101013;
+  color: #a6a3b0;
+  font-size: 12.5px;
+}
+.trash-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.empty-trash-button,
+.trash-confirm-btn,
+.restore-action {
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+.empty-trash-button {
+  border: 1px solid #5b3830;
+  background: #251416;
+  color: #fca5a5;
+}
+.empty-trash-button:hover {
+  border-color: #ef4444;
+  background: #3a181b;
+  color: #ffffff;
+}
+.trash-confirm-btn {
+  border: 1px solid #ef4444;
+  background: #ef4444;
+  color: #ffffff;
+}
+.trash-confirm-btn:hover {
+  background: #dc2626;
+}
+.trash-cancel-btn {
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid #34343a;
+  border-radius: 6px;
+  background: transparent;
+  color: #c6c2d0;
+  font-size: 11.5px;
+}
+.trash-cancel-btn:hover {
+  border-color: #55555c;
+  color: #ffffff;
+}
+.trash-expiry-tag {
+  padding: 4px 8px;
+  border: 1px solid #4d3b27;
+  border-radius: 999px;
+  background: #211910;
+  color: #fbbf24;
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.trash-expiry-tag.expiring-soon {
+  border-color: #633537;
+  background: #251416;
+  color: #ff8589;
+}
+.credential-row.trashed-row .row-actions {
+  width: auto;
+  gap: 6px;
+}
+.credential-list-head.trash-head,
+.credential-row.trashed-row {
+  grid-template-columns: minmax(220px, 1.45fr) minmax(190px, 1.25fr) minmax(150px, 1fr) minmax(120px, 0.8fr) 170px;
+}
+.restore-action {
+  border: 1px solid #294c40;
+  background: #102019;
+  color: #9bdabc;
+}
+.restore-action:hover {
+  border-color: #34d399;
+  background: #142c22;
+  color: #ffffff;
+}
+.trash-undo-pill {
+  position: fixed;
+  bottom: 28px;
+  right: 28px;
+  z-index: 9998;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px 10px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(15, 15, 19, 0.96);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.75);
+  color: #e4e4e7;
+  font-size: 13px;
+  animation: pillSlideUp 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.trash-undo-btn {
+  padding: 5px 12px;
+  border: 1px solid #ffffff;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #09090b;
+  font-size: 12px;
+  font-weight: 700;
+}
+.trash-undo-btn:hover {
+  background: #e4e4e7;
+}
+.trash-undo-close {
+  border: 0;
+  background: transparent;
+  color: #94a3b8;
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.trash-undo-close:hover {
+  color: #ffffff;
+}
+@media (max-width: 760px) {
+  .trash-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .credential-list-head.trash-head,
+  .credential-row.trashed-row {
+    grid-template-columns: minmax(190px, 1.3fr) minmax(150px, 1fr) 110px 165px;
+  }
+  .trash-undo-pill {
+    left: 16px;
+    right: 16px;
+    bottom: 20px;
+    justify-content: space-between;
+  }
+}

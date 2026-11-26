@@ -653,35 +653,107 @@ app.get('/api/logo', (req, res) => {
   });
 });
 
+const TRASH_RETENTION_DAYS = 30;
+const TRASH_RETENTION_MS = TRASH_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+const ACTIVE_CREDENTIAL_FILTER = { $or: [{ deletedAt: null }, { deletedAt: { $exists: false } }] };
+
+const decryptCredentialRecord = (item) => ({
+  ...item,
+  password: decryptVaultPassword(item.password),
+  favorite: Boolean(item.favorite),
+  tag: typeof item.tag === 'string' ? item.tag : 'Personal',
+  customFields: Array.isArray(item.customFields) ? item.customFields : [],
+  createdAt: item.createdAt,
+  updatedAt: item.updatedAt,
+  deletedAt: item.deletedAt || null,
+  purgeAt: item.purgeAt || null,
+  history: Array.isArray(item.history)
+    ? item.history.map((h) => ({
+      ...h,
+      password: decryptVaultPassword(h.password),
+    }))
+    : [],
+});
+
 app.get('/api/passwords', authenticateToken, async (req, res) => {
   try {
     // FIX #2: Using pre-resolved passwordsCol
     // FIX #4: MongoDB projection to only fetch needed fields — reduces bandwidth
     const passwords = await passwordsCol
-      .find({ userId: req.user.userId })
+      .find({ userId: req.user.userId, ...ACTIVE_CREDENTIAL_FILTER })
       .project({ _id: 0, id: 1, site: 1, username: 1, password: 1, favorite: 1, tag: 1, customFields: 1, history: 1, createdAt: 1, updatedAt: 1 })
       .sort({ site: 1 })
       .toArray();
 
-    const decryptedPasswords = passwords.map((item) => ({
-      ...item,
-      password: decryptVaultPassword(item.password),
-      favorite: Boolean(item.favorite),
-      tag: typeof item.tag === 'string' ? item.tag : 'Personal',
-      customFields: Array.isArray(item.customFields) ? item.customFields : [],
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-      history: Array.isArray(item.history)
-        ? item.history.map(h => ({
-          ...h,
-          password: decryptVaultPassword(h.password),
-        }))
-        : [],
-    }));
-    res.json(decryptedPasswords);
+    res.json(passwords.map(decryptCredentialRecord));
   } catch (error) {
     console.error('Failed to load passwords:', error);
     res.status(500).json({ success: false, message: 'Failed to load passwords' });
+  }
+});
+
+app.get('/api/passwords/trash', authenticateToken, async (req, res) => {
+  try {
+    const now = new Date();
+    // Ensure expired trash records are purged promptly even before MongoDB's background TTL sweep runs
+    await passwordsCol.deleteMany({
+      userId: req.user.userId,
+      purgeAt: { $lte: now },
+    });
+
+    const trashed = await passwordsCol
+      .find({ userId: req.user.userId, deletedAt: { $ne: null, $exists: true } })
+      .project({ _id: 0, id: 1, site: 1, username: 1, password: 1, favorite: 1, tag: 1, customFields: 1, history: 1, createdAt: 1, updatedAt: 1, deletedAt: 1, purgeAt: 1 })
+      .sort({ deletedAt: -1 })
+      .toArray();
+
+    res.json(trashed.map(decryptCredentialRecord));
+  } catch (error) {
+    console.error('Failed to load trashed passwords:', error);
+    res.status(500).json({ success: false, message: 'Failed to load trash' });
+  }
+});
+
+app.post('/api/passwords/:id/restore', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Missing password id' });
+    }
+
+    const result = await passwordsCol.updateOne(
+      { id, userId: req.user.userId, deletedAt: { $ne: null, $exists: true } },
+      {
+        $unset: { deletedAt: '', purgeAt: '' },
+        $set: { updatedAt: new Date() },
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ success: false, message: 'Trashed password not found' });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Failed to restore password:', error);
+    res.status(500).json({ success: false, message: 'Failed to restore password' });
+  }
+});
+
+app.delete('/api/passwords/trash/empty', authenticateToken, async (req, res) => {
+  try {
+    const result = await passwordsCol.deleteMany({
+      userId: req.user.userId,
+      deletedAt: { $ne: null, $exists: true },
+    });
+
+    res.json({
+      success: true,
+      deletedCount: result.deletedCount,
+    });
+  } catch (error) {
+    console.error('Failed to empty trash:', error);
+    res.status(500).json({ success: false, message: 'Failed to empty trash' });
   }
 });
 
@@ -826,7 +898,7 @@ app.put('/api/passwords/:id', authenticateToken, async (req, res) => {
 
     // FIX #2: Using pre-resolved passwordsCol
     const result = await passwordsCol.updateOne(
-      { id, userId: req.user.userId },
+      { id, userId: req.user.userId, ...ACTIVE_CREDENTIAL_FILTER },
       { $set: updateFields }
     );
 
@@ -848,21 +920,41 @@ app.delete('/api/passwords/:id', authenticateToken, async (req, res) => {
   try {
     const { id } = req.params;
     const passwordId = id || req.body?.id;
+    const permanent = req.query.permanent === 'true';
 
     if (!passwordId) {
       return res.status(400).json({ success: false, message: 'Missing password id' });
     }
 
-    // FIX #2: Using pre-resolved passwordsCol
-    const result = await passwordsCol.deleteOne({ id: passwordId, userId: req.user.userId });
+    if (permanent) {
+      const result = await passwordsCol.deleteOne({ id: passwordId, userId: req.user.userId });
+      if (result.deletedCount === 0) {
+        return res.status(404).json({ success: false, message: 'Password not found' });
+      }
+      return res.json({
+        success: true,
+        permanentlyDeleted: true,
+        deletedCount: result.deletedCount,
+      });
+    }
 
-    if (result.deletedCount === 0) {
+    const deletedAt = new Date();
+    const purgeAt = new Date(deletedAt.getTime() + TRASH_RETENTION_MS);
+
+    const result = await passwordsCol.updateOne(
+      { id: passwordId, userId: req.user.userId, ...ACTIVE_CREDENTIAL_FILTER },
+      { $set: { deletedAt, purgeAt } }
+    );
+
+    if (result.matchedCount === 0) {
       return res.status(404).json({ success: false, message: 'Password not found' });
     }
 
     res.json({
       success: true,
-      deletedCount: result.deletedCount,
+      softDeleted: true,
+      deletedAt,
+      purgeAt,
     });
   } catch (error) {
     console.error('Failed to delete password:', error);
@@ -1121,6 +1213,8 @@ async function startServer() {
     await usersCol.createIndex({ email: 1 }, { unique: true });
     await passwordsCol.createIndex({ userId: 1, id: 1 }, { unique: true });
     await passwordsCol.createIndex({ userId: 1, site: 1 });
+    await passwordsCol.createIndex({ userId: 1, deletedAt: 1 });
+    await passwordsCol.createIndex({ purgeAt: 1 }, { expireAfterSeconds: 0 });
     // FIX #1: Standalone index on `id` for O(1) PUT/DELETE lookups without needing userId prefix
     await passwordsCol.createIndex({ id: 1 }, { unique: true });
 
