@@ -15,10 +15,31 @@ import { logAuditEvent, AUDIT_CATEGORIES, AUDIT_EVENT_TYPES } from "./utils/audi
 import { useSmoothScroll } from "./hooks/useSmoothScroll";
 
 const CATEGORIES = ["Personal", "Finance", "Work", "Developer"];
-const initialForm = { service: "", category: "Personal", username: "", password: "", note: "" };
+const CUSTOM_FIELD_PRESETS = [
+  { label: "API Key", isSecret: true },
+  { label: "PIN", isSecret: true },
+  { label: "Security Question", isSecret: false },
+  { label: "Recovery Code", isSecret: true },
+];
+const initialForm = { service: "", category: "Personal", username: "", password: "", note: "", favorite: false, customFields: [] };
 const POPULAR_SERVICES = ["Netflix", "Stripe", "Notion", "YouTube", "Google", "GitHub", "Amazon", "Facebook", "Instagram", "Microsoft"];
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3000/api/passwords";
 const AUTH_API_URL = import.meta.env.VITE_AUTH_API_URL ?? "http://localhost:3000/api/auth";
+
+function splitCustomFields(customFields = []) {
+  const fields = Array.isArray(customFields) ? customFields : [];
+  const noteField = fields.find((field) => field && (field.id === "note" || field.label === "Note"));
+  const extraFields = fields.filter((field) => field && field !== noteField);
+  return {
+    note: typeof noteField?.value === "string" ? noteField.value : "",
+    extraFields: extraFields.map((field) => ({
+      id: field.id || crypto.randomUUID(),
+      label: typeof field.label === "string" ? field.label : "",
+      value: typeof field.value === "string" ? field.value : "",
+      isSecret: Boolean(field.isSecret),
+    })),
+  };
+}
 
 function passwordStrength(value) {
   if (!value) return "";
@@ -45,7 +66,7 @@ async function normalizeEncryptedCredential(item, vaultKey) {
     })))
     : [];
   const customFields = Array.isArray(item.customFields) ? await decryptCustomFields(item.customFields, vaultKey) : [];
-  const note = customFields.find((field) => field.label === "Note")?.value || "";
+  const { note } = splitCustomFields(customFields);
   const service = typeof item.site === "string" && item.site.trim()
     ? item.site.trim()
     : typeof item.service === "string" && item.service.trim()
@@ -56,6 +77,7 @@ async function normalizeEncryptedCredential(item, vaultKey) {
     service,
     username: typeof item.username === "string" ? item.username : "",
     password: typeof password === "string" ? password : "",
+    favorite: Boolean(item.favorite),
     history,
     category: item.tag === "Development" ? "Developer" : (item.tag || "Personal"),
     note,
@@ -138,6 +160,9 @@ function App() {
   const [newPasswordConfirmation, setNewPasswordConfirmation] = useState("");
   const [credentialFormError, setCredentialFormError] = useState("");
   const [revealed, setRevealed] = useState({});
+  const [expandedFields, setExpandedFields] = useState({});
+  const [drawerSecretVisible, setDrawerSecretVisible] = useState({});
+  const togglingFavoritesRef = useRef(new Set());
   const [copied, setCopied] = useState("");
   const [showLanding, setShowLanding] = useState(true);
   const [isVaultLocked, setIsVaultLocked] = useState(false);
@@ -160,10 +185,13 @@ function App() {
   const filtered = useMemo(() => {
     const term = query.trim().toLowerCase();
     const source = isTrashView ? trashedCredentials : credentials;
-    return source.filter((item) => {
-      const matchesCategory = isTrashView || category === "All" || item.category === category;
-      return matchesCategory && (isTrashView || !weakOnly || passwordStrength(item.password) === "Weak") && (!term || `${item.service} ${item.username} ${item.category}`.toLowerCase().includes(term));
+    const matched = source.filter((item) => {
+      const matchesCategory = isTrashView || category === "All" || (category === "Favorites" ? Boolean(item.favorite) : item.category === category);
+      const fieldLabels = (item.customFields || []).map((field) => field.label || "").join(" ");
+      return matchesCategory && (isTrashView || !weakOnly || passwordStrength(item.password) === "Weak") && (!term || `${item.service} ${item.username} ${item.category} ${fieldLabels}`.toLowerCase().includes(term));
     });
+    if (isTrashView) return matched;
+    return [...matched].sort((a, b) => Number(Boolean(b.favorite)) - Number(Boolean(a.favorite)));
   }, [credentials, trashedCredentials, category, query, weakOnly, isTrashView]);
 
   const searchSuggestions = useMemo(() => {
@@ -216,7 +244,10 @@ function App() {
   }, [credentials]);
   const reusedCount = credentials.filter((item) => item.password && passwordGroups.get(item.password) > 1).length;
   const categoryCounts = useMemo(() => {
-    const counts = { All: credentials.length };
+    const counts = {
+      All: credentials.length,
+      Favorites: credentials.filter((item) => Boolean(item.favorite)).length,
+    };
     ["Finance", "Work", "Personal", "Developer"].forEach((cat) => {
       counts[cat] = credentials.filter((item) => (item.category || "").toLowerCase() === cat.toLowerCase()).length;
     });
@@ -278,6 +309,9 @@ function App() {
     setVaultKey(null);
     setCredentials([]);
     setTrashedCredentials([]);
+    setRevealed({});
+    setExpandedFields({});
+    setDrawerSecretVisible({});
     if (trashNoticeTimerRef.current) window.clearTimeout(trashNoticeTimerRef.current);
     setTrashNotice(null);
     setConfirmPermanentId(null);
@@ -335,6 +369,8 @@ function App() {
     // a key that has already been discarded. A page refresh still clears
     // the key and correctly requires the master password.
     setRevealed({});
+    setExpandedFields({});
+    setDrawerSecretVisible({});
     setQuery("");
     setHealthOpen(false);
     if (trashNoticeTimerRef.current) window.clearTimeout(trashNoticeTimerRef.current);
@@ -470,12 +506,56 @@ function App() {
   });
 
   function openNewCredential() {
-    setForm(initialForm); setEditingId(null); setCurrentPasswordConfirmation(""); setNewPasswordConfirmation(""); setCredentialFormError(""); setServiceSuggestionIndex(0); setServiceSuggestionsDismissed(false); setDrawerClosing(false); setDrawerOpen(true);
+    setForm(initialForm); setEditingId(null); setDrawerSecretVisible({}); setCurrentPasswordConfirmation(""); setNewPasswordConfirmation(""); setCredentialFormError(""); setServiceSuggestionIndex(0); setServiceSuggestionsDismissed(false); setDrawerClosing(false); setDrawerOpen(true);
   }
 
   function openEdit(item) {
-    setForm({ service: item.service, category: item.category, username: item.username, password: item.password, note: item.note || "" });
-    setEditingId(item.id); setCurrentPasswordConfirmation(""); setNewPasswordConfirmation(""); setCredentialFormError(""); setServiceSuggestionsDismissed(true); setDrawerClosing(false); setDrawerOpen(true);
+    const { note, extraFields } = splitCustomFields(item.customFields);
+    setForm({
+      service: item.service,
+      category: item.category,
+      username: item.username,
+      password: item.password,
+      note: note || item.note || "",
+      favorite: Boolean(item.favorite),
+      customFields: extraFields,
+    });
+    setEditingId(item.id); setDrawerSecretVisible({}); setCurrentPasswordConfirmation(""); setNewPasswordConfirmation(""); setCredentialFormError(""); setServiceSuggestionsDismissed(true); setDrawerClosing(false); setDrawerOpen(true);
+  }
+
+  function addCustomField(preset = null) {
+    setForm((current) => {
+      if ((current.customFields || []).length >= 49) return current;
+      const newField = {
+        id: crypto.randomUUID(),
+        label: preset?.label || "",
+        value: "",
+        isSecret: Boolean(preset?.isSecret),
+      };
+      return { ...current, customFields: [...(current.customFields || []), newField] };
+    });
+    setCredentialFormError("");
+  }
+
+  function updateCustomField(fieldId, patch) {
+    setForm((current) => ({
+      ...current,
+      customFields: (current.customFields || []).map((field) => (field.id === fieldId ? { ...field, ...patch } : field)),
+    }));
+    setCredentialFormError("");
+  }
+
+  function removeCustomField(fieldId) {
+    setForm((current) => ({
+      ...current,
+      customFields: (current.customFields || []).filter((field) => field.id !== fieldId),
+    }));
+    setDrawerSecretVisible((current) => {
+      const next = { ...current };
+      delete next[fieldId];
+      return next;
+    });
+    setCredentialFormError("");
   }
 
   function closeDrawer() {
@@ -484,6 +564,7 @@ function App() {
     window.setTimeout(() => {
       setDrawerOpen(false);
       setDrawerClosing(false);
+      setDrawerSecretVisible({});
     }, 380);
   }
 
@@ -536,10 +617,28 @@ function App() {
         return;
       }
       setCredentialFormError("");
+      const cleanedExtraFields = (form.customFields || [])
+        .map((field) => ({
+          id: field.id || crypto.randomUUID(),
+          label: (field.label || "").trim(),
+          value: typeof field.value === "string" ? field.value : "",
+          isSecret: Boolean(field.isSecret),
+        }))
+        .filter((field) => field.label.length > 0 || field.value.length > 0);
+      if (cleanedExtraFields.some((field) => !field.label)) {
+        setCredentialFormError("Please enter a label for each custom field.");
+        return;
+      }
+      if (cleanedExtraFields.length > 49) {
+        setCredentialFormError("You can store up to 49 custom fields per credential.");
+        return;
+      }
       const id = editingId || crypto.randomUUID();
-      const plainCustomFields = form.note.trim()
-        ? [{ id: "note", label: "Note", value: form.note.trim(), type: "text" }]
-        : [];
+      const normalizedNote = form.note.trim();
+      const plainCustomFields = [
+        ...(normalizedNote ? [{ id: "note", label: "Note", value: normalizedNote, isSecret: false }] : []),
+        ...cleanedExtraFields,
+      ];
       const customFields = plainCustomFields.length
         ? await encryptCustomFields(plainCustomFields, vaultKey)
         : [];
@@ -548,7 +647,7 @@ function App() {
         site: form.service.trim(),
         username: form.username.trim(),
         password: await encryptCredential(form.password, vaultKey),
-        favorite: Boolean(existing?.favorite),
+        favorite: Boolean(form.favorite),
         tag: form.category === "Developer" ? "Development" : form.category,
         customFields,
         history: passwordChanged
@@ -577,8 +676,8 @@ function App() {
       if (response.status === 401) throw new Error("Your session expired. Please sign in again.");
       if (!response.ok) throw new Error("The database could not save this credential.");
       setCredentials((items) => editingId
-        ? items.map((item) => item.id === id ? { ...item, ...form, site: payload.site, tag: payload.tag, customFields: plainCustomFields, history } : item)
-        : [...items, { ...form, id, site: payload.site, tag: payload.tag, customFields: plainCustomFields, favorite: false, history: [] }]);
+        ? items.map((item) => item.id === id ? { ...item, ...form, note: normalizedNote, site: payload.site, tag: payload.tag, favorite: payload.favorite, customFields: plainCustomFields, history } : item)
+        : [...items, { ...form, note: normalizedNote, id, site: payload.site, tag: payload.tag, customFields: plainCustomFields, favorite: payload.favorite, history: [] }]);
       logAuditEvent(session.user?.email, {
         type: editingId ? AUDIT_EVENT_TYPES.CREDENTIAL_UPDATE : AUDIT_EVENT_TYPES.CREDENTIAL_CREATE,
         title: editingId ? 'Credential Updated' : 'Credential Added',
@@ -793,6 +892,35 @@ function App() {
     }
   }
 
+  async function toggleFavorite(item) {
+    if (!item || togglingFavoritesRef.current.has(item.id)) return;
+    togglingFavoritesRef.current.add(item.id);
+    const nextFavorite = !item.favorite;
+    setVaultError("");
+    setCredentials((items) => items.map((entry) => (entry.id === item.id ? { ...entry, favorite: nextFavorite } : entry)));
+    try {
+      const response = await secureFetch(`${API_BASE_URL}/${encodeURIComponent(item.id)}/favorite`, {
+        method: "PUT",
+        headers: authHeaders(true),
+        body: JSON.stringify({ favorite: nextFavorite }),
+      });
+      if (response.status === 401) throw new Error("Your session expired. Please sign in again.");
+      if (!response.ok) throw new Error("Could not update favorite status.");
+      logAuditEvent(session.user?.email, {
+        type: AUDIT_EVENT_TYPES.CREDENTIAL_UPDATE,
+        title: nextFavorite ? 'Credential Pinned' : 'Credential Unpinned',
+        description: `${nextFavorite ? 'Pinned' : 'Unpinned'} "${item.service}" ${nextFavorite ? 'to' : 'from'} Favorites.`,
+        severity: 'info',
+        category: AUDIT_CATEGORIES.VAULT,
+      });
+    } catch (error) {
+      setCredentials((items) => items.map((entry) => (entry.id === item.id ? { ...entry, favorite: !nextFavorite } : entry)));
+      setVaultError(error.message);
+    } finally {
+      togglingFavoritesRef.current.delete(item.id);
+    }
+  }
+
   async function emptyTrash() {
     setVaultError("");
     try {
@@ -920,15 +1048,15 @@ function App() {
             )}
           </div>
           <nav className="category-tabs" aria-label="Filter by category">
-            {["All", "Finance", "Work", "Personal", "Developer"].map((value) => {
+            {["All", "Favorites", "Finance", "Work", "Personal", "Developer"].map((value) => {
               const count = categoryCounts[value] ?? 0;
               return (
                 <button
                   key={value}
-                  className={category === value && !weakOnly ? "active" : ""}
+                  className={`${value === "Favorites" ? "favorites-tab " : ""}${category === value && !weakOnly ? "active" : ""}`.trim()}
                   onClick={() => { setCategory(value); setWeakOnly(false); setConfirmEmptyTrash(false); setConfirmPermanentId(null); }}
                 >
-                  {value} <span>({count})</span>
+                  {value === "Favorites" ? "★ Favorites" : value} <span>({count})</span>
                 </button>
               );
             })}
@@ -991,8 +1119,36 @@ function App() {
             const service = getServicePresentation(item.service);
             const breachResult = breachResults[item.id];
             const daysLeft = isTrashView ? getTrashDaysRemaining(item) : 0;
-            return <article className={`credential-row${isTrashView ? " trashed-row" : ""}`} key={item.id}>
-              <div className="service-cell"><SiteLogo site={item.service} size="md" className="service-icon" /><div><strong title={item.service}><HighlightMatch text={service.label} query={query} /></strong><small><HighlightMatch text={item.category} query={query} /> · <HighlightMatch text={service.detail} query={query} /></small></div></div>
+            const { note: itemNote, extraFields } = splitCustomFields(item.customFields);
+            const resolvedNote = itemNote || item.note || "";
+            const totalDetailsCount = extraFields.length + (resolvedNote ? 1 : 0);
+            const isExpanded = Boolean(expandedFields[item.id]);
+            return <article className={`credential-row${isTrashView ? " trashed-row" : ""}${item.favorite && !isTrashView ? " is-favorite" : ""}`} key={item.id}>
+              <div className="service-cell">
+                <SiteLogo site={item.service} size="md" className="service-icon" />
+                <div>
+                  <div className="service-title-line">
+                    <strong title={item.service}><HighlightMatch text={service.label} query={query} /></strong>
+                    {item.favorite && !isTrashView && <span className="pinned-badge" title="Pinned to Favorites">★ Pinned</span>}
+                  </div>
+                  <small>
+                    <HighlightMatch text={item.category} query={query} /> · <HighlightMatch text={service.detail} query={query} />
+                    {totalDetailsCount > 0 && !isTrashView && (
+                      <>
+                        {" · "}
+                        <button
+                          type="button"
+                          className="details-toggle-link"
+                          onClick={() => setExpandedFields((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
+                          aria-expanded={isExpanded}
+                        >
+                          {isExpanded ? "Hide fields ▴" : `${extraFields.length ? `${extraFields.length} custom field${extraFields.length === 1 ? "" : "s"}` : "Note"}${extraFields.length && resolvedNote ? " + note" : ""} ▾`}
+                        </button>
+                      </>
+                    )}
+                  </small>
+                </div>
+              </div>
               <div className="username-cell"><span title={item.username}><HighlightMatch text={item.username} query={query} /></span><button className="icon-action inline-copy" aria-label="Copy username" title="Copy username" onClick={() => copyValue(item.username, `${item.id}-user`)}>{copied === `${item.id}-user` ? "✓" : "▢"}</button></div>
               <div className="password-cell"><span>{revealed[item.id] ? item.password : "•".repeat(Math.min(Math.max(item.password.length, 8), 16))}</span><button className="icon-action" aria-label={revealed[item.id] ? "Hide password" : "Reveal password"} title={revealed[item.id] ? "Hide password" : "Reveal password"} onClick={() => setRevealed((value) => ({ ...value, [item.id]: !value[item.id] }))}>{revealed[item.id] ? "◉" : "◌"}</button><button className="icon-action" aria-label="Copy password" title="Copy password" onClick={() => copyValue(item.password, `${item.id}-password`)}>{copied === `${item.id}-password` ? "✓" : "▢"}</button></div>
               {isTrashView ? (
@@ -1014,7 +1170,82 @@ function App() {
               ) : (
                 <>
                   <div className="credential-status"><span className={`strength-tag ${strength.toLowerCase()}`}>{strength}</span><span className={`breach-tag${breachResult?.pwned ? " breached" : ""}`}>{breachResult?.error ? "Check failed" : breachResult ? breachResult.pwned ? "Breached" : "No match" : "Not checked"}</span></div>
-                  <div className="row-actions"><button className="icon-action" aria-label={`View password history${item.history?.length ? ` (${item.history.length} previous versions)` : ""}`} title={`${item.history?.length || 0} previous versions`} onClick={() => openHistory(item)}>↺{item.history?.length ? <sup>{item.history.length}</sup> : null}</button><button className="icon-action" aria-label="Edit credential" title="Edit credential" onClick={() => openEdit(item)}>✎</button><button className="icon-action delete-action" aria-label="Move to Trash" title="Move to Trash (30-day recovery)" onClick={() => removeCredential(item.id)}>×</button></div>
+                  <div className="row-actions">
+                    <button
+                      type="button"
+                      className={`icon-action favorite-action${item.favorite ? " is-active" : ""}`}
+                      aria-label={item.favorite ? "Unpin from Favorites" : "Pin to Favorites"}
+                      aria-pressed={Boolean(item.favorite)}
+                      title={item.favorite ? "Unpin from Favorites" : "Pin to Favorites"}
+                      onClick={() => { void toggleFavorite(item); }}
+                    >
+                      {item.favorite ? "★" : "☆"}
+                    </button>
+                    <button className="icon-action" aria-label={`View password history${item.history?.length ? ` (${item.history.length} previous versions)` : ""}`} title={`${item.history?.length || 0} previous versions`} onClick={() => openHistory(item)}>↺{item.history?.length ? <sup>{item.history.length}</sup> : null}</button>
+                    <button className="icon-action" aria-label="Edit credential" title="Edit credential" onClick={() => openEdit(item)}>✎</button>
+                    <button className="icon-action delete-action" aria-label="Move to Trash" title="Move to Trash (30-day recovery)" onClick={() => removeCredential(item.id)}>×</button>
+                  </div>
+                  {isExpanded && totalDetailsCount > 0 && (
+                    <div className="credential-details-panel">
+                      {extraFields.map((field) => {
+                        const revealKey = `${item.id}-field-${field.id}`;
+                        const copyKey = field.isSecret ? `${item.id}-field-password-${field.id}` : `${item.id}-field-${field.id}`;
+                        const isFieldRevealed = Boolean(revealed[revealKey]);
+                        return (
+                          <div className="detail-field-row" key={field.id}>
+                            <span className="detail-field-label">
+                              <HighlightMatch text={field.label || "Field"} query={query} />
+                              {field.isSecret && <em className="detail-secret-badge">Secret</em>}
+                            </span>
+                            <span className="detail-field-value">
+                              {field.isSecret && !isFieldRevealed ? "•".repeat(Math.min(Math.max((field.value || "").length, 8), 16)) : (field.value || "—")}
+                            </span>
+                            <div className="detail-field-actions">
+                              {field.isSecret && (
+                                <button
+                                  type="button"
+                                  className="icon-action"
+                                  aria-label={isFieldRevealed ? `Hide ${field.label}` : `Reveal ${field.label}`}
+                                  title={isFieldRevealed ? "Hide value" : "Reveal value"}
+                                  onClick={() => setRevealed((prev) => ({ ...prev, [revealKey]: !prev[revealKey] }))}
+                                >
+                                  {isFieldRevealed ? "◉" : "◌"}
+                                </button>
+                              )}
+                              {field.value && (
+                                <button
+                                  type="button"
+                                  className="icon-action"
+                                  aria-label={`Copy ${field.label}`}
+                                  title={`Copy ${field.label}`}
+                                  onClick={() => copyValue(field.value, copyKey)}
+                                >
+                                  {copied === copyKey ? "✓" : "▢"}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {resolvedNote && (
+                        <div className="detail-field-row detail-note-row">
+                          <span className="detail-field-label">Note</span>
+                          <span className="detail-field-value">{resolvedNote}</span>
+                          <div className="detail-field-actions">
+                            <button
+                              type="button"
+                              className="icon-action"
+                              aria-label="Copy note"
+                              title="Copy note"
+                              onClick={() => copyValue(resolvedNote, `${item.id}-note`)}
+                            >
+                              {copied === `${item.id}-note` ? "✓" : "▢"}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </>
               )}
             </article>;
@@ -1141,14 +1372,106 @@ function App() {
                 </div>
               )}
             </label>
-            <fieldset><legend>Category</legend><div className="form-categories">{CATEGORIES.map((value) => <button type="button" key={value} className={form.category === value ? "selected" : ""} onClick={() => setForm({ ...form, category: value })}>{value}</button>)}</div></fieldset>
+            <fieldset>
+              <legend>Category &amp; Pin</legend>
+              <div className="form-categories-row">
+                <div className="form-categories">{CATEGORIES.map((value) => <button type="button" key={value} className={form.category === value ? "selected" : ""} onClick={() => setForm({ ...form, category: value })}>{value}</button>)}</div>
+                <button
+                  type="button"
+                  className={`drawer-favorite-toggle${form.favorite ? " selected" : ""}`}
+                  aria-pressed={Boolean(form.favorite)}
+                  onClick={() => setForm((current) => ({ ...current, favorite: !current.favorite }))}
+                >
+                  {form.favorite ? "★ Pinned" : "☆ Pin"}
+                </button>
+              </div>
+            </fieldset>
             <label>Username or email<input required value={form.username} onChange={(event) => setForm({ ...form, username: event.target.value })} placeholder="name@domain.com or handle" /></label>
             <label>Password<div className="password-entry"><input type="password" autoComplete={editingId ? "current-password" : "new-password"} required value={form.password} onChange={(event) => { setForm({ ...form, password: event.target.value }); setCurrentPasswordConfirmation(""); setNewPasswordConfirmation(""); setCredentialFormError(""); }} placeholder="Enter or generate" /><button type="button" onClick={generatePassword}>Generate</button></div>{form.password && <small className="password-tip">Tip: generated passphrases are 18 characters with high entropy.</small>}</label>
             {isChangingPassword && <div className="password-confirmation-fields">
               <label>Current password<input type="password" autoComplete="current-password" required value={currentPasswordConfirmation} onChange={(event) => { setCurrentPasswordConfirmation(event.target.value); setCredentialFormError(""); }} placeholder="Enter the current account password" /></label>
               <label>Confirm new password<input type="password" autoComplete="new-password" required value={newPasswordConfirmation} onChange={(event) => { setNewPasswordConfirmation(event.target.value); setCredentialFormError(""); }} placeholder="Re-enter the new password" /></label>
             </div>}
-            <label>Optional note<input value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="Recovery pin, security question, seed hint" /></label>
+            <label>Optional note<input value={form.note} onChange={(event) => setForm({ ...form, note: event.target.value })} placeholder="General note or hint" /></label>
+            <fieldset className="custom-fields-section">
+              <div className="custom-fields-header">
+                <legend>Custom fields (encrypted)</legend>
+                <button type="button" className="add-custom-field-btn" onClick={() => addCustomField()}>
+                  + Add field
+                </button>
+              </div>
+              <div className="custom-field-presets">
+                {CUSTOM_FIELD_PRESETS.map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    className="custom-field-preset-chip"
+                    onClick={() => addCustomField(preset)}
+                  >
+                    + {preset.label}
+                  </button>
+                ))}
+              </div>
+              {(form.customFields || []).length > 0 && (
+                <div className="custom-fields-list">
+                  {(form.customFields || []).map((field, index) => {
+                    const isVisible = Boolean(drawerSecretVisible[field.id]);
+                    return (
+                      <div className="custom-field-editor" key={field.id}>
+                        <div className="custom-field-top">
+                          <input
+                            type="text"
+                            maxLength={128}
+                            value={field.label}
+                            onChange={(event) => updateCustomField(field.id, { label: event.target.value })}
+                            placeholder={`Field ${index + 1} label (e.g. API Key)`}
+                            aria-label={`Custom field ${index + 1} label`}
+                          />
+                          <button
+                            type="button"
+                            className={`secret-toggle-btn${field.isSecret ? " active" : ""}`}
+                            aria-pressed={Boolean(field.isSecret)}
+                            title={field.isSecret ? "Masked as secret" : "Shown as plain text"}
+                            onClick={() => updateCustomField(field.id, { isSecret: !field.isSecret })}
+                          >
+                            {field.isSecret ? "🔒 Secret" : "Text"}
+                          </button>
+                          <button
+                            type="button"
+                            className="remove-custom-field-btn"
+                            aria-label={`Remove field ${field.label || index + 1}`}
+                            title="Remove field"
+                            onClick={() => removeCustomField(field.id)}
+                          >
+                            ×
+                          </button>
+                        </div>
+                        <div className="custom-field-value-row">
+                          <input
+                            type={field.isSecret && !isVisible ? "password" : "text"}
+                            maxLength={10000}
+                            value={field.value}
+                            onChange={(event) => updateCustomField(field.id, { value: event.target.value })}
+                            placeholder="Field value"
+                            aria-label={`Custom field ${index + 1} value`}
+                          />
+                          {field.isSecret && (
+                            <button
+                              type="button"
+                              className="reveal-custom-field-btn"
+                              aria-label={isVisible ? "Hide field value" : "Reveal field value"}
+                              onClick={() => setDrawerSecretVisible((prev) => ({ ...prev, [field.id]: !prev[field.id] }))}
+                            >
+                              {isVisible ? "Hide" : "Show"}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </fieldset>
             {credentialFormError && <p className="credential-form-error" role="alert">{credentialFormError}</p>}
             <div className="drawer-actions"><button type="button" className="cancel-button" onClick={closeDrawer}>Cancel</button><button type="submit" className="save-button" disabled={isSaving}>{isSaving ? "Saving…" : "Save to vault"}</button></div>
           </form>

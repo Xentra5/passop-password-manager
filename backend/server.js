@@ -80,6 +80,16 @@ app.use(
 const sanitizeText = (str) =>
   typeof str === 'string' ? str.replace(/[<>"'`]/g, '') : str;
 
+const sanitizeCustomFields = (fields) =>
+  Array.isArray(fields)
+    ? fields.slice(0, 50).map((field) => ({
+      id: typeof field.id === 'string' && field.id.trim() ? field.id.trim().slice(0, 64) : crypto.randomBytes(4).toString('hex'),
+      label: sanitizeText((field.label || '').trim()).slice(0, 128),
+      value: typeof field.value === 'string' ? field.value : '',
+      isSecret: Boolean(field.isSecret),
+    }))
+    : [];
+
 const isValidPasswordPayload = (payload) => {
   return (
     payload &&
@@ -757,6 +767,33 @@ app.delete('/api/passwords/trash/empty', authenticateToken, async (req, res) => 
   }
 });
 
+app.put('/api/passwords/:id/favorite', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) {
+      return res.status(400).json({ success: false, message: 'Missing password id' });
+    }
+    if (typeof req.body?.favorite !== 'boolean') {
+      return res.status(400).json({ success: false, message: 'favorite must be a boolean' });
+    }
+
+    const favorite = Boolean(req.body.favorite);
+    const result = await passwordsCol.updateOne(
+      { id, userId: req.user.userId, ...ACTIVE_CREDENTIAL_FILTER },
+      { $set: { favorite, updatedAt: new Date() } }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ success: false, message: 'Password not found' });
+    }
+
+    res.json({ success: true, favorite });
+  } catch (error) {
+    console.error('Failed to toggle favorite:', error);
+    res.status(500).json({ success: false, message: 'Failed to update favorite status' });
+  }
+});
+
 app.post('/api/passwords', authenticateToken, async (req, res) => {
   try {
     const password = req.body;
@@ -776,7 +813,7 @@ app.post('/api/passwords', authenticateToken, async (req, res) => {
       password: encryptVaultPassword(password.password),
       favorite: Boolean(password.favorite),
       tag: typeof password.tag === 'string' && password.tag.trim() ? password.tag.trim() : 'Personal',
-      customFields: Array.isArray(password.customFields) ? password.customFields : [],
+      customFields: sanitizeCustomFields(password.customFields),
       userId: req.user.userId,
       createdAt: new Date(),
     };
@@ -828,7 +865,7 @@ app.post('/api/passwords/bulk', authenticateToken, async (req, res) => {
           password: encryptVaultPassword(item.password),
           favorite: Boolean(item.favorite),
           tag: typeof item.tag === 'string' && item.tag.trim() ? item.tag.trim() : 'Personal',
-          customFields: Array.isArray(item.customFields) ? item.customFields : [],
+          customFields: sanitizeCustomFields(item.customFields),
           userId: req.user.userId,
           createdAt: now,
         });
@@ -886,7 +923,7 @@ app.put('/api/passwords/:id', authenticateToken, async (req, res) => {
     }
 
     if (Array.isArray(password.customFields)) {
-      updateFields.customFields = password.customFields;
+      updateFields.customFields = sanitizeCustomFields(password.customFields);
     }
 
     if (Array.isArray(password.history)) {
